@@ -1,0 +1,298 @@
+﻿# Reference report
+
+The signal-junction follow-up uses the user's close-up and `uz_video.mp4` at 04:20–04:35 and 06:40. Each zebra is placed at its own road mouth and fitted across the actual rounded island boundaries, with shared stripe polygons in the scene and mini-map. The four stop bars and lane-divider ends share their stations with the two scored approaches; practice spawns wait behind the relocated bars. Extra nominal corner rounding was removed from the traced pavement. Continuous pale kerbs have a bevel and a 0.20 m top across rendering-region joins. Pedestrian boards, STOP plates, priority boards and direction discs follow the reference arrangement; navigation chevrons leave this junction clear. These placements are visual estimates from the supplied evidence rather than surveyed dimensions.
+
+## Evidence and interpretation
+
+| Source | Extracted information | Status |
+| --- | --- | --- |
+| `2026-03-19_17-47-25_3UKDK1HJ4R.jpg` | B/C/D autodrome plan, 12 numbered exercises, B branches, arrows, crossings, signs, ramp and parking locations | User-supplied layout; no dimensions |
+| `2026-04-17_14-47-01_NFP8VA7K37.png` | 32 Russian-language penalties, point values, several exact time/distance thresholds | Primary scoring specification |
+| `video/uz_video.mp4` | 11:41.55, 1920×1080, 30 fps. Visual examples of the same course, maneuvers, markings and scoring | Sampled frames inspected; audio not transcribed |
+| `video/RQZeRiXdsk9ualSykoFF+J6Yl64tQNes.mp4` | 6:46.117, 1920×888. Gameplay reference for curbs, road arrows, ramp, railway signs, camera framing, and exercise timers | 24 evenly spaced frames plus 12 targeted frames inspected on 2 November 2026; audio not transcribed |
+| `chevrolet_cobalt_ltz_2014.glb` | Car body, cabin, steering, wheel groups and license metadata | Original preserved; optimized derivative used |
+| [Chevrolet Uzbekistan catalogue](https://chevrolet.uz/storage/images/catalog_auto/17/E4LbSiWS8ADy0P3AMIcPsdYGAfb6meFN1n28pOUv.pdf) | Length 4,479 mm, width 1,735 mm, height 1,514 mm, wheelbase 2,620 mm | Manufacturer dimensions; catalogue describes a newer automatic trim |
+| [Three.js GLTFLoader](https://threejs.org/docs/#examples/en/loaders/GLTFLoader) | Loading the material extensions used by the supplied GLB | Implementation reference |
+| [Rapier vehicle controller](https://rapier.rs/javascript3d/classes/DynamicRayCastVehicleController.html) | Suspension rays, wheel forces, braking impulses, steering | Implementation reference |
+
+The public YIM pages available during research did not expose a usable full rulebook. Consequently, the supplied penalty image remains the scoring authority. Other simulator websites were not treated as authoritative rule sources.
+
+## Video observations
+
+These timestamps identify inspected frames, not a verbatim account of narration.
+
+| Time | Visible evidence |
+| --- | --- |
+| 00:05 | “Avtodromda amaliy imtihon” introduction |
+| 00:20–00:25 | Timed full-route examples; these do not establish the exact category B limit |
+| 00:40–00:45 | Penalty totals below 100 versus totals of 100 or more |
+| 00:50–01:00 | Separate B start lane and category-specific directional arrows |
+| 01:25–01:40 | Seatbelt and in-car preparation; manual driving controls |
+| 02:10–02:40 | Pedestrian crossing and front-bumper stopping distance under 1 metre |
+| 02:55–03:25 | Ramp stop and hill-start timing |
+| 03:55–04:10 | Right-angle maneuver, control-line crossing penalty |
+| 04:25–04:55 | Signalized crossing and stop-line positioning |
+| 05:10–05:25 | Snake course and maneuver timer |
+| 05:55–06:25 | Garage approach/reversing area |
+| 06:40–06:55 | Another intersection traversal |
+| 07:10–07:25 | Stop position and distance annotation |
+| 07:40–07:55 | Acceleration lane with 20/40 speed signs |
+| 08:10–08:40 | Emergency-stop demonstration and timing |
+| 08:55–09:40 | Parking/intersection sequences and route branches |
+| 09:55–10:10 | Manual gear-changing demonstration |
+| 10:25–10:55 | Crossings and railway stop approach |
+| 11:10–11:20 | Speed/overall-time examples |
+| 11:32–11:40 | Uzbek summary tables corresponding to the supplied penalty image |
+
+## Course reconstruction
+
+### Continuous markings from the video — 3 November 2026
+
+`src/data/lane-markings.ts` replaces the old generic dashed centreline loops and detached triangle placeholders with named solid paths. They follow the upper/left/right perimeter curves, both sides of the central junction, the finish-road branch and the parallel-parking split. The signal junction stays clear between its zebra crossings. Curved painted gores at the upper and lower splits attach to the road-edge paint; diagonal hatching is clipped to their outlines instead of extending onto grass. Ordinary white separators remain 0.10 m wide.
+
+Yellow edge zones now include the garage recesses, all B parking pockets, the CD parking pocket and both snake corridors. Control dashes are traced at the garage, parking and B/CD snake entry/exit stations. Bay stop bars follow the plan; the former white rectangles representing scoring targets are no longer painted over the actual bays. The default direction arrow is 3 m long, and an explicit opposing-lane right-turn arrow is retained at the T-junction shown by the user. Shared resolved arrow data prevents the 3D road and minimap from disagreeing or drawing duplicate incoming arrows near stop lines.
+
+The physical START stripe, sign, label and start sensor share plan x=232. The starting car is behind that stripe at x=200, while the first exercise destination remains the plan's exercise-1 marker at x=320. The finish stripe spans both lanes at x=175, with its text alongside it. These changes distinguish the physical lines from exercise destination markers. The minimap draws the same new separators, gores and yellow edge surface. Reference contact sheets for this pass are in `test-results/all-markings-reference/`; actual-game captures and continuous paint-ray checks are in `test-results/all-markings/`.
+
+### Full plan and video overview — 3 November 2026
+
+The full-course view in `video/uz_video.mp4` at 00:35 was compared with the supplied B/C/D plan. `src/data/course-layout.ts` now traces the entire pavement envelope and ten grass islands: two interlocking garage islands in the northwest, three snake islands in the northeast, the southwest parking island, the long start/finish separator and the three previously traced southeast islands. Garage recesses, the three B parking pockets and curved island caps are actual openings in the asphalt polygon. Ordinary kerbs now use pale concrete with darker vertical faces, matching this original video reference. The 3D asphalt, kerbs, boundary paint, off-road sensors and minimap all derive from the same surface.
+
+The plan frame is preserved without mirroring or rotating the simulation: start/pedestrian crossing/ramp run east along the lower edge; the outside B lane turns left into the right-angle course; the snake occupies the northeast and garages the northwest. The B garage uses the plan's left bay with a horizontal final parking axis. Parallel parking now targets the marked southwest pocket, and the finish uses the lower B lane at plan y=795 instead of the CD lane at y=760. Guidance approaches the snake from the eastbound upper lane and routes around the garage island rather than through it. The existing repeated junction itinerary is retained. Parking-skipped detection arms only after approaching the bay, preventing the longer transit from being mistaken for a missed maneuver.
+
+The paired perimeter arrows also follow the supplied plan: the upper inner lane points east while the outer lane points west, and the left inner lane points north while the outer lane points south. The east-side B railway approach and stop line are centred on plan x=1235, clear of the opposing lane; its inner-lane arrow faces south. These markings are shared by the 3D road and minimap.
+
+The larger bottom-right map retains the plan orientation, uniform metric scale and actual vehicle heading. It adds painted road-direction arrows, four junction crossings, START/FINISH labels and an arrowed highlight of the current ordered route leg; the two junction visits have distinct highlights. Individual practice trims the highlight to its approach. The map adapts to desktop, compact and narrow layouts. `test-results/full-map/plan-overlay.png` overlays the runtime boundaries in magenta and the B route in orange on the preserved source plan. `video-comparison.png` puts the 00:35 video frame beside the rendered aerial view. This is a traced approximation at the estimated 0.1 m/pixel scale, not surveyed dimensions or a claim that the surrounding buildings reproduce the video.
+
+### Post-ramp comparison with the original video and plan — 3 November 2026
+
+Inspected `video/uz_video.mp4` at 02:55–04:45, then extracted frames every two seconds from 03:30 to 04:10. The timestamp manifest and contact sheet are in `test-results/uz-video/exit-detail/`. The plan's southeast corner was inspected at full resolution alongside the 03:38, 03:44 and 03:54 frames. These distinguish the outside B lane from the inside CD lane and show two separate right-angle corridors rather than a single shared zigzag.
+
+`src/data/after-hill.ts` traces the outer southeast boundary and the three main islands, including the thin L-shaped separator. B follows the outside bend into the upper corridor, turns south and then west, and curves north towards the signal junction. CD enters the lower corridor. The B guide rounds its two exercise turns within the traced pavement instead of cutting across the islands. White concrete kerbs, boundary paint, yellow exercise entry/exit dashes, category labels, arrows and roadside signs follow the replacement surface. The minimap and scoring use the same asphalt boundary. Single-exercise route checks follow the bent B corridor instead of a straight spawn-to-goal segment.
+
+`npm run test:after-hill` saves `test-results/after-hill/plan-overlay.png`: magenta is the runtime asphalt boundary and the orange dashed line is the B guide. It also captures the ramp departure, fork, both corridors, exit and minimap. This is a traced comparison of the southeast section; the plan has no surveyed dimensions, the 0.1 m/pixel scale remains an estimate, and the other course regions retain their previous reconstruction.
+
+The missing signs visible at 03:34 are now included before the first left bend: an unrestricted blue left-turn disc on the right verge and a low red/white four-chevron board across the far end of the straight. Both face the ramp approach; these are separate from the category-specific B/CD discs farther around the bend. The authored chevron board uses the existing metal plate, folded rim, mounting hardware and post model.
+
+The inside island edge at the end of the ramp previously changed from plan y=896 to y=890, widening the road to the driver's left by 0.6 m. Its lower edge now remains at y=896 until the turn. The inside bend has the same centre as the perimeter centreline, with radius 51 px (90 px minus the 39 px half-width), so the straight edge joins the curve tangentially. The asphalt, kerb and edge paint share this corrected contour.
+
+The subsequent fork-marking comparison adds the missing outer B channel line from the roadside edge into the upper island boundary. A common curved centreline and width stations now define the painted gore; six evenly spaced chevrons point towards approaching traffic and meet both borders. Longer B/CD turn arrows and the B label are positioned before the gore. Southeast kerbs are continuous concrete with an 18 cm nominal height, a 2 cm top bevel, and darker vertical faces; the signal-junction kerbs retain their existing dimensions. `test-results/after-hill/fork-driver.png` captures the ordinary chase camera and `b-cd-separation.png` shows both channel boundaries.
+
+The user's subsequent close-up clarifies that the gore wraps the complete rounded island cap. Its borders are now single cubic curves, with a tangential join to the incoming divider and separate attachments at the north/south cap tangents. A semicircle at the existing paint offset closes the upper end instead of collapsing both borders onto the eastmost cap point. Chevron strokes are clipped to this outline to prevent their acute mitres extending outside it. `fork-closeup.png` shows the latest shape.
+
+The following lane-width correction moves the B-side gore contour inward and the outer B guide towards the roadside edge. The previous paint boundaries narrowed to approximately 2.14 m of clear width through the bend; normal cross-sections sampled every two degrees over its first 70 degrees now leave at least 3.4 m between the paint edges. The B guide moves gradually outward by up to 0.8 m within this wider channel and rejoins its original tangents, giving the vehicle clearance from both painted boundaries. This is a simulator usability adjustment rather than a surveyed lane-width claim.
+
+The newer gameplay video was sampled through Chromium's video decoder. Frames and timestamp manifests are saved in `test-results/reference-video/`; `contact-sheet.png` covers the complete duration and `details.png` contains targeted sections. The original videos are preserved.
+
+| Gameplay reference time | Visible comparison and resulting change |
+| --- | --- |
+| 00:21 | White direction arrows in the start lanes; added painted arrows independent of practice guidance. |
+| 00:42, 01:29 | Raised hill road with visible supports; added deck edging/supports and corrected the shared elevation bounds so both road edges follow the physical ramp. |
+| 01:29, 02:54 | Alternating black/yellow boundaries; continuous coloured curb bands now follow the unified asphalt boundary, with overlapping regions removed. |
+| 01:29, 01:55 | Separate exercise time display; exposed the existing 120-second turn/snake limit in the exercise card. |
+| 03:12 | Car remains visible during reverse practice; moved instruments away from the chase car and checked desktop screen-space bounds. |
+| 04:52 | STOP above a red/white railway crossbuck; replaced the placeholder warning triangle with this assembly. |
+
+Stop-line distance, the remaining three-second hold, and accepted-stop feedback were added to make the existing scoring requirements observable. These are usability improvements derived from the existing scoring contract, rather than a claim that identical text appears in the video. Rear brake lights now illuminate the supplied model's lamp materials instead of protruding placeholder boxes.
+
+The reference shows another game's presentation; it does not establish official dimensions, the general exam time limit, or manual-transmission behaviour. Existing source-based penalty values and exam clutch requirements remain the authority for this simulator.
+
+Coordinates are traced against the diagram's 1280×1072 pixel layout. `mapPoint(x,y)` converts to metres using 0.1 m/pixel, centred at diagram (640,530). The scene reconstructs perimeter roads, central crossings, internal maneuver corridors, parking bays, and the elevated bottom straight with generated meshes. Sampled road corridors form one shared asphalt polygon. The mini-map fills this same polygon, including its islands and parking pockets, using a uniform metric projection; off-road sensors also use its boundary. The mini-map is a view of the reconstructed game course, not an independently redrawn or surveyed source plan.
+
+The B itinerary contains 12 distinct exercises and 13 visits because the central intersection is traversed again after the garage. Practice exposes the 12 exercise types separately. Decorative C/D branches may remain in the environment; the exam follows only B checkpoints.
+
+Defaults after the width and ramp reviews: 3.5 m nominal scoring-lane span, 7.8-8 m main corridors (78-80 drawing pixels), 4.5-5.2 m narrow maneuver corridors, 3 m parking-pocket depth, approximately 16.4% ramp gradient, 1.8 m ramp height, 15-minute overall limit. Paint uses 0.10 m edge/centre lines and 2 m dashes with 3 m gaps. Ordinary curbs are 0.24 m wide/high with 0.70 m colour runs; the ramp has plain concrete edging. All dimensions and the overall time limit remain traced estimates. The perspective video does not establish surveyed dimensions or a pixel-for-pixel match.
+
+### Asphalt-detail comparison
+
+The 01:03 frame shows B/CD lane categories and separate straight/turn arrows on the eastern approach; 00:21 shows paired START lanes; 06:17 shows edge paint, dashed centre marks, turn arrows and white parking outlines with a yellow fixing line. Category letters and branch locations were cross-checked against the supplied plan. `src/data/road-markings.ts` records their drawing coordinates and driving headings, including B/CD at start, finish and approach branches, B/BCD on the parking approach, channel guides and hatched junction islands.
+
+Main corridors were widened from 7 m to 7.8-8 m and the finish corridor shifted to the plan's two-lane centre. Three asphalt parking pockets were added behind the through lane. The 5.2 m parking connector meets the adjacent road instead of leaving a 0.20 m sliver between two overlapping curbs. A joined snake-entry connector closes a small gap at its bend. Road polygons are united before triangulation; boundary outlines generate curb/edge paint and supply the same signed distance used by control-line and off-road scoring. This avoids visible roads and scoring using different corner shapes.
+
+`npm run test:course` saves six comparison views and the geometry report in `test-results/course-details/`. Black and yellow curb regions are mutually exclusive and clipped outside asphalt, including acute corners. The old 0.72 m boxes at 0.70 m spacing, duplicated road edges and a continuously moving shadow projection caused flicker; the new mesh removes overlapping top faces and snaps the shadow projection to world texels. The ramp is triangulated in separate slope/plateau bands so its surface retains the physical elevation.
+
+### Sign and ramp visual references - 2 November 2026
+
+| Source | Applied observation |
+| --- | --- |
+| [Uzavtoyolbelgi manufacturer catalogue](https://uzavtoyolbelgi.uz/dorojnie/znaki) | Inspected STOP (2.5), speed limit (3.24), pedestrian crossing (5.16.1/2) and steep-ascent (1.14) diagrams. Red/white proportions, blue square/white triangle, filled pedestrian silhouette, perspective stripes, and circular/octagonal/triangular board outlines were redrawn locally. |
+| [STOP and pedestrian-sign photograph by Marko Milivojevic, CC0](https://pixnio.com/media/stop-crosswalk-sign-traffic-traffic-jam) | Real metal plate thickness, white edge, round metal posts, face proportions and the plain reverse of the adjacent plate. The photograph is retained only as a local reference, not bundled into the game. |
+| Gameplay frames 00:42, 00:44, 00:47, 00:49 and 01:28-01:29 | Plain pale concrete kerbs on the ramp instead of alternating painted blocks, a raised deck, flat crest and regularly spaced supports. Five additional frames were extracted during this review. |
+
+Sign models use 0.70-0.90 m boards, extruded galvanised-looking backs and edges, cylindrical posts, two clamps/brackets and small hex bolts. Face artwork is authored using canvas and cached at 512 px. The two pedestrian faces use opposite figure directions; backs carry no mirrored symbols. Railway STOP and the crossbuck are separate physical boards. The hill warning board reads 12%, matching the supplied reference close-up; this posted value is separate from the estimated physical ramp profile. Board dimensions are modelling choices, not a declaration of certified sign manufacture.
+
+The ramp was raised from 1.1 m to an estimated 1.8 m to better match the side view. Its 11 m approach/descent and 9 m crest remain at the existing plan coordinates. `hillHeight` drives asphalt, marking elevation, concrete edging, supports, vehicle reset and the Rapier collider. Black/yellow curb surfaces are explicitly excluded from the ramp footprint. The 0.40 m wide concrete wheel kerbs sit 0.17 m above the asphalt datum; a 0.235 m deck and piers make the underside visible. The inferred height/gradient are visual estimates rather than measurements from the reference game.
+
+The supplied departure and manoeuvre close-ups also inform the solid divider around the ramp-exit bend, the painted B/CD fork with chevron hatching, yellow edge paint within the right-angle and snake exercises, and transverse dashed yellow control lines. Yellow and white edge surfaces partition the same pavement boundary, so their colours do not overlap or extend over the grass. Manoeuvre control marks span both sides of their narrow road; boundary colours change at those marks. `npm run test:route-markings` captures these areas and checks visible yellow edges and full-width control dashes.
+
+The hill stop line now spans both lanes, including the left half, at the same scoring position. For the 12% warning board, the [Uzavtoyo‘lbelgi sign catalogue](https://uzavtoyolbelgi.uz/uz/dorojnie/znaki) and its [1.14 illustration](https://uzavtoyolbelgi.uz/uploads/store/product/475ce8fa28942575c1e1404a2d773ff2.jpg) were inspected as visual references. The locally drawn artwork follows their rounded warning triangle, broad red border, ascending black wedge and larger sloping 12% lettering. The board uses a 2.2 mm metal face, a folded rear rim and a subtle grain in the film's roughness; this is a visual approximation rather than a certified retroreflective material. No downloaded illustration is loaded by the running app. The [Wikimedia 1.14 drawing](https://commons.wikimedia.org/wiki/File:RU_road_sign_1.14.svg) was also consulted for comparison.
+
+On 3 November 2026 the dangerous-bends symbol was redrawn using the manufacturer's [1.12.2 reference](https://uzavtoyolbelgi.uz/uploads/store/product/a3e14a14d45d40fe870b9b6079be1c04.png) and [1.12.1 counterpart](https://uzavtoyolbelgi.uz/uploads/store/product/b3320d03b55fcd62b1d9764df1685339.png). The two post-ramp exercise signs use 1.12.2, with a smooth first bend to the left; the snake exit uses the mirrored 1.12.1 for its first right bend. The artwork has broad, smooth curves and square-ended stems, replacing the thin angular zigzag. A 1 mm metal blank, folded rear edge and existing clamp/bolt model represent construction described in the [Palitra manufacturer's product page](https://zavod-palitra.ru/view_product.php?id=3209); film roughness remains an authored visual approximation. Downloaded catalogue images are inspection references only; runtime artwork is drawn locally in canvas.
+
+At the central junction the long cross street stays straight until the far eastern bend. Four 2.4 m corner fillets join the pavement to continuous white concrete curbs, using the same boundary as the asphalt and off-road sensors. Incoming lanes have solid dividers, arrows and stop bars before their yellow/white crossings. Both guided intersection visits now approach in the incoming lane. Signal posts stand on the verge with priority/yield boards below, a pedestrian board on a side bracket and a nearby STOP plate. Direction discs, vehicle-category plates and winding-road warnings follow the supplied screenshots; board positions and dimensions remain traced approximations. Signal heads have rounded housings/backboards, visors, domed lenses and instanced LED points, with static hardware merged by material.
+
+## Scoring rules — supplied-2026-04-v1
+
+| # | Violation | Points |
+| --- | --- | ---: |
+| 1 | Seatbelt not fastened | 5 |
+| 2 | Cross start without the left indicator | 5 |
+| 3 | Fail to cancel the left indicator 10 m after start | 5 |
+| 4 | Stop more than 1 m before a stop line | 5 |
+| 5 | Fail to indicate in the appropriate direction | 5 |
+| 6 | Violate signs 4.7 or 3.24 | 5 |
+| 7 | Fail to indicate right before finish | 5 |
+| 8 | Exceed 20 km/h outside acceleration exercise | 5 per complete 5-second interval |
+| 9 | Take more than 30 seconds to traverse intersection on a permitting signal | 10 |
+| 10 | Fail to start moving within 30 seconds of start signal | 25 |
+| 11 | Fail to stop before a stop line, or cross it | 20 |
+| 12 | Move again less than 3 seconds after stopping | 20 |
+| 13 | Fail to move within 30 seconds of stopping on the ramp | 25 |
+| 14 | Roll back more than 0.3 m on the ramp | 20 |
+| 15 | Cross a control line in right-angle turns or snake exercise | 20 |
+| 16 | Take more than 2 minutes for right-angle turns or snake exercise | 15 |
+| 17 | Fail to put wheels on the fixing line in garage or parallel parking | 20 |
+| 18 | Fail to engage second gear on the acceleration section | 25 |
+| 19 | Fail to stop within 2 seconds of the emergency audio/light signal | 20 |
+| 20 | Fail to activate hazards within 3 seconds of the emergency stop | 20 |
+| 21 | Fail to turn hazards off before moving again | 10 |
+| 22 | Stall the engine during an exercise | 20 for each stall |
+| 23 | Fail to start moving within 40 seconds of start signal | 100 |
+| 24 | Enter intersection or cross stop line on a prohibiting signal | 100 |
+| 25 | Cross railway without stopping | 50 |
+| 26 | Leave exam or refuse to perform exercises | 100 |
+| 27 | Fail to complete a required exercise | 100 |
+| 28 | Deviate from the prescribed route | 100 |
+| 29 | Reverse outside an exercise that permits it | 100 |
+| 30 | Collide with another vehicle or obstacle | 100 |
+| 31 | Exceed 40 km/h | 100 |
+| 32 | Exceed the overall practical-exam time limit | 100 |
+
+## Explicit simulation interpretations
+
+- The supplied video supports failure at **100 or more points**. The 15-minute timer was explicitly selected as provisional during planning.
+- Stop position is measured at the front bumper. A stop means horizontal speed below 0.12 m/s. A recorded stop and its three-second dwell are tracked separately: leaving too early triggers rule 12 rather than also claiming that no stop occurred.
+- Red/amber crossing uses rule 24 instead of also charging rule 11 for the same crossing. A green signal permits crossing without an unnecessary stop.
+- Discrete violations are deduplicated per exercise visit. Start preparation and finish-indicator rules are global. Stalls/collisions are separate episodes. Continuous overspeed is charged at completed five-second intervals; returning below the limit resets the interval.
+- Rule 3 is evaluated once at the 10 m threshold so later left turns are not incorrectly penalized.
+- Control-line checks use all four wheel contact locations. Road deviation tolerates 1 second outside the drivable corridor or 2 seconds more than 12 m from the active route leg; these tolerances are implementation estimates.
+- Parking requires reversing, a low-speed stop for 2 seconds, alignment within 0.15 rad, the body inside the bay, and wheel fixing-line alignment within 0.32 m. These tolerances are inferred for stable game interaction, not official surveyed criteria.
+- The acceleration lane checks engagement of second gear and the 20 km/h minimum at its exit. The maximum 40 km/h rule applies everywhere.
+- Traffic signals share a deterministic 64-second two-axis controller. North/south green lasts 30 seconds; east/west green lasts 24 seconds. Each change includes 3 seconds of amber and 2 seconds of clearance with both roads showing red; the last clearance second also displays red/amber on the next approach. Green blinks for its final 3 seconds. Rendering, scoring and HUD feedback use the vehicle simulation clock and the approach axis; pausing freezes the cycle. These timings are simulator defaults, not verified exam-site timings.
+- Delayed-start rules 10 and 23 accumulate if both thresholds are reached; the source does not specify replacement. Practice records mistakes but continues; exam ends once the total reaches 100.
+- Ramp rollback is evaluated separately from intentional reversing. There are no moving traffic vehicles; obstacle collisions are implemented for poles, fences, and the entry structure.
+
+## Asset inspection
+
+Roadside vegetation now uses three authored procedural tree shapes and one locally stored, generated RGBA branch atlas. Bark colour/normal maps are procedural. The atlas was created with built-in imagegen rather than downloaded from a photograph library; [tree asset notes](TREE-ASSETS.md) record the final prompt, saved file and rendering details.
+
+The original GLB has 402 nodes, 150 meshes/primitives, 13 materials, no texture images, and no animation clips. Inspection found sixteen full wheel groups at four axle corners. The preparation script retains one assembly per corner and removes twelve redundant groups. Geometry is deduplicated, welded, and simplified, then refined with authored cabin details, from approximately 1,045,425 unique triangles to 219,144 in the 4 November revision. The approximately 5.2 MB derivative is welded again after refinement. This count measures unique primitive geometry, not all rendered shadow/mirror passes.
+
+The visual model is scaled uniformly to a 4.479 m length. The physics wheelbase is 2.620 m. Mirrors make the visual bounding-box width greater than the manufacturer's body-width figure. The supplied body shell is retained; the dashboard, seats, steering wheel, cabin controls and gauges are reconstructed. The result is an approximation from photographs, not a scan or manufacturer CAD model.
+
+## Cobalt photographs - 2 November 2026
+
+The 4 November repair additionally uses the [2014 Cobalt exterior photographs in the Kolesa test drive](https://kolesa.kz/content/test-drive/chevrolet-cobalt/) for the side profile, door folds and wheel-arch appearance, and the [archived dealer cabin photograph](https://data.favorit-motors.ru/upload/iblock/c81/c81601a11b82788ef5399f9b90dd476f.jpg) for tapered cloth seat backs, shoulder contours and almost concealed headrest rods. Inspection copies are in `test-results/model-review/references/side-2014.jpg` and `seats-dealer.jpg`; neither is embedded in the game. The [official Chevrolet Uzbekistan brochure](https://chevrolet.uz/storage/images/catalog_auto/17/E4LbSiWS8ADy0P3AMIcPsdYGAfb6meFN1n28pOUv.pdf) was checked for the exterior silhouette; its newer dashboard equipment is not used to replace the selected manual 2014-style cabin.
+
+The visible dent effect came from coarse position buckets in normal smoothing. Precise position matching with corner-angle weighting now preserves thin sheet-metal returns and panel creases without contaminating the neighbouring broad faces. The former rectangular seat layers are replaced by contoured backs and cloth inserts. Forty roof-lining vertices are fitted beneath the existing metal skin, duplicate tubular front pillar covers are removed while retaining the source frame and its inward-facing trim, and rear door cards follow the arch cut. A separate runtime correction aligns the body with the loaded suspension; the previous low visual body position let tyre geometry show through the upper fenders. These repairs preserve the supplied outer body silhouette and source GLB.
+
+The 3 November follow-up uses the same period photograph for the user-selected manual transmission and factory radio. Broad painted panels retain a 36% simplification target with locked borders and a smaller error limit; crease-aware normals remove faceted reflections. Gold front badging and non-emissive headlamp reflectors replace the black badge/constant white glow. The cabin now has a compound swept dashboard, a perforated silver centre bezel, two radio knobs on the left, fitted door cards, new fabric cushions/bolsters and head restraints, manual floor tunnel/handbrake, ribbed mats, seat belts, stowed sun visors and mirror hardware. A short-range daylight fill and stronger car-material reflections improve readability. The shallow dashboard avoids receiving the course's coarse shadow map, which otherwise creates diagonal self-shadow bands; its normal lighting and the other car shadows remain. The instrument LCD uses seven-segment speed numerals and an illustrative static odometer. Source/derivative attribution is retained. Dimensions and material appearance remain an authored visual reconstruction, not an exact scan of a particular car.
+
+| Visual reference | Observed feature and implementation |
+| --- | --- |
+| [Period Cobalt cabin photograph, Motor1/Autoblog](https://cdn.motor1.com/images/mgl/lQjqM/s3/critica-chevrolet-cobalt.jpg) | Grey molded dashboard, rectangular vents, three-spoke wheel with gold bowtie/silver lower spoke, analogue tachometer with digital speed display, factory radio, three rotary climate controls and manual gear lever. Reconstructed with geometry and authored SVG/PNG textures. |
+| [2012-2015 rear lamp, part 52023546](https://www.acciolygm.com.br/lanterna-traseira-s-lampada-lado-passageiro-cobalt-2012-ate-2015-cod-52023546) - [inspected product photograph](https://images.tcdn.com.br/img/img_prod/476243/lanterna_traseira_s_lampada_lado_passageiro_cobalt_2012_ate_2015_cod_52023546_144501_1_20201213205740.jpg) | Red upper/lower sections and perimeter with two clear reflector bands. Replaced the source's opaque black outer lens and assigned independent brake/tail/reverse/indicator surfaces on both sides. |
+| [White 2014 Cobalt, Uzbekistan listing](https://www.olx.uz/d/obyavlenie/shevrolet-cobalt-yili-2014-rangi-oq-mehanika-propan-benzin-ID42N12.html) - [inspected rear photograph](https://frankfurt.apollo.olxcdn.com/v1/files/ek7jhh5eol6x2-UZ/image;s=960x1280) | White body, rear-window tint, gold boot badge and red/clear lamp appearance. Adjusted paint/glass/badging; the game uses an authored AVTODROM demonstration plate. |
+| [Rear lamp replacement, Za Rulem](https://www.zr.ru/content/articles/794878-zamena-lamp-v-zadnem-fonare-chevrolet-cobalt/) | Workshop illustrations and separate lamp functions used as a secondary check. |
+
+Photographs were inspected as references and are not embedded in the runtime asset. Twenty textures are authored locally: cloth weave, reflector prisms, plastic grain normal map, hazard button, radio, climate labels, passenger and steering airbag emboss, shift pattern, tachometer face, digital display, speaker grille, demonstration plate, indicator and wiper legends, MENU, SET/CLR and selector legends, wiper-ring legend and the switch-ring knurl normal map. `npm run prepare:car` reproduces the derivative and attribution from the preserved source; `npm run test:model` captures it in the running game.
+
+The second cabin pass replaces the entire source dashboard instead of layering rectangular patches over it. It follows the period photograph's curved upper shell, separate instrument hood, recessed gauges, silver radio surround, triangular lower dial positions, forked steering spokes, passenger shelf and door pulls. The [GM 2014 owner's manual](https://mi.chevrolet.com.ar/content/dam/gmownercenter/gmsa/gmar/dynamic/manuals/2014/chevrolet/Cobalt/es/om_ng-chevrolet_Cobalt_my14-es_AR.pdf.pdf) identifies the dashboard controls and instrument variants (printed pages 1-2/1-3 and 5-3 onward). The [GM 2014 photo gallery](https://media.gm.com/Pages/galleries/br/pt/vehicles/chevrolet/cobalt/14-brasil-cobalt.html) is an additional period reference index. Trim and radio equipment vary across markets; the result remains an authored approximation, with the original body/seat shapes retained.
+
+Rear-lamp visibility is controlled on the outer lenses as well as their internal reflectors. Their source triangles are clipped at the section boundaries, avoiding jagged red/clear transitions. Saturated signalling materials bypass ACES to preserve red instead of shifting bright brake light towards orange; the rest of the scene retains its existing tone mapping. White reverse light, red brake light and amber indicators remain independent. Brake lamps respond to the pedal even when the engine stalls.
+
+The daylight visibility revision increases the brake/indicator emission and reduces the inactive brake glow. Active indicator lenses also take an amber base tint, returning to their original clear-lens colour during the off phase. Four small additive optical halos are fitted to the actual rear lens vertices at load time, share a locally drawn radial texture, and follow the same telemetry and blink phase as the lamps. They retain depth testing and fade for side/front observers per camera pass. They do not add point lights or require a full-scene bloom pass, and they are excluded from picking rays. The GLB and its source are unchanged by this runtime revision.
+
+Wheel animation now corrects the source's approximately 3.55-degree right-wheel spindle angle before applying spin. Each hub is calculated from vertices in the wheel's own coordinate frame, independent of the parked car's orientation. The complete assembly steers and follows suspension; the source brake calliper follows those movements without spinning with the tyre. Forward/reverse roll uses the controller's original angle sign and compensates for the imported tyre radius (approximately 0.3223 m versus the physics radius of 0.317 m). Suspension height includes the same radius difference. These are runtime corrections; the source and derivative GLBs and vehicle handling parameters remain unchanged.
+
+Turn-arrow footprints are centred across their placement point using the full outline, including the bent arrowhead. The four left-turn markings after the ramp and at the B/CD fork additionally find their lane centres between the actual edge/divider/guide paint paths at each arrow's station. This removes the lateral bias from anchoring only the arrow's stem and keeps their placement tied to the current road geometry.
+
+
+## Tyre forces and braking refinement - 4 November 2026
+
+The steering revision separates keyboard input filtering from optional driving assistance. Its full mechanical rack range is preserved; only the rate of keyboard movement changes with speed. An explicit, default-off practice aid can restrict the target angle using the lower estimated grip of the two front contact surfaces and a lateral-acceleration envelope. Changes in the target are rate-limited, including when assistance is toggled. The cabin animation uses actual rack telemetry. This follows the distinction between slower steering input and a separate understeer aid described in [BeamNG's v0.26 announcement](https://www.beamng.com/game/news/blog/beamng-drive-v0-26/). The rate curve and aid envelope are authored gameplay estimates, not manufacturer steering data or a calibrated optimum-grip controller.
+
+The [Rapier vehicle-controller source](https://github.com/dimforge/rapier/blob/master/src/control/ray_cast_vehicle_controller.rs) selects engine force or brake impulse for longitudinal wheel response. The application now combines opposing driveline torque, service/parking brake demand and rolling resistance before choosing that path. Retarding demand uses the brake path to avoid driving backwards through a stop. A separate longitudinal cap uses the previous suspension load and estimated dry-asphalt/grass friction coefficients (0.95/0.45); the existing controller still handles lateral slip. Each wheel samples its own contact location. Moving rear-wheel handbraking reduces grip, while stationary holding is limited by normal load and surface friction. These are estimated handling parameters, not instrumented Cobalt tyre measurements; wheel rotational inertia, ABS hydraulics and detailed tyre deformation are not modelled.
+
+
+## Source normals and smoothing fans - 4 November 2026
+
+A second surface inspection found per-triangle normal disagreement at shared vertices: comparing each face to neighbours independently produced different sums on the same smooth fan. Paint normals now use edge-connected fans with corner-angle weights, precise position matching and a 60-degree hard-fold threshold. Only oppositely wound manifold edges connect fans; UV splits may share normals, while point contacts, opposite sheets and non-manifold overlaps stay separate.
+
+Normals are calculated on the full-resolution source before the existing geometry simplification, then retained at surviving vertices. Recomputing them on the decimated mesh gave the roof-edge bevel disproportionate influence: one witness normal changed from the dense source [0.0226, 0.8380, -0.5452] to [0.0220, 0.5966, -0.8022], producing triangular patches. Source-normal preservation corrects this without moving the source vertices or raising the triangle budget. The source GLB is unchanged.
+
+The paint simplifier also includes vertex normals in its error metric (weights 0.25 per normal component), retaining submillimetre bevel support rows that position-only simplification removed. Without those rows the roof's top surface interpolated the bent tip normal over large triangles, producing a wavy front-edge highlight even though the source normals were correct. The normal-aware output has 218,585 unique triangles, inside the existing 220,000 limit.
+
+
+## Cabin fit and overlapping source surfaces - 4 November 2026
+
+The source rubber shell supplied both useful floor/firewall surfaces and duplicate ceiling/backrest sheets. Selective removal of 114 ceiling and 22 old-backrest triangles reveals the existing light headliner and reconstructed rear upholstery. The floor, firewall, seals and wheel wells remain. Inner pillar returns retain their shape with light trim; the rear wheel-well shell retains black wheel-facing surfaces and grey cabin-facing cladding.
+
+Cloth surfaces are projected onto the actual padding meshes with 1.5 mm clearance, replacing buried front cushion inserts and thick rear overlays. Cushion stitch strips follow the same support. The front seat's lumbar crown now fades at the sides, closing an approximately 11 mm UV-seam gap; connected smoothing keeps the join continuous. Defrost slots follow the dashboard crown with 0.8 mm clearance, and the manual knob has a flat cap under its shift-pattern plate. All are authored approximations checked against the existing period cabin reference.
+
+## Cabin photograph fidelity - 4 November 2026
+
+The follow-up compares the same [manual cabin photograph](https://cdn.motor1.com/images/mgl/lQjqM/s3/critica-chevrolet-cobalt.jpg) and [dealer seat photograph](https://data.favorit-motors.ru/upload/iblock/c81/c81601a11b82788ef5399f9b90dd476f.jpg). The cowl now joins the actual curved back of the instrument hood instead of ending in a slab beside it. A fitted shallow upper tray, dark rounded centre vent pod, recessed louvres, slimmer passenger shelf lip and continuous silver lower steering trim follow visible reference details. Front cloth insert outlines have rounded ends; a low-contrast neutral grey weave uses a consistent 160 mm texture tile (2.5 mm weave repeat) across front and rear upholstery. Cushion normals are joined at UV seams. The material grain and exact dimensions are inferred from photographs; the mesh is not manufacturer CAD. Reference photographs remain inspection-only files.
+
+
+## Column-switch photograph comparison - 5 November 2026
+
+The three cabin photographs supplied in the conversation (front passenger views with automatic/manual levers and a closer open-driver-door view) guide the short exposed necks, different moulded grips, matte black finish and circular end ring on the right switch. The right stalk is most clearly visible in the last photograph. These proportions are inferred from perspective photographs, not measured factory dimensions; the existing manual gearbox configuration is retained. No supplied photograph is bundled in the asset.
+
+The [official Chevrolet 2014 Cobalt owner manual](https://www.chevrolet.com.br/content/dam/chevrolet/south-america/brazil/portuguese/index/services/owner-manuals/05-pdf/cobalt/14cobalt-adv-pt-br-080613-baixa.pdf) identifies the left turn/high-beam switch, right wiper switch, up-for-right/down-for-left signal motion and HI/LO/INT/OFF wiper positions in its quick-reference controls section (PDF pages 22-23). The two legend textures are authored SVG artwork rasterised locally. The left lever follows the selected indicator independently of wheel rotation and flash phase, returning when Q/E cancels it. The right lever remains a visual fitting; wiper operation is not simulated.
+
+## Manual cabin photograph follow-up - 5 November 2026
+
+The two further photographs supplied in the conversation guide this revision. The first clearly shows the longer round left indicator grip, recessed end cap and white lighting legends outside the wheel rim. The later manual-transmission photograph guides the plain moulded spokes, smaller gold bowtie, slimmer continuous satin V, dark neutral dashboard and blue instrument/radio/climate accents. The user explicitly selected the wheel without buttons. The signal lever retains its independent pivot and Q/E selection/cancellation; switch markings follow the actual curved grip surface. Instrument and control illumination follows engine state. Proportions remain inferred from perspective photographs, and the supplied images are not embedded in the model.
+
+The subsequent stalk-specific pass fits both handles to these views: approximately 61 mm rounded grips, stepped selector collars, inset dark circular ends, thicker bent necks and compact separate symbols. The left grip rises toward its outer end beside the rim; the right grip sits lower and nearer the driver, visible below the right spoke within the wheel opening. Their reach differs, as in the photographs. Matched before/after images and the interaction report are in `test-results/stalk-photo/`; reproduce with `CABIN_CAPTURE_DIRECTORY=test-results/stalk-photo npm run test:cabin-reference` (set the environment variable using the shell's syntax).
+
+`npm run test:cabin-reference` captures matched driver, oblique and manual-cabin views plus close switch legends. It verifies plain spokes, engine illumination and independent lever motion while the actual steering mesh turns. The asset remains inside the existing 220,000-triangle limit.
+
+The supplied close-up of the left windscreen corner identified the jagged light/black joint in the source interior. Both front pillar returns now carry their light lining behind the dashboard; crossing triangles are split at a continuous lower plane instead of being assigned by their centres. The original closed shell, floor, firewall and glass opening remain. The dashboard continues into the instrument hood's side walls instead of dropping its join abruptly after the rear crown. The plain steering wheel has a more tapered hub, moulded side spokes and a supported satin lower V generated as a continuous offset ribbon with rounded ends, avoiding crossing outlines and folded bevel tips. Matched wheel and left/right corner screenshots are in `test-results/front-cabin/`; cabin-fit rays cover both lower pillar joints and the existing asset checks protect the exterior windscreen rim.
+
+The later component photographs supersede the inferred short switch-grip shapes. The left Cobalt/Ravon R4 MENU variant has a long rounded rectangular shell, raised MENU button, separate turn arrows, up/down selector symbols, a fine knurled collar and SET/CLR end. The right part has a matching long shell and broad straight shank, rear/front wiper symbols, HI/LO/INT/OFF/1x positions and a marked knurled collar. Their mounting boxes remain concealed inside the column shroud; visible geometry is reconstructed from the photographs rather than measured factory CAD. Legends are projected onto the actual lofted surfaces. MENU, SET/CLR and wiper controls are visual details; the existing Q/E turn selection and cancellation remain functional. `test-results/cobalt-switch-parts/` contains matched cabin views, isolated installed-mesh part views and the browser interaction report.
+
+On 6 November the installed right switch was raised and moved outward to the opposite upper shoulder of the column. Its former low/inboard placement hid it behind the lower steering spoke and below the standard driver's view. Both grips now sit at matching mounting heights and extend beside their respective rim edges, retaining the separate MENU/turn and wiper details. `test-results/right-stalk-fit/` records the standard forward driver camera and a closer wheel view before/after the installation correction.
+
+## Interior mirror photograph - 6 November 2026
+
+The [Accioly GM Cobalt 2011–2017 mirror listing](https://www.acciolygm.com.br/espelho-retrovisor-interno-cobalt-de-2011-a-2017) and its [GM 13585947 product photograph](https://images.tcdn.com.br/img/img_prod/476243/espelho_retrovisor_interno_cobalt_de_2011_a_2017_54728504_1_20240531165406.jpg) guide the bowed lower edge, rounded ends, narrow black housing and swept mounting arm. A small manual day/night tab is modelled below the housing. The geometry is reconstructed from a perspective photograph; the photograph is an inspection reference only and is not embedded in the car asset. The complete housing, arm and adhesive mounting pad fit behind the actual windscreen surface.
+
+The in-car glass now displays the existing rear camera's live render target instead of a metallic environment reflection. The centre mirror now acts as a digital rear-camera display: the camera sits just beyond the back of the car, with a wide road view and slight downward pitch. The vehicle is hidden during this pass, keeping seats, headrests and bodywork out of the image. Runtime planar UVs remain valid after glTF pruning removes unused UVs from the untextured fallback. The image stays upright with horizontal mirror reversal. The centre HUD image/label are removed, and both side views now appear on continuous glass sheets fitted to the source door-mirror outlines. These replace the overlapping triangulated inserts so plastic slivers cannot interrupt the live image. The separate HUD mirror windows are removed. Every visible mirror refreshes before the main view on every frame, using the current chassis transform. Offscreen mirrors are skipped; quality scales render-target resolution instead of delaying camera frames. Cached local mirror positions avoid repeated bounding-box scans; mirror passes restore the render target, car/glass visibility and shadow-update state before drawing the main view. This is a rear-recorder camera view, not an oblique planar-reflection solver; the day/night tab remains a visual fitting.
+
+`npm run test:mirror` records matched front/oblique and driver views in `test-results/mirror-reference/`. It checks the live material, actual marked objects behind the car in the render target and on the final physical glass, mounting clearance and renderer state. The existing shadow browser check verifies shadow stability while driving and switching into the cockpit.
+
+## Powered kerb contact - 5 November 2026
+
+The [Rapier ray-cast vehicle controller source](https://github.com/dimforge/rapier/blob/master/src/control/ray_cast_vehicle_controller.rs) derives its rolling direction from the suspension ray's contact plane and applies engine force at that point. A finite wheel touching a kerb edge before that ray reaches it therefore needs an additional contact representation. The application's effective edge contact uses the actual solid tyre/concrete contact, redirects the existing driven-wheel force into its rolling tangent and suppresses that wheel's duplicate ray drive impulse. Tyre grip, obstacle friction and previous contact load bound the force. This is an authored approximation within the existing massless wheel-solid architecture; there is no independent wheel torque/inertia solver or measured Cobalt kerb-climbing calibration. A 20 cm course kerb is not required to be crossable from rest on grass.
+
+The mirror browser check also captures the normal cockpit with its HUD, confirms there is no mirror overlay scene, and places rear witnesses on both sides to verify that each physical side mirror actually displays its own live feed. Side camera positions follow the fitted mirror surfaces.
+
+The later supplied close-up supersedes the horizontal colour cut at the pillar feet. Both light moulded returns are narrowed and fitted to the actual curved dashboard surface. Shared edge refinement preserves a continuous lower contour, with the original smooth trim normals retained. A narrow dark joint follows the cowl; buried horizontal source return fragments are removed where the authored dashboard closes the surface. The floor, firewall and exterior windscreen rim remain. Matched left/right views and the normal driver camera are in `test-results/pillar-photo/`. A geometric test samples both joint clearances against the cowl.
+
+
+Mirror asset loading now uses a content hash generated by `npm run prepare:car` in `src/render/car-asset-version.ts`, so a changed GLB receives a new URL. The mirror browser check verifies that hash and captures both mirrors from the actual driver eye position. Asset tests raycast samples across each pane from two driver positions to catch opaque housing fragments in front of the reflection.
+
+`npm run test:mirror-motion` drives the car and checks all three quality settings looking forward, left and right. It requires a camera update on every frame where a mirror is visible and no passes for offscreen mirrors; reports are in `test-results/mirror-motion/`. The former round-robin schedule updated each mirror once per 3/6/12 frames at high/medium/low quality.
+
+The cockpit mirror panel provides an L / 0 / R selector and momentary directional pad in Russian and Uzbek. Each glass insert pivots independently inside its stationary housing, with a simulated 24?/s actuator and travel limits of ?8? horizontally and ?6? vertically. The rear camera direction follows twice the glass deflection. Opening the panel previews the selected mirror; release, cancellation, closing, blur or leaving the cockpit stops the command. Angles persist in the existing settings store with bounded migration for older settings. Each side resets independently. The source mirror aperture is cleared of overlapping rear-facing backing fragments so tilting does not reveal triangular patches; the outer painted casing remains.
+
+
+## Working front lights - 6 November 2026
+
+The supplied body shell provides the headlamp bowls, lower turn-signal sections and round bumper fog-lamp apertures. Their native optical sections now have independently controlled materials, with fitted front faces closing the fog reflectors. Headlights and fog lamps emit warm white light and cast shadow-free spot beams onto the road; front amber signals share the rear flash phase, including hazards. Depth-tested glows fade out for observers behind the car. The L/F switches and matching HUD buttons operate independently of engine state; enabling fog lamps enables headlights, and switching headlights off clears both. Existing remapped keys are preserved when adding the new bindings. This adds working lights to the daylight simulator; the dark scene used for browser measurements is a test fixture.
+
+The following rear-light pass adds white rear-facing reverse glows to the existing optical sections and an exposed red high-stop strip inside the original housing behind the rear glass. All three stop lamps follow the service brake, including after a stall; reverse lights require engine power and R. The mirror switch now remains discoverable next to the camera button in every driving view and opens the cockpit automatically. Inner window ledges are dark weatherstrip rather than white paint, preserving the exterior door skin and mirror housings.
+
+The subsequently supplied wide Cobalt cabin photograph guides the electric mirror switch on the left triangular sail trim: a small matte black rounded vertical housing, upper selector, pale mirror symbols and a lower circular directional knob. A wedge fits the original sloping panel while turning the face toward the normal driver eye, correcting the initially edge-on fit. Clicking the actual mesh opens the existing mirror panel; the round knob depresses briefly. Geometry and dimensions are inferred from the photograph, which is not embedded in the asset.

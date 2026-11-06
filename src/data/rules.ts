@@ -1,0 +1,42 @@
+import type { RuleDefinition } from '../types';
+const rows: [number, string, string][] = [
+  [5, 'Xavfsizlik kamari taqilmadi', 'Не пристегнул ремень безопасности'],
+  [5, 'Start chizig‘i chap burilish chirog‘isiz kesib o‘tildi', 'Пересёк линию «Старт» без левого указателя поворота'],
+  [5, 'Startdan 10 metr o‘tib chap burilish chirog‘i o‘chirilmadi', 'Не выключил левый указатель через 10 метров после старта'],
+  [5, 'Stop chizig‘idan 1 metrdan uzoqda to‘xtaldi', 'Остановился более чем за 1 метр до стоп-линии'],
+  [5, 'Kerakli burilish chirog‘i yoqilmadi', 'Не включил соответствующий указатель поворота'],
+  [5, '4.7 yoki 3.24 yo‘l belgisi talabi buzildi', 'Нарушил требования знаков 4.7 или 3.24'],
+  [5, 'Finishdan oldin o‘ng burilish chirog‘i yoqilmadi', 'Не включил правый указатель перед финишем'],
+  [5, 'Tezlik 20 km/soatdan oshdi (har 5 soniya uchun)', 'Скорость выше 20 км/ч (за каждые 5 секунд)'],
+  [10, 'Yashil chiroqda chorrahadan o‘tish 30 soniyadan oshdi', 'Проезд перекрёстка на разрешающий сигнал занял более 30 секунд'],
+  [25, 'Startdan keyin 30 soniyada harakat boshlanmadi', 'Не начал движение в течение 30 секунд после старта'],
+  [20, 'Stop chizig‘ida to‘xtamadi yoki uni bosib o‘tdi', 'Не остановился перед стоп-линией или пересёк её'],
+  [20, 'To‘xtagandan so‘ng 3 soniyadan oldin yurildi', 'Начал движение менее чем через 3 секунды после остановки'],
+  [25, 'Estakadada to‘xtagach 30 soniyada yurilmadi', 'На эстакаде не начал движение в течение 30 секунд после остановки'],
+  [20, 'Estakadada 0,3 metrdan ortiq orqaga ketdi', 'Откатился на эстакаде более чем на 0,3 метра'],
+  [20, '90° burilish yoki ilon izida nazorat chizig‘i bosildi', 'Пересёк контрольную линию в поворотах на 90° или змейке'],
+  [15, '90° burilish yoki ilon izi 2 daqiqadan oshdi', 'Повороты на 90° или змейка заняли более 2 минут'],
+  [20, 'Parkovkada g‘ildiraklar belgilangan chiziqqa qo‘yilmadi', 'Не установил колёса на фиксирующую линию при парковке'],
+  [25, 'Tezlanish qismida ikkinchi uzatma yoqilmadi', 'Не включил вторую передачу на участке разгона'],
+  [20, 'Favqulodda signaldan keyin 2 soniyada to‘xtamadi', 'Не остановился в течение 2 секунд после аварийного сигнала'],
+  [20, 'Favqulodda to‘xtagach 3 soniyada avariya chirog‘i yoqilmadi', 'Не включил аварийную сигнализацию в течение 3 секунд после остановки'],
+  [10, 'Yurishdan oldin avariya chirog‘i o‘chirilmadi', 'Не выключил аварийную сигнализацию перед началом движения'],
+  [20, 'Dvigatel o‘chib qoldi', 'Заглушил двигатель во время упражнения'],
+  [100, 'Startdan keyin 40 soniyada harakat boshlanmadi', 'Не начал движение в течение 40 секунд после старта'],
+  [100, 'Qizil chiroqda chorraha yoki stop chizig‘i kesildi', 'Въехал на перекрёсток или пересёк стоп-линию на запрещающий сигнал'],
+  [50, 'Temiryo‘l kesishmasidan to‘xtamasdan o‘tildi', 'Проехал железнодорожный переезд без остановки'],
+  [100, 'Imtihon tark etildi', 'Самовольно покинул экзамен или отказался выполнять упражнения'],
+  [100, 'Majburiy mashq bajarilmadi', 'Не выполнил одно из экзаменационных упражнений'],
+  [100, 'Belgilangan yo‘nalishdan chiqildi', 'Отклонился от установленного маршрута'],
+  [100, 'Ruxsat etilmagan joyda orqaga yurildi', 'Двигался задним ходом вне разрешённых упражнений'],
+  [100, 'To‘siq yoki transport bilan to‘qnashdi', 'Столкнулся с транспортом или препятствием'],
+  [100, 'Tezlik 40 km/soatdan oshdi', 'Превысил скорость 40 км/ч'],
+  [100, 'Imtihonning umumiy vaqti tugadi', 'Превысил общее время практического экзамена'],
+];
+export const RULESET_VERSION = 'supplied-2026-04-v1';
+export const rules: RuleDefinition[] = rows.map(([points, uz, ru], i) => ({
+  id: i + 1, points, text: { uz, ru }, severity: i < 9 ? 'minor' : i < 22 ? 'medium' : 'major',
+  source: `2026-04-17_14-47-01_NFP8VA7K37.png#row-${i + 1}`,
+  verification: 'supplied', repeat: i === 7 ? '5seconds' : i === 21 ? 'event' : undefined,
+}));
+export const ruleById = (id: number) => rules[id - 1];

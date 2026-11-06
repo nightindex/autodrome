@@ -1,0 +1,273 @@
+import RAPIER from '@dimforge/rapier3d-compat';
+import * as T from 'three';
+import { vehicleConfig as config,vehicleDynamics as dynamics } from '../data/vehicle';
+import { hillHeight } from '../data/course';
+import type { Vec2, VehicleTelemetry } from '../types';
+import { Drivetrain } from './drivetrain';
+import { Input } from './input';
+import { clamp,localPoint } from './math';
+import { tyreForces } from './tyre-forces';
+import { Steering } from './steering';
+const tyreHalfWidth=.105,tyreShoulder=.03,tyreClearance=.017;
+export class Vehicle {
+  body:RAPIER.RigidBody;collider:RAPIER.Collider;controller:RAPIER.DynamicRayCastVehicleController;
+  drivetrain=new Drivetrain();belt=false;indicator:'off'|'left'|'right'='off';hazards=false;
+  positionLights=false;headlights=false;fogLights=false;private ignitionOn=false;
+  get canUseFogLights(){return (this.ignitionOn||this.drivetrain.engine)&&(this.positionLights||this.headlights);}
+  readonly steering=new Steering();
+  surfaceAt:(point:Vec2)=>'asphalt'|'grass'=()=> 'asphalt';
+  time=0;collision=false;private queue=new RAPIER.EventQueue(true);
+  private tyres:RAPIER.Collider[]=[];private tyreHandles=new Set<number>();
+  private tyreContactForces=new Map<number,number>();
+  private contactPairs=new Set<string>();private collisionHold=0;
+  private impactPatches=new Map<number,Vec2>();
+  private readonly tyreShape=new RAPIER.RoundCylinder(tyreHalfWidth-tyreShoulder,config.wheelRadius-tyreClearance-tyreShoulder,tyreShoulder);
+  // Ray suspension supplies tyre traction and braking. The massless tyre
+  // solids resolve obstacle normals only: they have no independent spin, so
+  // Coulomb friction here would make a rolling tyre behave like a locked skid.
+  // Powered rolling at an obstacle edge is resolved separately below.
+  private hooks:RAPIER.PhysicsHooks={
+    filterContactPair:(a,b)=>{
+      const obstacle=this.tyreHandles.has(a)?b:this.tyreHandles.has(b)?a:null;
+      return obstacle===null||this.obstacles.has(obstacle)?RAPIER.SolverFlags.COMPUTE_IMPULSE:null;
+    },
+    filterIntersectionPair:()=>true,
+  };
+  constructor(public world:RAPIER.World,public obstacles:Set<number>){
+    this.body=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0,1,0).setLinearDamping(0).setAngularDamping(.8).setCcdEnabled(true));
+    this.collider=world.createCollider(RAPIER.ColliderDesc.cuboid(.78,.24,2.04).setTranslation(0,.12,0)
+      .setMassProperties(config.mass,{x:0,y:-.08,z:0},{x:1900,y:2200,z:480},{x:0,y:0,z:0,w:1})
+      .setFriction(.3).setRestitution(.02).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS|RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS),this.body);
+    this.controller=world.createVehicleController(this.body);this.controller.indexUpAxis=1;this.controller.setIndexForwardAxis=2;
+    for(const z of [config.wheelbase/2,-config.wheelbase/2])for(const x of [-config.track/2,config.track/2]){
+      this.controller.addWheel({x,y:.02,z},{x:0,y:-1,z:0},{x:-1,y:0,z:0},dynamics.suspensionRestLength,config.wheelRadius);
+      const i=this.controller.numWheels()-1;
+      this.controller.setWheelSuspensionStiffness(i,dynamics.suspensionStiffness);this.controller.setWheelSuspensionCompression(i,4.4);this.controller.setWheelSuspensionRelaxation(i,5.2);
+      this.controller.setWheelMaxSuspensionForce(i,dynamics.maxSuspensionForce);this.controller.setWheelMaxSuspensionTravel(i,dynamics.suspensionTravel);this.controller.setWheelFrictionSlip(i,dynamics.asphaltGrip);this.controller.setWheelSideFrictionStiffness(i,1.5);
+      const tyre=world.createCollider(RAPIER.ColliderDesc.roundCylinder(tyreHalfWidth-tyreShoulder,config.wheelRadius-tyreClearance-tyreShoulder,tyreShoulder)
+        .setTranslation(x,.02-dynamics.suspensionRestLength,z)
+        .setRotation(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2))
+        .setMass(0).setFriction(0).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setRestitution(.03)
+        .setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS|RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS),this.body);
+      this.tyres.push(tyre);this.tyreHandles.add(tyre.handle);
+    }
+  }
+  reset(p:Vec2,yaw:number){
+    this.body.setTranslation({x:p.x,y:hillHeight(p.x,p.z)+.67,z:p.z},true);
+    this.body.setRotation(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),yaw),true);
+    this.body.setLinvel({x:0,y:0,z:0},true);this.body.setAngvel({x:0,y:0,z:0},true);this.body.resetForces(true);this.body.resetTorques(true);
+    this.drivetrain.reset();this.steering.reset();this.belt=false;this.indicator='off';this.hazards=false;this.ignitionOn=false;this.positionLights=false;this.headlights=false;this.fogLights=false;this.time=0;this.collision=false;this.collisionHold=0;this.contactPairs.clear();this.impactPatches.clear();this.tyreContactForces.clear();this.queue.clear();
+    this.tyres.forEach((tyre,i)=>{
+      this.controller.setWheelSteering(i,0);
+      this.controller.setWheelRadius(i,config.wheelRadius);
+      this.controller.setWheelChassisConnectionPointCs(i,{x:(i%2===0?-1:1)*config.track/2,y:.02,z:(i<2?1:-1)*config.wheelbase/2});
+      tyre.setTranslationWrtParent({x:(i%2===0?-1:1)*config.track/2,y:.02-dynamics.suspensionRestLength,z:(i<2?1:-1)*config.wheelbase/2});
+      tyre.setRotationWrtParent(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2));
+    });
+  }
+  action(action:string,assist=false){
+    if(action==='positionLights'){this.positionLights=!this.positionLights;if(!this.positionLights){this.headlights=false;this.fogLights=false;}}
+    if(action==='headlights'){this.headlights=!this.headlights;if(this.headlights)this.positionLights=true;}
+    if(action==='fogLights'&&this.canUseFogLights)this.fogLights=!this.fogLights;
+    if(action.startsWith('gear'))this.drivetrain.shift(Number(action.slice(-1)),assist);
+    if(action==='reverse')this.drivetrain.shift(-1,assist);if(action==='neutral')this.drivetrain.shift(0);
+    if(action==='ignition'){this.ignitionOn=!this.drivetrain.engine;this.drivetrain.ignite();if(!this.ignitionOn)this.fogLights=false;}
+    if(action==='handbrake'){this.drivetrain.handbrake=!this.drivetrain.handbrake;this.body.wakeUp();}
+    if(action==='belt')this.belt=!this.belt;if(action==='hazards')this.hazards=!this.hazards;
+    if(action==='indicatorLeft')this.indicator=this.indicator==='left'?'off':'left';
+    if(action==='indicatorRight')this.indicator=this.indicator==='right'?'off':'right';
+  }
+  update(dt:number,input:Input,assist:boolean,steeringAssist=false){
+    if(input.down('throttle')||input.down('brake')||input.down('left')||input.down('right'))this.body.wakeUp();
+    this.time+=dt;const q=this.body.rotation(),rotation=new T.Quaternion(q.x,q.y,q.z,q.w);
+    const forward=new T.Vector3(0,0,1).applyQuaternion(rotation),position=this.body.translation();
+    const vel=this.body.linvel(),speed=vel.x*forward.x+vel.y*forward.y+vel.z*forward.z;
+    const drive=this.drivetrain.update(dt,speed,{throttle:+input.down('throttle'),brake:+input.down('brake'),clutch:+input.down('clutch')},assist);
+    const horizontalSpeed=Math.hypot(vel.x,vel.z);
+    const steeringGrip=steeringAssist?Math.min(...[0,1].map(i=>{
+      const contact=this.controller.wheelIsInContact(i)?this.controller.wheelContactPoint(i):null;
+      const point=contact??new T.Vector3((i===0?-1:1)*config.track/2,0,config.wheelbase/2).applyQuaternion(rotation).add(position);
+      return this.surfaceAt(point)==='grass'?dynamics.grassGrip:dynamics.asphaltGrip;
+    })):undefined;
+    const steer=this.steering.update(dt,+input.down('left')-+input.down('right'),horizontalSpeed,steeringGrip);
+    if(horizontalSpeed>.001){
+      const drag=.5*dynamics.airDensity*dynamics.dragArea*horizontalSpeed*horizontalSpeed;
+      const impulse=Math.min(drag*dt,config.mass*horizontalSpeed);
+      this.body.applyImpulse({x:-vel.x/horizontalSpeed*impulse,y:0,z:-vel.z/horizontalSpeed*impulse},false);
+    }
+    // Live engine torque can overcome rollback; passive engine drag only brakes.
+    const powered=this.drivetrain.engine&&drive.force*this.drivetrain.gear>0;
+    const brakes:number[]=[],gripLimits:number[]=[];
+    for(let i=0;i<4;i++){
+      // Ackermann geometry: the inside wheel follows the tighter radius.
+      const x=(i%2===0?-1:1)*config.track/2;
+      const wheelSteer=i<2&&Math.abs(steer)>.0001?Math.sign(steer)*Math.atan(config.wheelbase/(config.wheelbase/Math.tan(Math.abs(steer))-x*Math.sign(steer))):0;
+      this.controller.setWheelSteering(i,wheelSteer);
+      const support=this.wheelSupport(i,position,rotation,wheelSteer);
+      this.controller.setWheelRadius(i,support?.radius??config.wheelRadius);
+      this.controller.setWheelChassisConnectionPointCs(i,support?.connection??{x,y:.02,z:(i<2?1:-1)*config.wheelbase/2});
+      const length=clamp(this.controller.wheelSuspensionLength(i)??dynamics.suspensionRestLength,.08,dynamics.suspensionRestLength+dynamics.suspensionTravel);
+      const wheelPoint=new T.Vector3(x,.02-length-config.wheelRadius,(i<2?1:-1)*config.wheelbase/2).applyQuaternion(rotation).add(position);
+      const grass=!support&&this.surfaceAt(wheelPoint)==='grass';
+      // Each tyre responds to the surface underneath it, including split verges.
+      // Previous-step spring load includes acceleration/braking load transfer.
+      const load=this.controller.wheelIsInContact(i)?clamp(this.controller.wheelSuspensionForce(i)??0,0,dynamics.maxSuspensionForce):0;
+      const lockedRear=i>=2&&drive.parkingBrake>0&&Math.abs(speed)>1;
+      const grip=(support?Math.min(dynamics.asphaltGrip,support.friction):grass?dynamics.grassGrip:dynamics.asphaltGrip)*(lockedRear?dynamics.handbrakeGrip:1);
+      const limit=load*grip;gripLimits.push(limit);
+      this.controller.setWheelFrictionSlip(i,grip);
+      this.controller.setWheelSideFrictionStiffness(i,lockedRear ? .65 : 1.5);
+      // Service brakes act on all wheels; the handbrake holds the rear axle.
+      const brakingForce=drive.braking*(i<2?dynamics.frontBrakeShare:1-dynamics.frontBrakeShare)/2+(i>=2?drive.parkingBrake/2:0);
+      const rollingForce=load*(grass?dynamics.grassResistance:dynamics.rollingResistance);
+      const direction=new T.Vector3(Math.sin(wheelSteer),0,Math.cos(wheelSteer)).applyQuaternion(rotation);
+      const wheelVelocity=this.body.velocityAtPoint(wheelPoint),wheelSpeed=direction.dot(wheelVelocity);
+      const edge=i<2&&!support?this.wheelEdge(i,direction,new T.Vector3(0,1,0).applyQuaternion(rotation),drive.force):undefined;
+      // A finite tyre can touch a curb before the downward suspension ray
+      // reaches it. Redirect this wheel's existing axle force into its rolling
+      // tangent instead of applying another drive impulse on the flat road.
+      // Use the measured contact load as well when the road ray is unloaded.
+      const tractionLimit=edge?Math.min(grip,edge.friction)*(load+(this.tyreContactForces.get(this.tyres[i].handle)??0)):limit;
+      const force=tyreForces(i<2?drive.force/2:0,brakingForce+rollingForce,tractionLimit,wheelSpeed,dt,powered);
+      this.controller.setWheelEngineForce(i,edge&&force.engine?0:force.engine);this.controller.setWheelBrake(i,force.brake);
+      if(edge&&force.engine)this.body.applyImpulseAtPoint(edge.tangent.multiplyScalar(force.engine*dt),edge.point,true);
+      brakes.push(Math.min(brakingForce,Math.max(0,force.brake/dt-rollingForce)));
+    }
+    this.controller.updateVehicle(dt,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,c=>c.handle!==this.collider.handle&&!this.tyreHandles.has(c.handle));
+    // Update the solid tyre poses after the new suspension rays, before contact
+    // resolution. A curb impact must not use last frame's wheel height.
+    for(let i=0;i<4;i++){
+      const length=clamp(this.controller.wheelSuspensionLength(i)??dynamics.suspensionRestLength,.08,dynamics.suspensionRestLength+dynamics.suspensionTravel);
+      this.tyres[i].setTranslationWrtParent({x:(i%2===0?-1:1)*config.track/2,y:.02-length,z:(i<2?1:-1)*config.wheelbase/2});
+      this.tyres[i].setRotationWrtParent(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),this.controller.wheelSteering(i)??0).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2)));
+    }
+    // At rest, static tyre friction balances the component of gravity along
+    // the road. The ray controller otherwise leaves a one-step downhill creep.
+    if(Math.abs(speed)<.15&&(drive.braking>100||drive.parkingBrake>0)){
+      const normal=new T.Vector3();let contacts=0,holdingForce=0;
+      for(let i=0;i<4;i++)if(this.controller.wheelIsInContact(i)){
+        normal.add(this.controller.wheelContactNormal(i)!);contacts++;
+        holdingForce+=Math.min(brakes[i],gripLimits[i]);
+      }
+      if(contacts>=2){
+        normal.normalize();
+        const tangent=new T.Vector3(-normal.x*normal.y,1-normal.y*normal.y,-normal.z*normal.y).multiplyScalar(config.mass*9.81);
+        if(holdingForce>=tangent.length())this.body.applyImpulse(tangent.multiplyScalar(dt),false);
+      }
+    }
+    for(const a of [0,2]){
+      const b=a+1;if(!this.controller.wheelIsInContact(a)||!this.controller.wheelIsInContact(b))continue;
+      const force=clamp(((this.controller.wheelSuspensionLength(b)??0)-(this.controller.wheelSuspensionLength(a)??0))*dynamics.antiRollStiffness,-1500,1500);
+      this.body.applyImpulseAtPoint({x:0,y:force*dt,z:0},this.controller.wheelContactPoint(a)!,false);
+      this.body.applyImpulseAtPoint({x:0,y:-force*dt,z:0},this.controller.wheelContactPoint(b)!,false);
+    }
+    this.tyreContactForces.clear();
+    this.world.timestep=dt;this.world.step(this.queue,this.hooks);
+    this.collisionHold=Math.max(0,this.collisionHold-dt);
+    // Front and rear axles can touch the same curb seconds apart. Keep that
+    // local impact episode until the whole footprint clears it, even in the
+    // air. A whole-course curb mesh must still permit later, separate hits.
+    const bodyPosition=this.body.translation(),bodyRotation=this.body.rotation();
+    const heading=new T.Vector3(0,0,1).applyQuaternion(bodyRotation),yaw=Math.atan2(heading.x,heading.z);
+    const sin=Math.sin(yaw),cos=Math.cos(yaw);
+    for(const [handle,point]of this.impactPatches){
+      const dx=point.x-bodyPosition.x,dz=point.z-bodyPosition.z;
+      if(!this.world.getCollider(handle)||Math.abs(dx*cos-dz*sin)>config.width/2||Math.abs(dx*sin+dz*cos)>config.length/2)this.impactPatches.delete(handle);
+    }
+    // CCD may resolve a brief impact before the final manifolds are refreshed,
+    // leaving separated contacts with no stored impulses. Force events retain
+    // that physical hit without counting inactive predictive contact pairs.
+    this.queue.drainContactForceEvents(event=>{
+      const a=event.collider1(),b=event.collider2(),own=(h:number)=>h===this.collider.handle||this.tyreHandles.has(h);
+      if(event.totalForceMagnitude()<=0)return;
+      const tyre=this.tyreHandles.has(a)?a:this.tyreHandles.has(b)?b:undefined;
+      if(tyre!==undefined)this.tyreContactForces.set(tyre,(this.tyreContactForces.get(tyre)??0)+event.totalForceMagnitude());
+      if(own(a)&&this.obstacles.has(b))this.recordImpact(this.world.getCollider(a),this.world.getCollider(b));
+      else if(own(b)&&this.obstacles.has(a))this.recordImpact(this.world.getCollider(b),this.world.getCollider(a));
+    });
+    this.queue.clear();
+    // Rapier can retain a pair across teleports and emit its "started" event
+    // while the shapes are still separated by its prediction distance. Read
+    // touching or impulse-bearing contacts so resets and near misses report
+    // correctly, including curb impacts resolved before shapes penetrate.
+    const contacts=new Set<string>();
+    for(const own of [this.collider,...this.tyres])this.world.contactPairsWith(own,other=>{
+      if(!this.obstacles.has(other.handle))return;
+      let touching=false;
+      this.world.contactPair(own,other,manifold=>{
+        for(let i=0;i<manifold.numContacts();i++)if(manifold.contactDist(i)<=0||manifold.contactImpulse(i)>0){touching=true;break;}
+      });
+      if(touching){
+        const a=own.handle,b=other.handle,key=a<b?`${a}:${b}`:`${b}:${a}`;
+        contacts.add(key);
+        if(!this.contactPairs.has(key))this.recordImpact(own,other);
+      }
+    });
+    this.contactPairs=contacts;
+    this.collision=this.contactPairs.size>0||this.collisionHold>0||this.impactPatches.size>0;
+  }
+  private wheelSupport(index:number,position:RAPIER.Vector,rotation:T.Quaternion,steer:number){
+    // The centre ray misses a curb under the tyre's tread or shoulder. Sweep
+    // the finite tyre along its suspension to find the actual supported axle
+    // height, so the ray cannot extend the wheel back down into the concrete.
+    const root=new T.Vector3((index%2===0?-1:1)*config.track/2,.02,(index<2?1:-1)*config.wheelbase/2).applyQuaternion(rotation).add(position);
+    const up=new T.Vector3(0,1,0).applyQuaternion(rotation),down=up.clone().negate();
+    const range=dynamics.suspensionRestLength+dynamics.suspensionTravel;
+    const road=this.world.castRay(new RAPIER.Ray(root,down),range+config.wheelRadius,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body);
+    if(!road)return;
+    const orientation=rotation.clone().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),steer)).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2));
+    const support=this.world.castShape(root,orientation,down,this.tyreShape,0,range,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body,c=>this.obstacles.has(c.handle));
+    if(!support||support.time_of_impact<=.001||up.dot(support.normal1)<.05)return;
+    const rise=road.timeOfImpact-config.wheelRadius-support.time_of_impact;
+    if(rise<=.001||rise>=config.wheelRadius)return;
+    const ground=root.clone().addScaledVector(down,road.timeOfImpact);
+    if(new T.Vector3().copy(support.witness1).sub(ground).dot(up)>=config.wheelRadius-.02)return;
+    const center=root.clone().addScaledVector(down,support.time_of_impact);
+    const point=new T.Vector3().copy(support.witness1);
+    const offset=point.sub(center);offset.addScaledVector(down,-offset.dot(down));
+    // Cast inside the 2 cm bevel, away from its almost vertical side face.
+    // Use that fresh ray's distance to retain the shape sweep's axle height
+    // with the same clearance as the ordinary road ray, including when the
+    // ray lands on the higher top of the bevel.
+    offset.addScaledVector(new T.Vector3(support.normal1.x,0,support.normal1.z),-.03);
+    const shiftedRoot=root.add(offset);
+    const ray=this.world.castRayAndGetNormal(new RAPIER.Ray(shiftedRoot,down),range+config.wheelRadius,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body);
+    if(!ray||up.dot(ray.normal)<.25)return;
+    if(shiftedRoot.clone().addScaledVector(down,ray.timeOfImpact).sub(ground).dot(up)>=config.wheelRadius-.02)return;
+    const radius=Math.min(config.wheelRadius,ray.timeOfImpact-support.time_of_impact+tyreClearance);
+    if(radius<.01)return;
+    const connection=shiftedRoot.sub(position).applyQuaternion(rotation.clone().invert());
+    return {radius,connection,friction:support.collider.friction()};
+  }
+  private wheelEdge(index:number,forward:T.Vector3,up:T.Vector3,engineForce:number){
+    if(Math.abs(engineForce)<.001)return;
+    const tyre=this.tyres[index],center=new T.Vector3().copy(tyre.translation()),axle=new T.Vector3().crossVectors(up,forward).normalize();
+    let closest:{distance:number;point:T.Vector3;tangent:T.Vector3;friction:number}|undefined;
+    this.world.contactPairsWith(tyre,other=>{
+      if(!this.obstacles.has(other.handle)||other.isSensor())return;
+      const contact=tyre.contactCollider(other,.002);
+      if(!contact)return;
+      const normal=new T.Vector3().copy(contact.normal2),point=new T.Vector3().copy(contact.point2);
+      // Only an edge below the axle and opposing powered rolling. A vertical
+      // wall, sidewall scrape or a contact on top of the wheel supplies no lift.
+      const rise=normal.dot(up);
+      if(normal.y<=.05||rise<=.05||rise>=.98||normal.dot(forward)*Math.sign(engineForce)>=-.02||point.clone().sub(center).dot(up)>=-.01||Math.abs(normal.dot(axle))>.8)return;
+      const tangent=new T.Vector3().crossVectors(axle,normal).normalize();
+      if(!closest||contact.distance<closest.distance)closest={distance:contact.distance,point,tangent,friction:other.friction()};
+    });
+    return closest;
+  }
+  private recordImpact(own:RAPIER.Collider,obstacle:RAPIER.Collider){
+    this.collisionHold=.35;
+    if(this.impactPatches.has(obstacle.handle))return;
+    const hit=obstacle.projectPoint(own.translation(),false);
+    if(hit)this.impactPatches.set(obstacle.handle,{x:hit.point.x,z:hit.point.z});
+  }
+  telemetry():VehicleTelemetry{
+    const p=this.body.translation(),q=this.body.rotation(),v=this.body.linvel();
+    const dir=new T.Vector3(0,0,1).applyQuaternion(new T.Quaternion(q.x,q.y,q.z,q.w));const yaw=Math.atan2(dir.x,dir.z);
+    const d=this.drivetrain;
+    return {time:this.time,position:{x:p.x,z:p.z},yaw,speed:Math.hypot(v.x,v.z),signedSpeed:v.x*dir.x+v.y*dir.y+v.z*dir.z,rpm:d.rpm,gear:d.gear,throttle:d.throttle,brake:d.brake,clutch:d.clutch,steering:this.steering.normalized,engine:d.engine,stalled:d.stalled,belt:this.belt,handbrake:d.handbrake,indicator:this.indicator,hazards:this.hazards,ignition:this.ignitionOn||d.engine,positionLights:this.positionLights||this.headlights,headlights:this.headlights,fogLights:this.fogLights&&this.canUseFogLights,bumper:localPoint(p,yaw,0,config.length/2),wheels:[localPoint(p,yaw,-config.track/2,config.wheelbase/2),localPoint(p,yaw,config.track/2,config.wheelbase/2),localPoint(p,yaw,-config.track/2,-config.wheelbase/2),localPoint(p,yaw,config.track/2,-config.wheelbase/2)],collision:this.collision};
+  }
+  dispose(){this.queue.free();this.world.removeVehicleController(this.controller);this.world.removeRigidBody(this.body);}
+}
