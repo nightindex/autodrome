@@ -63,6 +63,13 @@ export function signShape(kind:SignKind):T.Shape{
   const direction=spec.outline==='triangle'?1:-1;shape.moveTo(0,h/2*direction);shape.lineTo(-w/2,-h/2*direction);shape.lineTo(w/2,-h/2*direction);shape.closePath();return shape;
 }
 const textures=new Map<string,T.CanvasTexture>();
+const directionArtwork=new Map<'left'|'right',HTMLImageElement>();
+export async function loadDirectionSignArtwork(){
+  await Promise.all(([['left','4.1.3'],['right','4.1.2']] as const).map(async([kind,designation])=>{
+    const image=new Image();image.src=`/assets/road-signs/${designation}.png`;
+    await image.decode();directionArtwork.set(kind,image);
+  }));
+}
 const isVehiclePlate=(kind:SignKind):kind is VehiclePlateKind=>kind==='carPlate'||kind==='truckPlate'||kind==='busPlate';
 const isRectangularPlate=(kind:SignKind)=>isVehiclePlate(kind)||kind==='stopPlate'||kind==='parkingEndPlate';
 const signVariation=(kind:SignKind,mirror:boolean)=>kind==='winding'&&mirror?{designation:'1.12.1',firstTurn:'right'}:kind==='pedestrian'&&mirror?{designation:'5.16.1'}:kind==='chevronLeft'&&mirror?{designation:'1.31.1'}:{};
@@ -95,15 +102,13 @@ export function signTexture(kind:SignKind,mirror=false){
     ctx.fillStyle=white;ctx.fillRect(0,0,256,256);ctx.strokeStyle=black;ctx.lineWidth=2;ctx.strokeRect(2,2,252,252);
     const count=kind==='railBars3'?3:kind==='railBars2'?2:1;
     for(let i=0;i<count;i++){const y=128+(i-(count-1)/2)*56;polygon([[6,y+42],[250,y-34],[250,y-13],[6,y+63]],red);}
-  }else if(kind==='right'||kind==='left'||kind==='straight'){
+  }else if(kind==='right'||kind==='left'){
+    const image=directionArtwork.get(kind);
+    if(!image)throw new Error(`Direction sign artwork is not loaded: ${kind}`);
+    ctx.drawImage(image,0,0,256,256);
+  }else if(kind==='straight'){
     circle(128,white);circle(120,blue);
-    if(kind==='straight')polygon([[116,256],[140,256],[140,95],[165,95],[128,28],[92,95],[116,95]],white);
-    else{
-      // The manufactured sign's stem meets the lower rim. Its inner bend is
-      // rounded, while the outer elbow and arrowhead keep their broad shape.
-      ctx.save();if(kind==='right'){ctx.translate(256,0);ctx.scale(-1,1);}
-      ctx.fillStyle=white;const arrow=new Path2D('M91 95 L34 128 L91 161 V141 H108 Q132 141 132 160 V256 H157 V134 Q157 116 140 116 H91Z');ctx.fill(arrow);ctx.restore();
-    }
+    polygon([[116,256],[140,256],[140,95],[165,95],[128,28],[92,95],[116,95]],white);
   }else if(kind==='chevronLeft'){
     ctx.save();if(mirror){ctx.translate(256,0);ctx.scale(-1,1);}
     ctx.fillStyle=white;ctx.fillRect(0,0,256,256);
@@ -166,17 +171,18 @@ function signFilmGrain(){
   let seed=1421;for(let i=0;i<data.data.length;i+=4){seed=(seed*1664525+1013904223)>>>0;const value=175+(seed>>>27);data.data[i]=data.data[i+1]=data.data[i+2]=value;data.data[i+3]=255;}
   ctx.putImageData(data,0,0);reflectiveGrain=new T.CanvasTexture(canvas);reflectiveGrain.wrapS=reflectiveGrain.wrapT=T.RepeatWrapping;reflectiveGrain.repeat.set(6,6);return reflectiveGrain;
 }
-export function createRoadSign(kind:SignKind,mirror=false,lowerSign?:SignKind|SignKind[],options:{center?:number;bottom?:number;post?:boolean}={}):T.Group{
+export function createRoadSign(kind:SignKind,mirror=false,lowerSign?:SignKind|SignKind[],options:{center?:number;bottom?:number;post?:boolean;postBase?:number}={}):T.Group{
   const root=new T.Group(),spec=signSpecifications[kind],lower=lowerSign?(Array.isArray(lowerSign)?lowerSign:[lowerSign]):[],boards=signBoardLayout(kind,lower,options);
-  const center=boards[0].center,crossCenter=center+spec.height/2+.6,postHeight=kind==='railway'?crossCenter+.3:center+.18;
+  const center=boards[0].center,crossCenter=center+spec.height/2+.6,postHeight=kind==='railway'?crossCenter+.3:center+.18,postBase=options.postBase??0;
   const mainBoards=boards.filter(b=>!supplementary(b.kind));
   root.name=`assembly-sign-${kind}`;root.userData={kind,...spec,...signVariation(kind,mirror),thickness:kind==='winding'?.001:.0022,mirrored:mirror,lowerMainEdge:Math.min(...(mainBoards.length?mainBoards:boards).map(b=>b.center-signSpecifications[b.kind].height/2)),heightDatum:'road-surface-to-lowest-main-board'};
   if(kind==='railway')root.userData.crossbuckCenter=crossCenter;
   const part=(geometry:T.BufferGeometry,material:T.Material,position:number[],rotation=[0,0,0],name='')=>{const m=new T.Mesh(geometry,material);m.name=name;m.position.fromArray(position);m.rotation.fromArray([...rotation,'XYZ'] as [number,number,number,T.EulerOrder]);m.castShadow=true;m.receiveShadow=true;root.add(m);return m;};
   if(options.post!==false){
-    part(new T.CylinderGeometry(.03,.034,postHeight,12),steel,[0,postHeight/2,0]);
+    // The board datum follows the road; a raised roadside post still reaches the ground.
+    part(new T.CylinderGeometry(.03,.034,postHeight-postBase,12),steel,[0,(postHeight+postBase)/2,0]);
     part(new T.CylinderGeometry(.035,.035,.025,12),hardware,[0,postHeight+.008,0]);
-    part(new T.CylinderGeometry(.095,.12,.12,12),concrete,[0,.04,0]);
+    part(new T.CylinderGeometry(.095,.12,.12,12),concrete,[0,postBase+.04,0]);
   }
   const board=(kind:SignKind,center:number,mirror:boolean)=>{
   const spec=signSpecifications[kind],shape=signShape(kind),thinPlate=true,plateThickness=kind==='winding'?.001:.0022,faceZ=.055+plateThickness+.001;

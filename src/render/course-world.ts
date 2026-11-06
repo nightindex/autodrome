@@ -166,8 +166,9 @@ export class CourseWorld {
     mesh.rotation.set(-Math.PI/2,0,yaw);mesh.position.set(x,hillHeight(x,z)+.055,z);this.group.add(mesh);
   }
   private sign(kind:SignKind,x:number,z:number,yaw:number,mirror=false,lowerSign?:SignKind|SignKind[],center?:number,bottom?:number){
-    const base=hillHeight(x,z),assembly=createRoadSign(kind,mirror,lowerSign,{center,bottom});assembly.position.set(x,base,z);assembly.rotation.y=yaw;this.group.add(assembly);
-    const collider=this.physics.createCollider(RAPIER.ColliderDesc.cylinder(1.3,.034).setTranslation(x,base+1.3,z));this.obstacles.add(collider.handle);
+    const base=hillHeight(x,z),assembly=createRoadSign(kind,mirror,lowerSign,{center,bottom,postBase:-base});assembly.position.set(x,base,z);assembly.rotation.y=yaw;this.group.add(assembly);
+    const halfHeight=1.3+base/2;
+    const collider=this.physics.createCollider(RAPIER.ColliderDesc.cylinder(halfHeight,.034).setTranslation(x,halfHeight,z));this.obstacles.add(collider.handle);
     return assembly;
   }
   private build(){

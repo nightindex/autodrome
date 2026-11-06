@@ -9,7 +9,8 @@ const page=await browser.newPage({viewport:{width:1440,height:960}}),errors=[];p
 try{
   await page.goto('http://127.0.0.1:5173/');await page.waitForFunction(()=>window.__avtodrom?.snapshot().loaded,null,{timeout:60000});await page.click('#practice');await page.keyboard.press('Escape');
   const report=await page.evaluate(async()=>{
-    const T=await import('/node_modules/three/build/three.module.js'),{createRoadSign,signTexture,signSpecifications}=await import('/src/render/road-signs.ts');
+    const T=await import('/node_modules/three/build/three.module.js'),{createRoadSign,signTexture,signSpecifications,loadDirectionSignArtwork}=await import('/src/render/road-signs.ts');
+    await loadDirectionSignArtwork();
     const kinds=['carPlate','truckPlate','busPlate'],plates=kinds.map(kind=>{
       const canvas=signTexture(kind).image,ctx=canvas.getContext('2d'),{width:w,height:h}=canvas,data=ctx.getImageData(0,0,w,h).data,seen=new Uint8Array(w*h),components=[];
       const ink=i=>data[i*4]<80&&data[i*4+1]<80&&data[i*4+2]<80;
@@ -24,7 +25,7 @@ try{
     });
     const directions=['left','right'].map(kind=>{
       const ctx=signTexture(kind).image.getContext('2d'),pixel=(x,y)=>[...ctx.getImageData(x*2,y*2,1,1).data];
-      return {kind,tip:pixel(kind==='left'?40:216,128),stem:pixel(kind==='left'?144:112,232),opposite:pixel(kind==='left'?216:40,128)};
+      return {kind,tip:pixel(kind==='left'?42:214,112),stem:pixel(kind==='left'?178:78,232),opposite:pixel(kind==='left'?216:40,112)};
     });
     const s=window.__avtodrom.scene,targets=s.world.group.children.filter(n=>n.userData.kind==='left'&&(n.getObjectByName('sign-carPlate-front')||n.getObjectByName('sign-truckPlate-front')));
     const positions=targets.map(n=>n.getWorldPosition(new T.Vector3()).toArray());

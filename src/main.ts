@@ -12,6 +12,7 @@ import { readSettings, saveSettings } from './ui/storage';
 import { ruleById } from './data/rules';
 import type { ExamResult, Mode } from './types';
 import { label } from './ui/i18n';
+import {loadDirectionSignArtwork} from './render/road-signs';
 
 const settings=readSettings();document.documentElement.lang=settings.language;
 let vehicle:Vehicle,scene:GameScene,physics:RAPIER.World;
@@ -96,7 +97,7 @@ window.addEventListener('blur',()=>{if(state==='driving')pause();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='driving')pause();});
 async function boot(){
   try{
-    await RAPIER.init();physics=new RAPIER.World({x:0,y:-9.81,z:0});vehicle=new Vehicle(physics,new Set());
+    await Promise.all([RAPIER.init(),loadDirectionSignArtwork()]);physics=new RAPIER.World({x:0,y:-9.81,z:0});vehicle=new Vehicle(physics,new Set());
     vehicle.reset(course.exercises[0].spawn,course.exercises[0].yaw);
     scene=new GameScene(ui.viewport,vehicle);scene.setQuality(settings.quality);scene.setMirrorAdjustments(settings.mirrors);
     scene.onCabinMirrorSwitch=()=>{if(state==='driving')ui.openMirrorControls();};

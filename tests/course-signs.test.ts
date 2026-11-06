@@ -1,7 +1,8 @@
 import {describe,expect,it} from 'vitest';
 import {courseSigns,courseSignPoint} from '../src/data/course-signs';
 import {signBoardLayout,signSpecifications} from '../src/render/road-signs';
-import {roadDistance} from '../src/render/course-world';
+import {boundaryLoops,roadDistance} from '../src/render/course-world';
+import {hillEdgeSections} from '../src/render/hill-structure';
 import {intersectionApproaches} from '../src/data/intersection';
 
 describe('sign assemblies surveyed from uz_video.mp4',()=>{
@@ -11,6 +12,15 @@ describe('sign assemblies surveyed from uz_video.mp4',()=>{
       expect(roadDistance(courseSignPoint(sign)),sign.id).toBeGreaterThanOrEqual(.3);
       expect(sign.frames.length,sign.id).toBeGreaterThan(0);
       expect(sign.frames.every(t=>t>=0&&t<701),sign.id).toBe(true);
+    }
+  });
+  it('keeps the hill posts and entire boards beyond the concrete edging',()=>{
+    const edges=hillEdgeSections(boundaryLoops);
+    for(const sign of courseSigns.filter(s=>s.id==='hill-ascent'||s.id==='hill-stop')){
+      const p=courseSignPoint(sign),outer=edges.filter(e=>Math.min(e.a.x,e.b.x)<=p.x&&Math.max(e.a.x,e.b.x)>=p.x).reduce((z,e)=>Math.max(z,e.outerA.z,e.outerB.z),-Infinity);
+      expect(Number.isFinite(outer),sign.id).toBe(true);
+      const halfWidth=Math.abs(Math.sin(sign.yaw))*signSpecifications[sign.kind].width/2;
+      expect(p.z-halfWidth-outer,sign.id).toBeGreaterThan(.1);
     }
   });
   it('keeps vehicle restrictions paired with the correct turn, and parking out of the garage exercise',()=>{

@@ -13,9 +13,12 @@ export const courseSigns:CourseSignPlacement[]=[
   {id:'start-speed20',kind:'speed20',x:350,y:980.5,yaw:east,frames:[130,160]},
   {id:'start-crossing-near',kind:'pedestrian',x:487,y:980.5,yaw:east,lower:['stop'],bottom:1.5,frames:[130,160]},
   {id:'start-crossing-far',kind:'pedestrian',x:527,y:889.5,yaw:west,mirror:true,frames:[130,160]},
-  {id:'hill-ascent',kind:'ascent',x:660,y:980.5,yaw:east,frames:[175,190]},
-  {id:'hill-stop',kind:'stop',x:770,y:980.5,yaw:east,frames:[175,190,203]},
-  {id:'after-hill-left-turn',kind:'left',x:1235,y:983,yaw:east,frames:[215,218]},
+  // Keep the complete boards beyond the ramp's wider concrete edging.
+  {id:'hill-ascent',kind:'ascent',x:660,y:984,yaw:east,frames:[175,190]},
+  {id:'hill-stop',kind:'stop',x:770,y:984,yaw:east,frames:[175,190,203]},
+  // 03:35: the turn sign stands on the straight verge before the bend,
+  // just beyond the painted turn arrows, rather than at the far corner.
+  {id:'after-hill-left-turn',kind:'left',x:1100,y:983,yaw:east,frames:[215,218]},
   {id:'after-hill-chevron',kind:'chevronLeft',x:1262,y:920,yaw:east,bottom:1.05,frames:[215]},
   {id:'departure-b-left',kind:'left',x:1264,y:780,yaw:north,lower:['carPlate'],frames:[218,228]},
   {id:'departure-cd-left',kind:'left',x:1257.5,y:835,yaw:north,lower:['truckPlate','busPlate'],frames:[218,228]},
