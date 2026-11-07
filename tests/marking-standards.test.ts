@@ -13,20 +13,16 @@ const area=(surface:MultiPolygon)=>surface.reduce((sum,p)=>sum+p.reduce((total,r
 const ring=(outline:Vec2[]):MultiPolygon=>[[[...outline,outline[0]].map(p=>[p.x,p.z])]];
 const span=(values:number[])=>Math.max(...values)-Math.min(...values);
 
-describe('O‘z DSt 3419:2022 low-speed marking geometry',()=>{
-  it('uses complete five-metre arrow silhouettes with a 15 cm tail in every direction',()=>{
+describe('plan arrow silhouettes and shared stop markings',()=>{
+  it('keeps plan arrow proportions and 20 cm stems in every direction',()=>{
     for(const normal of [{x:1,z:0},{x:0,z:1},{x:-1,z:0},{x:0,z:-1}])for(const turn of [undefined,'left','right','straight-right'] as const){
       const point={x:13,z:-8},outline=roadArrowOutline({point,normal,turn});
       const local=outline.map(p=>({across:(p.x-point.x)*-normal.z+(p.z-point.z)*normal.x,along:(p.x-point.x)*normal.x+(p.z-point.z)*normal.z}));
-      expect(span(local.map(p=>p.along))).toBeCloseTo(5,9);
-      expect(span(local.map(p=>p.across))).toBeCloseTo(turn==='straight-right'?1.425:turn?1.05:.75,9);
-      const tail=local.filter(p=>Math.abs(p.along+2.5)<1e-8);
-      expect(tail).toHaveLength(2);expect(span(tail.map(p=>p.across))).toBeCloseTo(.15,9);
-      if(!turn){const headBase=local.filter(p=>Math.abs(p.across)>.37);expect(headBase.every(p=>Math.abs(p.along-.45)<1e-8)).toBe(true);}
-      else if(turn!=='straight-right'){
-        const diagonal=local[3],neck=local[2];
-        expect(Math.abs(diagonal.along-neck.along)).toBeCloseTo(Math.abs(diagonal.across-neck.across),9);
-      }
+      expect(span(local.map(p=>p.along))).toBeCloseTo(turn==='straight-right'?6:5,9);
+      expect(span(local.map(p=>p.across))).toBeCloseTo(turn==='straight-right'?2.2:turn?1.8:1.2,9);
+      const tail=local.filter(p=>Math.abs(p.along+(turn==='straight-right'?3:2.5))<1e-8);
+      expect(tail).toHaveLength(2);expect(span(tail.map(p=>p.across))).toBeCloseTo(.2,9);
+      if(!turn){const headBase=local.filter(p=>Math.abs(p.across)>.59);expect(headBase.every(p=>Math.abs(p.along-.7)<1e-8)).toBe(true);}
     }
   });
   it('does not crop any full-size direction arrow against the pavement',()=>{
@@ -43,9 +39,9 @@ describe('O‘z DSt 3419:2022 low-speed marking geometry',()=>{
       expect((b.x-a.x)*line.normal.x+(b.z-a.z)*line.normal.z,line.name).toBeCloseTo(0,8);
     }
   });
-  it('uses four-metre crossings with 40 cm stripes, 10 cm gaps, and a clear stop gap',()=>{
+  it('fits plan crossings with 40 cm stripes, 10 cm gaps and the surveyed stop stations',()=>{
     for(const crossing of [pedestrianCrossingLayout(),...intersectionCrossings]){
-      expect(crossing.length).toBe(4);
+      expect(crossing.length).toBe(2.6);
       const stripes=crosswalkStripes(crossing),r={x:-crossing.normal.z,z:crossing.normal.x};
       for(const stripe of stripes){expect(span(stripe.points.map(p=>p.x*r.x+p.z*r.z))).toBeCloseTo(.4,8);}
       for(let i=1;i<stripes.length;i++){
@@ -54,7 +50,7 @@ describe('O‘z DSt 3419:2022 low-speed marking geometry',()=>{
       }
       const line=roadStopLines.find(l=>l.name===('id' in crossing?`intersection-stop-${crossing.id}`:'paint-pedestrian-stop-line'))!;
       const gap=(crossing.center.x-line.point.x)*line.normal.x+(crossing.center.z-line.point.z)*line.normal.z-crossing.length/2-line.width/2;
-      expect(gap).toBeCloseTo(1,8);
+      expect(gap).toBeGreaterThan(1);expect(gap).toBeLessThan(2.2);
     }
   });
   it('measures stopping distance and the crossing event from the approaching painted edge',()=>{

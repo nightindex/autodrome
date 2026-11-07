@@ -36,7 +36,7 @@ try{
       const ray=new T.Raycaster(new T.Vector3(p.x,.12,p.z),new T.Vector3(-right.x,0,-right.z),0,6),hit=ray.intersectObject(curbs)[0];
       return {approach:a.id,axis:head.axis,position:p.toArray(),clearance:roadDistance({x:p.x,z:p.z}),curbVisible:!!hit,curbDistance:hit?.distance};
     });
-    const signs=[];world.group.traverse(n=>{if(/^sign-.*-front$/.test(n.name)){const p=n.getWorldPosition(new T.Vector3());signs.push({name:n.name,clearance:roadDistance({x:p.x,z:p.z})});}});
+    const signs=[];world.group.traverse(n=>{if(/^sign-.*-front$/.test(n.name)){const p=n.getWorldPosition(new T.Vector3());signs.push({name:n.name,assembly:n.parent.name,clearance:roadDistance({x:p.x,z:p.z})});}});
     const stops=intersectionApproaches.map(a=>{
       const mesh=world.group.getObjectByName(`intersection-stop-${a.id}`);mesh.geometry.computeBoundingBox();return {id:a.id,min:mesh.geometry.boundingBox.min.toArray(),max:mesh.geometry.boundingBox.max.toArray()};
     });
@@ -63,7 +63,7 @@ try{
     // drawn over this background. Both should retain the stripe's colour.
     for(const stripe of crossing.stripes){const [r,g,b]=stripe.mapPixel,visible=stripe.yellow?r>190&&g>160&&b<170:r>210&&g>210&&b>180;assert(visible,`Mini-map stripe ${crossing.id}: ${JSON.stringify(stripe)}`);}
   }
-  assert(geometry.signs.every(s=>s.clearance>.15),JSON.stringify(geometry.signs.filter(s=>s.clearance<=.15)));
+  assert(geometry.signs.every(s=>['hill-stop','hill-descent'].includes(s.assembly)?s.clearance>-.14&&s.clearance<-.05:s.clearance>.15),JSON.stringify(geometry.signs.filter(s=>!['hill-stop','hill-descent'].includes(s.assembly)&&s.clearance<=.15)));
   for(const kind of ['right','left','straight','yield','priority','stopPlate','winding','carPlate','truckPlate','busPlate'])assert(geometry.signs.some(s=>s.name===`sign-${kind}-front`),`Missing ${kind} sign`);
   const phases=[];
   for(const [name,time]of [['red',0],['red-amber',17.5],['green',20],['green-blink-off',45.6],['amber',49],['clearance',51.5],['cross-road-green',56]]){

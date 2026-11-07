@@ -5,7 +5,7 @@ import { carMapMarker,mapProjection } from './map-projection';
 import { mapRouteLeg } from './map-route';
 import { roadArrowOutline } from '../render/road-arrows';
 import { crosswalkStripes } from '../render/crosswalk';
-import { laneLines,laneGores } from '../data/lane-markings';
+import { laneLines,laneGores,lanePaintPaths } from '../data/lane-markings';
 
 const colors={paper:'#f4f5ec',grass:'#b7c6a5',road:'#5d6868',edge:'#f5f4e7',route:'#f4ca70',car:'#075a47',goal:'#e4b346'};
 let cachedBase:HTMLCanvasElement|undefined;
@@ -37,8 +37,8 @@ export class Minimap {
     for(const polygon of yellowEdgeSurface)for(const ring of polygon){ring.forEach(([x,z],i)=>{const a=project({x,z});i?yellow.lineTo(a.x,a.y):yellow.moveTo(a.x,a.y);});yellow.closePath();}
     ctx.fillStyle='#e4c465';ctx.fill(yellow,'evenodd');
     ctx.strokeStyle=colors.edge;
-    for(const line of laneLines){ctx.beginPath();line.points.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});ctx.lineWidth=Math.max(.75,line.width*p.scale);ctx.stroke();}
-    for(const gore of laneGores){ctx.beginPath();gore.outline.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});ctx.closePath();ctx.lineWidth=.75;ctx.stroke();}
+    for(const line of laneLines)for(const points of lanePaintPaths(line)){ctx.beginPath();points.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});ctx.lineWidth=Math.max(.75,line.width*p.scale);ctx.stroke();}
+    for(const gore of laneGores)for(const points of gore.paintPaths??[[...gore.outline,gore.outline[0]]]){ctx.beginPath();points.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});ctx.lineWidth=.75;ctx.stroke();}
     const hillStart=project({x:hillProfile.start,z:hillBounds.minZ}),hillEnd=project({x:hillProfile.end,z:hillBounds.maxZ});
     ctx.fillStyle='#718076';ctx.fillRect(hillStart.x,hillStart.y,hillEnd.x-hillStart.x,hillEnd.y-hillStart.y);
     // Parking, the pedestrian crossing and railway give recognisable landmarks.

@@ -24,7 +24,7 @@ try{
     };
     const stops=roadStopLines.map(line=>({name:line.name,...extent(world.getObjectByName(line.name),line.point,line.normal)}));
     const arrowBatch=world.getObjectByName('paint-direction-arrows');
-    const arrows=arrowBatch.userData.arrows.map(arrow=>({name:`paint-arrow-${arrow.turn??'straight'}`,...extent(arrowBatch,arrow.point,arrow.normal,arrow.start,arrow.count)}));
+    const arrows=arrowBatch.userData.arrows.map(arrow=>({name:`paint-arrow-${arrow.turn??'straight'}`,turn:arrow.turn,scale:arrow.scale??1,profile:arrow.profile,traced:!!arrow.outline,...extent(arrowBatch,arrow.point,arrow.normal,arrow.start,arrow.count)}));
     const crossings=[pedestrianCrossingLayout(),...intersectionCrossings].map(c=>({length:c.length,stripes:crosswalkStripes(c).length}));
     const mini=new Minimap(document.createElement('canvas')),ctx=mini.base.getContext('2d');
     const mapStops=roadStopLines.map(line=>{const [a,b]=line.points,p=mini.projection.project({x:(a.x+b.x)/2,z:(a.z+b.z)/2});return {name:line.name,pixel:[...ctx.getImageData(Math.floor(p.x),Math.floor(p.y),1,1).data]};});
@@ -34,10 +34,10 @@ try{
   for(const stop of geometry.stops)assert(Math.abs(stop.length-.4)<2e-5,`${stop.name}: ${stop.length}`);
   assert.equal(geometry.arrows.length,geometry.expectedArrows);
   for(const arrow of geometry.arrows){
-    assert(Math.abs(arrow.length-5)<2e-5,`${arrow.name}: full length ${arrow.length}`);
-    assert(Math.abs(arrow.width-(arrow.name.endsWith('straight-right')?1.425:arrow.name.endsWith('straight')?.75:1.05))<2e-5,`${arrow.name}: width ${arrow.width}`);
+    assert(Math.abs(arrow.length-(arrow.traced?4.8:arrow.turn==='straight-right'?6:5)*arrow.scale)<2e-5,`${arrow.name}: full length ${arrow.length}`);
+    assert(Math.abs(arrow.width-(arrow.profile==='standard-turn'?1.05:arrow.traced?1.6:arrow.turn==='straight-right'?2.2:arrow.turn?1.8:1.2)*arrow.scale)<2e-5,`${arrow.name}: width ${arrow.width}`);
   }
-  assert(geometry.crossings.every(c=>c.length===4&&c.stripes>0));
+  assert(geometry.crossings.every(c=>c.length===2.6&&c.stripes>0));
   for(const line of geometry.mapStops){const [r,g,b]=line.pixel;assert(r>190&&g>190&&b>160,`Mini-map ${line.name}: ${line.pixel}`);}
   await page.addStyleTag({content:'#hud,#menu-shell,#modal,.vignette,#toast{display:none!important}dialog::backdrop{display:none}'});
   await page.evaluate(async()=>{

@@ -1,6 +1,5 @@
 import * as T from 'three';
-import {drawVehiclePlate,type VehiclePlateKind} from './vehicle-sign-artwork';
-import {drawPedestrianSign,drawPrioritySign,drawStopLineSign} from './junction-sign-artwork';
+import type {VehiclePlateKind} from './vehicle-sign-artwork';
 
 export type SignKind=keyof typeof signSpecifications;
 export const signSpecifications={
@@ -19,6 +18,7 @@ export const signSpecifications={
   railBars1:{width:.3,height:.6,outline:'rectangle',designation:'1.4.3'},
   pedestrian:{width:.7,height:.7,outline:'square',designation:'5.16.2'},
   ascent:{width:.9,height:.7794,outline:'triangle',designation:'1.14',gradePercent:12},
+  descent:{width:.9,height:.7794,outline:'triangle',designation:'1.13',gradePercent:12},
   right:{width:.7,height:.7,outline:'circle',designation:'4.1.2'},
   left:{width:.7,height:.7,outline:'circle',designation:'4.1.3'},
   straight:{width:.7,height:.7,outline:'circle',designation:'4.1.1'},
@@ -46,7 +46,9 @@ function roundedWarningShape(width:number,height:number){
 }
 export function signShape(kind:SignKind):T.Shape{
   const spec=signSpecifications[kind],shape=new T.Shape(),w=spec.width,h=spec.height;
-  if(kind==='ascent'||kind==='winding'||kind==='railWarning')return roundedWarningShape(w,h);
+  const imageOutline=artworkOutlines.get(referenceSign[kind]??'');
+  if(imageOutline)return new T.Shape(imageOutline.map(p=>new T.Vector2(p.x*w,p.y*h)));
+  if(kind==='ascent'||kind==='descent'||kind==='winding'||kind==='railWarning')return roundedWarningShape(w,h);
   if(kind==='yield')return new T.Shape(roundedWarningShape(w,h).getPoints(16).map(p=>p.multiplyScalar(-1)));
   if(spec.outline==='diamond'){
     const vertices=[new T.Vector2(0,h/2),new T.Vector2(-w/2,0),new T.Vector2(0,-h/2),new T.Vector2(w/2,0)],cut=w*.04;
@@ -63,13 +65,50 @@ export function signShape(kind:SignKind):T.Shape{
   const direction=spec.outline==='triangle'?1:-1;shape.moveTo(0,h/2*direction);shape.lineTo(-w/2,-h/2*direction);shape.lineTo(w/2,-h/2*direction);shape.closePath();return shape;
 }
 const textures=new Map<string,T.CanvasTexture>();
-const directionArtwork=new Map<'left'|'right',HTMLImageElement>();
+// Reference artwork supplied with the driving-theory catalogue. Each image is
+// loaded before the world is built, so every static sign has its final face.
+const referenceSignIds=['1.2','1.4.1','1.4.2','1.4.3','1.12.1','1.12.2','1.13','1.14','1.31.1','1.31.2','2.1','2.4','2.5','3.24','4.1.1','4.1.2','4.1.3','4.7','5.15','5.16.1','5.33','7.4.1','7.4.3','7.4.4','7.6.4'] as const;
+const referenceArtwork=new Map<string,HTMLImageElement>();
+const artworkOutlines=new Map<string,T.Vector2[]>();
+const triangularArtwork=new Set(['1.2','1.12.1','1.12.2','1.13','1.14','2.4']);
+/** Use the image's opaque silhouette for the metal blank and the film together.
+ * A convex hull removes raster stair-steps without exposing the white padding
+ * beyond the rounded corners of the reference artwork. */
+function artworkOutline(image:HTMLImageElement):T.Vector2[]{
+  const canvas=document.createElement('canvas'),w=canvas.width=image.naturalWidth,h=canvas.height=image.naturalHeight;
+  const ctx=canvas.getContext('2d',{willReadFrequently:true})!;ctx.drawImage(image,0,0);
+  const pixels=ctx.getImageData(0,0,w,h).data,points:T.Vector2[]=[];
+  for(let y=0;y<h;y++){
+    let first=0,last=w-1;
+    while(first<w&&pixels[(y*w+first)*4+3]<128)first++;
+    if(first===w)continue;
+    while(last>=first&&pixels[(y*w+last)*4+3]<128)last--;
+    points.push(new T.Vector2(first,y),new T.Vector2(last+1,y),new T.Vector2(first,y+1),new T.Vector2(last+1,y+1));
+  }
+  points.sort((a,b)=>a.x-b.x||a.y-b.y);
+  const cross=(a:T.Vector2,b:T.Vector2,c:T.Vector2)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+  const half=(vertices:T.Vector2[])=>{
+    const hull:T.Vector2[]=[];
+    for(const p of vertices){while(hull.length>1&&cross(hull[hull.length-2],hull[hull.length-1],p)<=0)hull.pop();hull.push(p);}
+    return hull.slice(0,-1);
+  };
+  return [...half(points),...half(points.slice().reverse())].map(p=>new T.Vector2(p.x/w-.5,.5-p.y/h));
+}
+
 export async function loadDirectionSignArtwork(){
-  await Promise.all(([['left','4.1.3'],['right','4.1.2']] as const).map(async([kind,designation])=>{
-    const image=new Image();image.src=`/assets/road-signs/${designation}.png`;
-    await image.decode();directionArtwork.set(kind,image);
+  await Promise.all(referenceSignIds.map(async id=>{
+    const image=new Image();image.src=`/assets/road-signs/reference/${id}.png`;
+    await image.decode();referenceArtwork.set(id,image);
+    if(triangularArtwork.has(id))artworkOutlines.set(id,artworkOutline(image));
   }));
 }
+const referenceSign:Partial<Record<SignKind,string>>={
+  stop:'2.5',railway:'2.5',speed20:'3.24',speed40:'3.24',minimum20:'4.7',yield:'2.4',parking:'5.15',
+  railWarning:'1.2',railBars3:'1.4.1',railBars2:'1.4.2',railBars1:'1.4.3',pedestrian:'5.16.1',
+  ascent:'1.14',descent:'1.13',right:'4.1.2',left:'4.1.3',straight:'4.1.1',priority:'2.1',
+  stopPlate:'5.33',carPlate:'7.4.3',truckPlate:'7.4.1',busPlate:'7.4.4',parkingEndPlate:'7.6.4',
+  winding:'1.12.2',chevronLeft:'1.31.2',
+};
 const isVehiclePlate=(kind:SignKind):kind is VehiclePlateKind=>kind==='carPlate'||kind==='truckPlate'||kind==='busPlate';
 const isRectangularPlate=(kind:SignKind)=>isVehiclePlate(kind)||kind==='stopPlate'||kind==='parkingEndPlate';
 const signVariation=(kind:SignKind,mirror:boolean)=>kind==='winding'&&mirror?{designation:'1.12.1',firstTurn:'right'}:kind==='pedestrian'&&mirror?{designation:'5.16.1'}:kind==='chevronLeft'&&mirror?{designation:'1.31.1'}:{};
@@ -88,77 +127,25 @@ export function signBoardLayout(kind:SignKind,lower:SignKind[]=[],options:{cente
 export function signTexture(kind:SignKind,mirror=false){
   const key=`${kind}:${mirror}`;if(textures.has(key))return textures.get(key)!;
   const canvas=document.createElement('canvas');canvas.width=512;canvas.height=isRectangularPlate(kind)?256:512;const ctx=canvas.getContext('2d')!;ctx.scale(2,2);
-  const red='#d91916',blue='#075caa',black='#181816',white='#fffef8';
-  const polygon=(points:number[][],fill:string)=>{ctx.fillStyle=fill;ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fill();};
-  const octagon=(inset:number,fill:string)=>{const r=(128-inset)/Math.cos(Math.PI/8);polygon(Array.from({length:8},(_,i)=>[128+Math.cos(Math.PI/8+i*Math.PI/4)*r,128+Math.sin(Math.PI/8+i*Math.PI/4)*r]),fill);};
-  const circle=(radius:number,fill:string)=>{ctx.fillStyle=fill;ctx.beginPath();ctx.arc(128,128,radius,0,Math.PI*2);ctx.fill();};
-  if(isVehiclePlate(kind)){
-    drawVehiclePlate(ctx,kind,256,128);
-  }else if(kind==='parkingEndPlate'){
-    ctx.fillStyle=white;ctx.fillRect(0,0,256,128);ctx.strokeStyle=black;ctx.lineWidth=4;ctx.beginPath();ctx.roundRect(3,3,250,122,9);ctx.stroke();
-    polygon([[89,34],[100,19],[156,19],[167,34],[173,48],[173,88],[83,88],[83,48]],black);
-    polygon([[102,26],[154,26],[162,47],[94,47]],white);ctx.fillStyle=white;ctx.fillRect(94,59,18,8);ctx.fillRect(144,59,18,8);ctx.fillStyle=black;ctx.fillRect(86,87,13,12);ctx.fillRect(157,87,13,12);
-  }else if(kind.startsWith('railBars')){
-    ctx.fillStyle=white;ctx.fillRect(0,0,256,256);ctx.strokeStyle=black;ctx.lineWidth=2;ctx.strokeRect(2,2,252,252);
-    const count=kind==='railBars3'?3:kind==='railBars2'?2:1;
-    for(let i=0;i<count;i++){const y=128+(i-(count-1)/2)*56;polygon([[6,y+42],[250,y-34],[250,y-13],[6,y+63]],red);}
-  }else if(kind==='right'||kind==='left'){
-    const image=directionArtwork.get(kind);
-    if(!image)throw new Error(`Direction sign artwork is not loaded: ${kind}`);
-    ctx.drawImage(image,0,0,256,256);
-  }else if(kind==='straight'){
-    circle(128,white);circle(120,blue);
-    polygon([[116,256],[140,256],[140,95],[165,95],[128,28],[92,95],[116,95]],white);
-  }else if(kind==='chevronLeft'){
-    ctx.save();if(mirror){ctx.translate(256,0);ctx.scale(-1,1);}
-    ctx.fillStyle=white;ctx.fillRect(0,0,256,256);
-    ctx.strokeStyle='#b2b7b6';ctx.lineWidth=3;ctx.strokeRect(2,2,252,252);
-    for(let x=-20;x<256;x+=64)polygon([[x+28,14],[x+68,14],[x+40,128],[x+68,242],[x+28,242],[x,128]],red);
-    ctx.restore();
-  }else if(kind==='priority'){
-    drawPrioritySign(ctx,256,256);
-  }else if(kind==='stopPlate'){
-    drawStopLineSign(ctx,256,128);
-  }else if(kind==='start'||kind==='finish'){
-    ctx.fillStyle=white;ctx.fillRect(0,0,256,256);ctx.strokeStyle=black;ctx.lineWidth=5;ctx.strokeRect(3,9,250,238);
-    ctx.fillStyle=black;ctx.font='500 190px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(kind==='start'?'START':'FINISH',128,137,228);
-  }else if(kind==='stop'||kind==='railway'){
-    octagon(0,white);octagon(8,red);ctx.fillStyle=white;ctx.font='700 104px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('STOP',128,132,226);
-  }else if(kind==='speed20'||kind==='speed40'||kind==='minimum20'){
-    const minimum=kind==='minimum20';circle(128,white);circle(124,minimum?blue:red);if(!minimum)circle(103,white);
-    ctx.fillStyle=minimum?white:black;ctx.font='600 116px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(kind==='speed40'?'40':'20',128,135,139);
-  }else if(kind==='ascent'||kind==='winding'||kind==='railWarning'){
-    const triangle=(left:number,top:number,right:number,bottom:number,fill:string)=>{
-      const points=roundedWarningShape(1,1).getPoints(),w=right-left,h=bottom-top;
-      ctx.fillStyle=fill;ctx.beginPath();points.forEach((p,i)=>{const x=left+(p.x+.5)*w,y=top+(.5-p.y)*h;i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.closePath();ctx.fill();
-    };
-    triangle(0,0,256,256,'#fffefa');triangle(3,4,253,252,'#e51b22');triangle(28,35,228,232,'#fffefa');
-    if(kind==='ascent'){
-      polygon([[37,228],[182,155],[220,228]],'#101211');
-      ctx.save();ctx.translate(136,174);ctx.rotate(-.47);ctx.fillStyle='#101211';ctx.font='700 54px Arial';ctx.textAlign='center';ctx.textBaseline='bottom';ctx.fillText(`${signSpecifications.ascent.gradePercent}%`,0,0);ctx.restore();
-    }else if(kind==='railWarning'){
-      ctx.fillStyle=black;ctx.fillRect(84,175,87,26);ctx.fillRect(136,155,23,34);ctx.fillRect(92,156,10,26);ctx.fillRect(80,200,102,6);
-      polygon([[78,203],[67,215],[179,215],[175,203]],black);
-      for(const [x,y,r]of [[99,210,9],[126,210,9],[153,210,9],[94,145,8],[105,131,10],[121,116,12]]){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
-      ctx.fillStyle=white;ctx.fillRect(141,160,11,12);for(const x of [99,126,153]){ctx.beginPath();ctx.arc(x,210,4,0,Math.PI*2);ctx.fill();}
-    }else{
-      // 1.12.2: the lower stem enters a LEFT bend, then returns right.
-      // Smooth S-shaped artwork, checked against Uzavtoyo'lbelgi's catalogue.
-      ctx.save();ctx.scale(256/100,256/88);
-      if(mirror){ctx.translate(100,0);ctx.scale(-1,1);}
-      ctx.strokeStyle=black;ctx.lineWidth=8;ctx.lineJoin='round';ctx.lineCap='butt';
-      ctx.beginPath();ctx.moveTo(64,79);ctx.lineTo(64,60);
-      ctx.bezierCurveTo(64,52,60,51,54,54);ctx.lineTo(47,58);
-      ctx.bezierCurveTo(41,61.5,40,58.5,40,53);ctx.lineTo(40,37);ctx.stroke();ctx.restore();
+  const id=kind==='winding'&&mirror?'1.12.1':kind==='chevronLeft'&&mirror?'1.31.1':referenceSign[kind];
+  if(id){
+    const image=referenceArtwork.get(id);
+    if(!image)throw new Error(`Road sign artwork is not loaded: ${id}`);
+    const width=256,height=isRectangularPlate(kind)?128:256;
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);
+    // The catalogue supplies 5.16.1; the other crossing sign faces right.
+    ctx.save();if(kind==='pedestrian'&&!mirror){ctx.translate(width,0);ctx.scale(-1,1);}
+    ctx.drawImage(image,0,0,width,height);ctx.restore();
+    if(kind==='speed20'||kind==='speed40'||kind==='minimum20'){
+      // Keep the catalogue's border while replacing its example value of 50.
+      ctx.fillStyle=kind==='minimum20'?'#0d69e1':'#fff';ctx.beginPath();ctx.arc(128,128,91,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=kind==='minimum20'?'#fff':'#111';ctx.font='700 116px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(kind==='speed40'?'40':'20',128,134,150);
     }
-  }else if(kind==='yield'){
-    polygon([[0,0],[256,0],[128,256]],white);polygon([[6,4],[250,4],[128,246]],red);polygon([[32,20],[224,20],[128,212]],white);
-  }else if(kind==='pedestrian'){
-    drawPedestrianSign(ctx,mirror,256,256);
-  }else{
-    ctx.fillStyle=white;ctx.fillRect(0,0,256,256);ctx.fillStyle=blue;ctx.beginPath();ctx.roundRect(6,6,244,244,12);ctx.fill();
-    ctx.fillStyle=white;ctx.font='500 190px Arial';ctx.textAlign='center';ctx.fillText('P',128,198);
+    const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=8;textures.set(key,texture);return texture;
   }
+  // START and FINISH are course-specific boards rather than catalogue signs.
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,256,256);ctx.strokeStyle='#111';ctx.lineWidth=5;ctx.strokeRect(3,9,250,238);
+  ctx.fillStyle='#111';ctx.font='500 190px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(kind==='start'?'START':'FINISH',128,137,228);
   const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace;texture.anisotropy=8;textures.set(key,texture);return texture;
 }
 const steel=new T.MeshStandardMaterial({color:0xa6adb0,metalness:.75,roughness:.5});

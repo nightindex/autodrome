@@ -13,17 +13,18 @@ export const courseSigns:CourseSignPlacement[]=[
   {id:'start-speed20',kind:'speed20',x:350,y:980.5,yaw:east,frames:[130,160]},
   {id:'start-crossing-near',kind:'pedestrian',x:487,y:980.5,yaw:east,lower:['stop'],bottom:1.5,frames:[130,160]},
   {id:'start-crossing-far',kind:'pedestrian',x:527,y:889.5,yaw:west,mirror:true,frames:[130,160]},
-  // Keep the complete boards beyond the ramp's wider concrete edging.
-  {id:'hill-ascent',kind:'ascent',x:660,y:984,yaw:east,frames:[175,190]},
-  {id:'hill-stop',kind:'stop',x:770,y:984,yaw:east,frames:[175,190,203]},
-  // 03:35: the turn sign stands on the straight verge before the bend,
-  // just beyond the painted turn arrows, rather than at the far corner.
-  {id:'after-hill-left-turn',kind:'left',x:1100,y:983,yaw:east,frames:[215,218]},
+  {id:'hill-ascent',kind:'ascent',x:660,y:980.5,yaw:east,frames:[175,190]},
+  // STOP is at the stop stripe; the descent warning is at the far end of the crest.
+  {id:'hill-stop',kind:'stop',x:770,y:973,yaw:east,frames:[175,190,203]},
+  {id:'hill-descent',kind:'descent',x:860,y:973,yaw:east,frames:[190,203]},
+  // 03:32–03:35: the sign stands just beyond the turn arrows.
+  {id:'after-hill-left-turn',kind:'left',x:1080,y:983,yaw:east,frames:[215,218]},
   {id:'after-hill-chevron',kind:'chevronLeft',x:1262,y:920,yaw:east,bottom:1.05,frames:[215]},
   {id:'departure-b-left',kind:'left',x:1264,y:780,yaw:north,lower:['carPlate'],frames:[218,228]},
   {id:'departure-cd-left',kind:'left',x:1257.5,y:835,yaw:north,lower:['truckPlate','busPlate'],frames:[218,228]},
   {id:'bend-b-warning',kind:'winding',x:985,y:586,yaw:west,frames:[228]},
-  {id:'bend-cd-warning',kind:'winding',x:1095,y:657.5,yaw:west,frames:[235,242]},
+  // 03:45: near the island nose and painted split, angled towards the C/D entry.
+  {id:'bend-cd-warning',kind:'winding',x:1125,y:657.5,yaw:Math.PI/3,frames:[225,235,242]},
   {id:'bend-b-yield-right',kind:'yield',x:850,y:716,yaw:west,lower:['right'],bottom:1.5,frames:[253,255]},
   {id:'bend-cd-right',kind:'right',x:865,y:817.5,yaw:west,lower:['truckPlate','busPlate'],frames:[242]},
   {id:'north-exit-right-turn',kind:'right',x:688,y:205,yaw:north,frames:[298]},
@@ -49,6 +50,6 @@ export const courseSigns:CourseSignPlacement[]=[
   {id:'northwest-left-chevron',kind:'chevronLeft',x:45,y:63,yaw:west,bottom:1.05,frames:[470,480]},
   {id:'west-end-left',kind:'left',x:18,y:485,yaw:south,frames:[495,515]},
   {id:'parking-bay',kind:'parking',x:390,y:621.5,yaw:east,lower:['parkingEndPlate','carPlate'],bottom:1.5,frames:[560]},
-  {id:'finish-board',kind:'finish',x:175,y:825,yaw:west,bottom:1.25,frames:[680]},
+  {id:'finish-board',kind:'finish',x:145,y:825,yaw:west,bottom:1.25,frames:[680]},
 ];
 export const courseSignPoint=(sign:CourseSignPlacement)=>mapPoint(sign.x,sign.y);

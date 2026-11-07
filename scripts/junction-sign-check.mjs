@@ -12,7 +12,8 @@ try{
   }
   await page.goto('http://127.0.0.1:5173/');await page.waitForFunction(()=>window.__avtodrom?.snapshot().loaded,null,{timeout:60000});await page.click('#practice');await page.keyboard.press('Escape');
   const result=await page.evaluate(async references=>{
-    const T=await import('/node_modules/three/build/three.module.js'),{signTexture,signSpecifications,createRoadSign}=await import('/src/render/road-signs.ts'),s=window.__avtodrom.scene;
+    const T=await import('/node_modules/three/build/three.module.js'),{signTexture,signSpecifications,createRoadSign,loadDirectionSignArtwork}=await import('/src/render/road-signs.ts'),s=window.__avtodrom.scene;
+    await loadDirectionSignArtwork();
     const pixel=(canvas,x,y)=>[...canvas.getContext('2d').getImageData(Math.floor(canvas.width*x),Math.floor(canvas.height*y),1,1).data];
     const textures=['pedestrian','priority','stopPlate','straight'].map(kind=>{const canvas=signTexture(kind).image;return {kind,width:canvas.width,height:canvas.height,spec:signSpecifications[kind],png:canvas.toDataURL('image/png')};});
     const normal=signTexture('pedestrian').image,mirrored=signTexture('pedestrian',true).image,a=normal.getContext('2d').getImageData(0,0,512,512).data,b=mirrored.getContext('2d').getImageData(0,0,512,512).data;

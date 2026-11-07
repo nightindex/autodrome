@@ -25,7 +25,7 @@ try{
   assert.notDeepEqual(geometry.firstJunction,geometry.secondJunction);
   const path=points=>points.map(([x,y],i)=>`${i?'L':'M'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
   const svg=Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1072"><g fill="none" stroke-linejoin="round"><g stroke="#ff20bf" stroke-width="2">${geometry.loops.map(points=>`<path d="${path(points)} Z"/>`).join('')}</g><path d="${path(geometry.route)}" stroke="#ff8b00" stroke-width="2.5" stroke-dasharray="7 5"/></g></svg>`);
-  await sharp('2026-03-19_17-47-25_3UKDK1HJ4R.jpg').composite([{input:svg}]).png().toFile(`${directory}/plan-overlay.png`);
+  await sharp('images/2026-03-19_17-47-25_3UKDK1HJ4R.jpg').composite([{input:svg}]).png().toFile(`${directory}/plan-overlay.png`);
   await page.locator('.minimap').screenshot({path:`${directory}/minimap.png`});
   const canvas=await page.locator('.minimap canvas').evaluate(c=>c.toDataURL().split(',')[1]);await writeFile(`${directory}/minimap-detail.png`,Buffer.from(canvas,'base64'));
   await page.addStyleTag({content:'#hud,#menu-shell,#modal,.vignette,#toast{display:none!important}dialog::backdrop{display:none}'});

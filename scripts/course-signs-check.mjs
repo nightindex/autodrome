@@ -21,7 +21,7 @@ try{
         const origin=root.localToWorld(new T.Vector3(side*.4,crossHeight+arm*.4*Math.tan(.43),.7)),direction=new T.Vector3(0,0,-1).transformDirection(root.matrixWorld);
         crossArms.push(new T.Raycaster(origin,direction,0,1).intersectObject(group,true).length>0);
       }
-      const groundedHillPost=root.name.startsWith('hill-')?new T.Raycaster(new T.Vector3(root.position.x-.2,.4,root.position.z),new T.Vector3(1,0,0),0,.4).intersectObject(group,true).length>0:undefined;
+      const groundedHillPost=['hill-stop','hill-descent'].includes(root.name)?new T.Raycaster(new T.Vector3(root.position.x-.2,root.position.y+.4,root.position.z),new T.Vector3(1,0,0),0,.4).intersectObject(group,true).length>0:undefined;
       return {id:root.name,placementId:root.userData.placementId,point:root.position.toArray(),yaw:root.rotation.y,lowerMainEdge:root.userData.lowerMainEdge,clearance:roadDistance(root.position),frames:root.userData.referenceFrames,faces,crossHeight,crossArms,groundedHillPost};
     });
     const canvas=document.createElement('canvas'),columns=6,cell=220,kinds=Object.keys(signSpecifications);canvas.width=columns*cell;canvas.height=Math.ceil(kinds.length/columns)*cell;const ctx=canvas.getContext('2d');ctx.fillStyle='#e2e8df';ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -46,10 +46,11 @@ try{
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.signAuditPose={eye:[-12,18,-49],target:[14,1,-27],fov:80});await page.waitForTimeout(220);await page.screenshot({path:`${directory}/mobile.png`});
   }delete report.atlas;
   await writeFile(`${directory}/report.json`,JSON.stringify({...report,errors},null,2));
-  console.log(JSON.stringify({assemblies:report.signs.length,boards:report.signs.reduce((n,s)=>n+s.faces.length,0),badPositions:report.signs.filter(s=>s.clearance<.3),errors},null,2));
+  console.log(JSON.stringify({assemblies:report.signs.length,boards:report.signs.reduce((n,s)=>n+s.faces.length,0),badPositions:report.signs.filter(s=>['hill-stop','hill-descent'].includes(s.id)?(s.clearance>=-.034||s.clearance<=-.126):s.clearance<.3),errors},null,2));
   for(const expected of report.expected){const matches=report.signs.filter(s=>s.placementId===expected.id);assert.equal(matches.length,1,expected.id);const sign=matches[0];assert.equal(sign.faces.length,1+expected.lower.length,expected.id);assert.deepEqual(sign.faces.map(f=>f.kind),[expected.kind,...expected.lower]);assert(Math.abs(sign.lowerMainEdge-expected.bottom)<1e-6,`${expected.id}: lower main edge`);assert.equal(sign.yaw,expected.yaw);assert(sign.frames?.length>0);}
-  assert(report.signs.every(s=>s.clearance>=.3),'Sign posts must stand off the asphalt');
-  assert(report.signs.filter(s=>s.id.startsWith('hill-')).every(s=>s.groundedHillPost),'The hill posts must reach the ground below the raised road');
+  assert(report.signs.filter(s=>!['hill-stop','hill-descent'].includes(s.id)).every(s=>s.clearance>=.3),'Roadside sign posts must stand off the asphalt');
+  assert(report.signs.filter(s=>['hill-stop','hill-descent'].includes(s.id)).every(s=>s.clearance<-.034&&s.clearance>-.126),'Hill posts must stand between the edge line and the concrete');
+  assert(report.signs.filter(s=>['hill-stop','hill-descent'].includes(s.id)).every(s=>s.groundedHillPost),'The hill posts must rise from the raised deck');
   for(const sign of report.signs){assert(Number.isFinite(sign.lowerMainEdge));assert(sign.faces.every(f=>f.side===0));for(let i=1;i<sign.faces.length;i++)assert(sign.faces[i].center[1]+sign.faces[i].height/2<sign.faces[i-1].center[1]-sign.faces[i-1].height/2-.04,`${sign.id}: boards overlap`);}
   const railway=report.signs.find(s=>s.id==='railway-stop');assert(railway.crossHeight+railway.point[1]>railway.faces[0].center[1]+railway.faces[0].height/2);assert(railway.crossArms.length===4&&railway.crossArms.every(Boolean),'All four crossbuck arms remain visible after static batching');
   assert.deepEqual(errors,[]);

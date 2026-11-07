@@ -10,12 +10,12 @@ try{
   await page.goto('http://127.0.0.1:5173/');await page.waitForFunction(()=>window.__avtodrom?.snapshot().loaded,null,{timeout:60000});
   await page.click('#practice');await page.waitForTimeout(500);await page.keyboard.press('Escape');
   const geometry=await page.evaluate(async()=>{
-    const T=await import('/node_modules/three/build/three.module.js'),{laneLines,laneGores}=await import('/src/data/lane-markings.ts'),{yellowControlLines}=await import('/src/data/road-markings.ts'),{mapPoint,startLinePoint}=await import('/src/data/course.ts');
+    const T=await import('/node_modules/three/build/three.module.js'),{laneLines,laneGores,lanePaintPaths}=await import('/src/data/lane-markings.ts'),{yellowControlLines}=await import('/src/data/road-markings.ts'),{mapPoint,startLinePoint}=await import('/src/data/course.ts');
     const group=window.__avtodrom.scene.world.group;group.updateMatrixWorld(true);
     const painted=(mesh,p)=>[[0,0],[1e-5,0],[-1e-5,0],[0,1e-5],[0,-1e-5]].some(([dx,dz])=>!!new T.Raycaster(new T.Vector3(p.x+dx,6,p.z+dz),new T.Vector3(0,-1,0)).intersectObject(mesh)[0]);
     let stations=0;const missing=[];
     for(const line of laneLines){const mesh=group.getObjectByName(`paint-lane-${line.id}`);
-      for(let i=1;i<line.points.length;i++){const a=line.points[i-1],b=line.points[i],steps=Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/.4);
+      for(const path of lanePaintPaths(line))for(let i=1;i<path.length;i++){const a=path[i-1],b=path[i],steps=Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/.4);
         for(let j=0;j<=steps;j++){const p={x:a.x+(b.x-a.x)*j/steps,z:a.z+(b.z-a.z)*j/steps};stations++;if(!painted(mesh,p))missing.push({id:line.id,...p});}
       }
     }

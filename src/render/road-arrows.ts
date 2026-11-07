@@ -1,29 +1,36 @@
 import type { Vec2 } from '../types';
 import type { PaintedArrow } from '../data/road-markings';
-import { directionArrowDimensions as dimensions } from '../data/marking-standards';
+import { directionArrowDimensions as dimensions,standardTurnArrowDimensions } from '../data/marking-standards';
 
 /** The complete bent arrow, including its head, is centred across the lane. */
-export function roadArrowOutline({point,normal,turn}:PaintedArrow):Vec2[]{
-  const {length,headLength,shaft,headWidth,turnWidth,turnHeadDepth,turnHeadBack,turnHeadFront,turnHalfNeck,turnStem}=dimensions;
-  const neck=turnWidth-turnHeadDepth,tip=length-turnHeadFront-turnHalfNeck;
-  // Coordinates are (across, along). The bend has 45° sides and a lateral
-  // arrowhead, rather than the old independently stretched turn icon.
-  const outline=turn==='straight-right'?[
-    [-shaft/2,0],[shaft/2,0],[shaft/2,1.9],
-    [.75,1.9],[.75,1.4],[turnWidth,2.4],[.75,3.1],[.75,2.7],
-    [shaft/2,2.7],[shaft/2,length-headLength],
-    [headWidth/2,length-headLength],[0,length],[-headWidth/2,length-headLength],[-shaft/2,length-headLength],
+export function roadArrowOutline({point,normal,turn,scale=1,outline:tracedOutline,profile}:PaintedArrow):Vec2[]{
+  if(tracedOutline)return tracedOutline.map(([across,along])=>({
+    x:point.x+(-normal.z*across+normal.x*along)*scale,
+    z:point.z+(normal.x*across+normal.z*along)*scale,
+  }));
+  const {length,headLength,shaft,headWidth,turnWidth,turnStem,combinedLength}=dimensions;
+  // (across, along), traced from the straight, bent and combined symbols in
+  // the plan. Left turns mirror only the sideways coordinate.
+  const standard=standardTurnArrowDimensions,neckStart=standard.length-standard.a2-2*standard.b,tip=neckStart+standard.b;
+  const outline=profile==='standard-turn'?[
+    [0,0],[standard.shaft,0],[standard.shaft,standard.stem],
+    [standard.headBase,neckStart],[standard.headBase,neckStart-standard.a1],
+    [standard.headBase+standard.headDepth,tip],[standard.headBase,standard.length],
+    [standard.headBase,tip+standard.b],[0,tip+standard.b-standard.headBase],
+  ]:turn==='straight-right'?[
+    [-shaft/2,0],[shaft/2,0],[shaft/2,1.3],[1.2,1.9],[1.2,1.4],
+    [1.6,2.5],[1.2,3.6],[1.2,3],[shaft/2,2.4],[shaft/2,3.8],
+    [.6,3.9],[0,combinedLength],[-.6,3.9],[-shaft/2,3.8],
   ]:turn?[
-    [0,0],[shaft,0],[shaft,turnStem],[neck,tip-turnHalfNeck],
-    [neck,tip-turnHalfNeck-turnHeadBack],[turnWidth,tip],
-    [neck,length],[neck,tip+turnHalfNeck],[0,tip+turnHalfNeck-neck],
+    [0,0],[shaft,0],[shaft,turnStem],[1.3,3.3],[1.3,2.7],
+    [turnWidth,3.8],[1.3,length],[1.3,4.3],[0,3.5],
   ]:[
     [-shaft/2,0],[shaft/2,0],[shaft/2,length-headLength],
     [headWidth/2,length-headLength],[0,length],[-headWidth/2,length-headLength],[-shaft/2,length-headLength],
   ];
   const center=(Math.min(...outline.map(p=>p[0]))+Math.max(...outline.map(p=>p[0])))/2;
   return outline.map(([x,along])=>{
-    const across=(x-center)*(turn==='left'?-1:1),forward=along-length/2;
+    const across=(x-center)*(turn==='left'?-1:1)*scale,forward=(along-(turn==='straight-right'?combinedLength:length)/2)*scale;
     return {x:point.x-normal.z*across+normal.x*forward,z:point.z+normal.x*across+normal.z*forward};
   });
 }

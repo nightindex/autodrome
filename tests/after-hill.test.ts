@@ -7,6 +7,7 @@ import { distance,localPoint } from '../src/simulation/math';
 import { CourseTracker } from '../src/simulation/tracker';
 import type { Vec2,VehicleTelemetry } from '../src/types';
 import { departureMarkingPaths } from '../src/render/departure-markings';
+import { departureHatching } from '../src/data/road-markings';
 
 describe('post-ramp corridors traced from the supplied plan and video',()=>{
   it('leaves at least 3.4 metres between the painted edges of the B turn',()=>{
@@ -27,7 +28,7 @@ describe('post-ramp corridors traced from the supplied plan and video',()=>{
       const angle=-degrees*Math.PI/180,normal={x:Math.cos(angle),z:Math.sin(angle)},point={x:47+normal.x*12.5,z:21+normal.z*12.5};
       const inside=intersect(point,normal,paths.right),outside=intersect(point,normal,paths.rightGuide);
       expect(Number.isFinite(inside)&&Number.isFinite(outside),`both borders at ${degrees} degrees`).toBe(true);
-      widths.push(outside-inside-.1); // subtract the two half-widths of the paint
+      widths.push(outside-inside-departureHatching.lineWidth); // subtract the two half-widths of the paint
     }
     expect(Math.min(...widths),JSON.stringify(widths)).toBeGreaterThanOrEqual(3.4);
     for(const [x,y]of afterHillBRoute.filter(([x,y])=>x>=1150&&y<=740&&y>=600)){

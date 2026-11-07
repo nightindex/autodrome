@@ -100,7 +100,7 @@ describe('continuous pavement and curbs',()=>{
 });
 describe('reference markings and stable lighting',()=>{
   it('uses yellow exercise edges without overlapping white paint or painting off the asphalt',()=>{
-    // Different-width bands can share a zero-area ring at a colour boundary.
+    // Adjacent colour regions can share a zero-area ring at a boundary.
     const overlap=polygonClipping.intersection(whiteEdgeSurface,yellowEdgeSurface);
     const area=overlap.reduce((total,p)=>total+p.reduce((sum,r)=>sum+Math.abs(r.slice(1).reduce((a,b,i)=>a+r[i][0]*b[1]-b[0]*r[i][1],0)/2),0),0);
     expect(area).toBeLessThan(1e-9);
@@ -131,13 +131,14 @@ describe('reference markings and stable lighting',()=>{
     for(let i=0;i<p.count;i++){expect(Math.abs(p.getZ(i))).toBeLessThanOrEqual(2);expect(Math.abs(p.getX(i))).toBeLessThanOrEqual(.050001);}
   });
   it('keeps both ramp edge lines straight through the departure and island join',()=>{
-    const geometry=asphaltGeometry(whiteEdgeSurface,.048),mesh=new T.Mesh(geometry,new T.MeshBasicMaterial());mesh.updateMatrixWorld();
+    const geometries=[whiteEdgeSurface,yellowEdgeSurface].map(surface=>asphaltGeometry(surface,.048));
+    const meshes=geometries.map(geometry=>new T.Mesh(geometry,new T.MeshBasicMaterial()));meshes.forEach(mesh=>mesh.updateMatrixWorld());
     for(const x of [5,10,13,17,22,28,32,33,34,37.9,38,38.1,40,44,48])for(const z of [36.81,44.19]){
-      const hit=new T.Raycaster(new T.Vector3(x,5,z),new T.Vector3(0,-1,0)).intersectObject(mesh)[0];
+      const hit=new T.Raycaster(new T.Vector3(x,5,z),new T.Vector3(0,-1,0)).intersectObjects(meshes)[0];
       expect(hit,`actual ramp paint at ${x},${z}`).toBeDefined();
       expect(hit.point.y).toBeCloseTo(hillHeight(x,z)+.048,5);
     }
-    geometry.dispose();
+    geometries.forEach(geometry=>geometry.dispose());
   });
   it('places B/CD labels on asphalt and uses fifteen-centimetre white edge lines',()=>{
     expect(categoryLabels.some(l=>l.text==='B')).toBe(true);expect(categoryLabels.some(l=>l.text==='CD')).toBe(true);

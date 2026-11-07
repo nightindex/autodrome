@@ -1,6 +1,6 @@
 import type { Exercise, VehicleTelemetry, Vec2 } from '../types';
 import type { Observations } from './exam';
-import { course, itinerary, mapPoint,startLinePoint } from '../data/course';
+import { course, itinerary, mapPoint,startLinePoint,finishLinePoint } from '../data/course';
 import { roadDistance } from '../render/course-world';
 import { signalAxis,signalState } from '../data/traffic-signals';
 import { angleDifference, crossedLine, distance, lineDistance, segmentDistance } from './math';
@@ -56,7 +56,7 @@ export class CourseTracker {
       if(atGoal)this.goalTime+=dt;else this.goalTime=0;
       atGoal=this.goalTime>2;o.parkingFinished=atGoal;
     }
-    if(e.id==='finish'){o.finishCrossed=crossedLine(prev.bumper,t.bumper,e.point,{x:-1,z:0},3.5);this.finishCrossed ||=o.finishCrossed;atGoal=this.finishCrossed&&dist<4&&t.speed<.12;}
+    if(e.id==='finish'){o.finishCrossed=crossedLine(prev.bumper,t.bumper,{x:finishLinePoint.x,z:e.point.z},{x:-1,z:0},3.5);this.finishCrossed ||=o.finishCrossed;atGoal=this.finishCrossed&&dist<4&&t.speed<.12;}
     if(e.indicator && e.id!=='finish'&&dist<8){o.turnRequired=e.indicator;o.turnCrossed=atGoal;}
     if(e.id==='acceleration'&&atGoal)o.signViolation=t.speed*3.6<20;
     o.exerciseFinished=atGoal;

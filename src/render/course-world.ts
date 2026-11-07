@@ -6,8 +6,8 @@ import { course, hillBounds, hillHeight, hillProfile, mapPoint,startLinePoint } 
 import { distance, segmentDistance } from '../simulation/math';
 import type { Vec2,Settings } from '../types';
 import { asphaltGeometry, boundaryPaintSurface, boundarySections, curbGeometry, curbSurfaces, offsetPath, paintPolygonGeometry, paintStripGeometry, paintJoinSurface, roadBoundaryLoops, roadPaint, unifiedRoads,type PaintPath } from './road-geometry';
-import { categoryLabels, departureTurnArrows, paintedArrows, yellowBoundaryRoads, yellowControlLines,type PaintedArrow } from '../data/road-markings';
-import { laneLines,laneGores } from '../data/lane-markings';
+import { categoryLabels, departureHatching, departureTurnArrows, paintedArrows, yellowBoundaryRoads, yellowControlLines,type PaintedArrow } from '../data/road-markings';
+import { laneLines,laneGores,lanePaintPaths } from '../data/lane-markings';
 import { centerArrowBetweenLines,roadArrowOutline } from './road-arrows';
 import { createRoadSign,type SignKind } from './road-signs';
 import { createHillStructure,hillColliderData } from './hill-structure';
@@ -42,16 +42,24 @@ const tracedPavement=planPavement.map(polygon=>polygon.map(ring=>ring.map(([x,z]
 // The traced islands already contain the junction's rounded corners. Adding a
 // second, nominal corner cuts little notches into them and leaves kerb stubs.
 export const roadSurface=tracedPavement;
-export const intersectionCrossings=intersectionApproaches.map(a=>({id:a.id,...fitCrosswalk(roadSurface,a.crossing,a.normal)}));
+export const intersectionCrossings=intersectionApproaches.map(a=>{
+  const fitted=fitCrosswalk(roadSurface,a.crossing,a.normal);
+  // The plan's 7.2 m crossing spans the lanes, not the full flared mouth.
+  return {id:a.id,...fitted,center:a.crossing,width:Math.min(7.2,fitted.width)};
+});
 export const boundaryLoops=roadBoundaryLoops(roadSurface);
 export const curbSections=boundarySections(boundaryLoops,-.025,-.025-roadPaint.curbWidth,roadPaint.curbStripe);
 export const curbSurface=curbSurfaces(curbSections,roadSurface);
 const edgeSurface=boundaryPaintSurface(boundarySections(boundaryLoops,roadPaint.edgeInset,roadPaint.edgeInset+roadPaint.edgeWidth));
-const yellowZones=unifiedRoads(yellowBoundaryRoads);
-const yellowEdgeBand=boundaryPaintSurface(boundarySections(boundaryLoops,roadPaint.edgeInset,roadPaint.edgeInset+markingDimensions.yellowBoundary));
-export const yellowEdgeSurface=polygonClipping.intersection(yellowEdgeBand,yellowZones,roadSurface);
+// The reference video shows yellow outer edges from the ramp foot to the stop stripe.
+const hillStop=course.exercises.find(e=>e.id==='hill')!.stop!.point.x;
+const hillYellowZone:polygonClipping.MultiPolygon=[[[[hillProfile.start,hillBounds.minZ],[hillStop,hillBounds.minZ],[hillStop,hillBounds.maxZ],[hillProfile.start,hillBounds.maxZ],[hillProfile.start,hillBounds.minZ]]]];
+const yellowZones=polygonClipping.union(unifiedRoads(yellowBoundaryRoads),hillYellowZone);
+export const yellowEdgeSurface=polygonClipping.intersection(edgeSurface,yellowZones,roadSurface);
 export const whiteEdgeSurface=polygonClipping.difference(polygonClipping.intersection(edgeSurface,roadSurface),yellowZones);
 export const departurePaint=departureMarkingPaths();
+// Connected divider and hatch strokes must share a plane to avoid a dark seam.
+const departurePaintHeight=.054;
 export const departureDivider=[{x:33,z:40.5},...roads[0].points.filter(p=>p.x>=33&&p.z>=departurePaint.right[0].z).reverse(),departurePaint.right[0]];
 export const departureArrowBorders=[...boundaryLoops.map(loop=>{const line=offsetPath(loop,roadPaint.edgeInset+roadPaint.edgeWidth/2,true);return [...line,line[0]];}),departureDivider,departurePaint.left,departurePaint.right,departurePaint.rightGuide];
 export function roadDistance(p:Vec2){
@@ -88,7 +96,7 @@ export function roadsidePosition(point:Vec2,normal:Vec2){
 }
 export function pedestrianCrossingLayout(){
   const stop=course.exercises.find(e=>e.id==='pedestrian')!.stop!;
-  const offset=markingDimensions.crossingLength/2+1+markingDimensions.stop/2;
+  const offset=markingDimensions.crossingLength/2+1.15+markingDimensions.stop/2;
   const ahead={x:stop.point.x+stop.normal.x*offset,z:stop.point.z+stop.normal.z*offset};
   return fitCrosswalk(roadSurface,ahead,stop.normal);
 }
@@ -118,7 +126,7 @@ const approachArrows=intersectionApproaches.map(a=>{
 export const coursePaintedArrows:PaintedArrow[]=[...paintedArrows.filter(arrow=>!intersectionApproaches.some(a=>{
   const dx=arrow.point.x-a.stop.x,dz=arrow.point.z-a.stop.z,along=dx*a.normal.x+dz*a.normal.z,lateral=dx*-a.normal.z+dz*a.normal.x;
   return arrow.normal.x*a.normal.x+arrow.normal.z*a.normal.z>.99&&along<=0&&along>=-8&&lateral>0&&lateral<4;
-})).map(arrow=>departureTurnArrows.includes(arrow)?centerArrowBetweenLines(arrow,departureArrowBorders):arrow),...approachArrows];
+})).map(arrow=>departureTurnArrows.includes(arrow)&&!arrow.outline?centerArrowBetweenLines(arrow,departureArrowBorders):arrow),...approachArrows];
 function noiseTexture(base:[number,number,number],size=128){
   const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
   const ctx=canvas.getContext('2d')!,data=ctx.createImageData(size,size);
@@ -165,10 +173,10 @@ export class CourseWorld {
     const mesh=new T.Mesh(new T.PlaneGeometry(width,length),new T.MeshBasicMaterial({map:tex,transparent:true,alphaTest:.08,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1}));mesh.name=`paint-label-${text}`;
     mesh.rotation.set(-Math.PI/2,0,yaw);mesh.position.set(x,hillHeight(x,z)+.055,z);this.group.add(mesh);
   }
-  private sign(kind:SignKind,x:number,z:number,yaw:number,mirror=false,lowerSign?:SignKind|SignKind[],center?:number,bottom?:number){
-    const base=hillHeight(x,z),assembly=createRoadSign(kind,mirror,lowerSign,{center,bottom,postBase:-base});assembly.position.set(x,base,z);assembly.rotation.y=yaw;this.group.add(assembly);
-    const halfHeight=1.3+base/2;
-    const collider=this.physics.createCollider(RAPIER.ColliderDesc.cylinder(halfHeight,.034).setTranslation(x,halfHeight,z));this.obstacles.add(collider.handle);
+  private sign(kind:SignKind,x:number,z:number,yaw:number,mirror=false,lowerSign?:SignKind|SignKind[],center?:number,bottom?:number,onHillDeck=false){
+    const base=hillHeight(x,z),assembly=createRoadSign(kind,mirror,lowerSign,{center,bottom,postBase:onHillDeck?0:-base});assembly.position.set(x,base,z);assembly.rotation.y=yaw;this.group.add(assembly);
+    const postBottom=onHillDeck?base:0,halfHeight=(2.6+base-postBottom)/2;
+    const collider=this.physics.createCollider(RAPIER.ColliderDesc.cylinder(halfHeight,.034).setTranslation(x,postBottom+halfHeight,z));this.obstacles.add(collider.handle);
     return assembly;
   }
   private build(){
@@ -201,34 +209,23 @@ export class CourseWorld {
     departureConcrete.name='departure-curbs';departureConcrete.userData={preserveMesh:true,height:.18,bevel:.02};departureConcrete.castShadow=departureConcrete.receiveShadow=true;this.group.add(departureConcrete);
     for(const mesh of [curbs,whiteCurbs,departureConcrete])addStaticObstacle(this.physics,mesh.geometry,this.obstacles);
     for(const [name,surface,material]of [['course-edge-lines',whiteEdgeSurface,this.white],['course-yellow-edge-lines',yellowEdgeSurface,this.yellow]] as const){
-      const paint=new T.Mesh(asphaltGeometry(surface,.048),material);paint.name=name;paint.userData.preserveMesh=true;paint.receiveShadow=true;this.group.add(paint);
+      const paint=new T.Mesh(asphaltGeometry(surface,departurePaintHeight),material);paint.name=name;paint.userData.preserveMesh=true;paint.receiveShadow=true;this.group.add(paint);
     }
     const startNormal={x:1,z:0},startFrame=roadFrame(startLinePoint,startNormal);
     // The start, crossing and ramp share a solid lane divider in the video.
-    this.strip([startFrame.center,{x:33,z:startFrame.center.z}],roadPaint.centerWidth,this.white,.05);
-    const divider=this.strip(departureDivider,roadPaint.centerWidth,this.white,.05);
-    divider.name='paint-departure-divider';divider.userData.preserveMesh=true;
-    for(const line of laneLines){const mesh=this.strip(line.points,line.width,this.white,.052);mesh.name=`paint-lane-${line.id}`;mesh.userData.preserveMesh=true;}
+    this.strip([startFrame.center,{x:33,z:startFrame.center.z}],departureHatching.lineWidth,this.white,departurePaintHeight);
+    for(const line of laneLines){
+      const paths=lanePaintPaths(line),geometries=paths.map(points=>paintStripGeometry(points,line.width,roadSurface,.052));
+      const mesh=new T.Mesh(mergeGeometries(geometries)!,this.white);geometries.forEach(g=>g.dispose());
+      mesh.name=`paint-lane-${line.id}`;mesh.userData.preserveMesh=true;mesh.receiveShadow=true;this.group.add(mesh);
+      this.continuousWhite.push(...paths.map(points=>({points,width:line.width})));
+    }
     for(const gore of laneGores){
-      const ring=[...gore.outline,gore.outline[0]].map(p=>[p.x,p.z] as polygonClipping.Pair),surface=polygonClipping.intersection(roadSurface,[[ring]]);
-      const geometries=[paintStripGeometry([...gore.outline,gore.outline[0]],markingDimensions.islandBorder,roadSurface,.054)];
-      const xs=gore.outline.map(p=>p.x),zs=gore.outline.map(p=>p.z),minX=Math.min(...xs),maxX=Math.max(...xs),minZ=Math.min(...zs),maxZ=Math.max(...zs),height=maxZ-minZ;
-      if(gore.fringe){
-        // 05:02: short inward teeth follow both curved borders, leaving the
-        // centre open instead of filling this splitter with diagonal bars.
-        for(const side of [gore.outline.slice(0,33),gore.outline.slice(33).reverse()]){
-          let station=.65;
-          for(let i=1;i<side.length;i++){
-            const a=side[i-1],b=side[i],length=distance(a,b),dx=(b.x-a.x)/length,dz=(b.z-a.z)/length;
-            for(;station<length;station+=gore.spacing){
-              const p={x:a.x+dx*station,z:a.z+dz*station},center={x:(minX+maxX)/2,z:(minZ+maxZ)/2};
-              const sign=(center.x-p.x)*-dz+(center.z-p.z)*dx>=0?1:-1;
-              geometries.push(paintStripGeometry([p,{x:p.x+(dx-dz*sign)*.65,z:p.z+(dz+dx*sign)*.65}],markingDimensions.edge,surface,.054));
-            }station-=length;
-          }
-        }
-      }else for(let x=minX-height;x<maxX;x+=gore.spacing)geometries.push(paintStripGeometry([{x,z:maxZ},{x:x+height,z:minZ}],markingDimensions.islandStripe,surface,.054));
-      const mesh=new T.Mesh(mergeGeometries(geometries)!,this.white);geometries.forEach(g=>g.dispose());mesh.name=`paint-gore-${gore.id}`;mesh.userData.preserveMesh=true;mesh.receiveShadow=true;this.group.add(mesh);
+      const paths=gore.paintPaths??[[...gore.outline,gore.outline[0]]];
+      const geometries=paths.map(points=>paintStripGeometry(points,markingDimensions.islandBorder,roadSurface,.054));
+      const mesh=new T.Mesh(mergeGeometries(geometries)!,this.white);geometries.forEach(g=>g.dispose());
+      mesh.name=`paint-gore-${gore.id}`;mesh.userData.preserveMesh=true;mesh.receiveShadow=true;this.group.add(mesh);
+      this.continuousWhite.push(...paths.map(points=>({points,width:markingDimensions.islandBorder})));
     }
     const transverse=(point:Vec2,normal:Vec2,width:number)=>{
       const frame=roadFrame(point,normal),half=(frame.width-2*roadPaint.edgeInset)/2;
@@ -247,14 +244,16 @@ export class CourseWorld {
     for(const label of categoryLabels)this.text(label.text,label.point.x,label.point.z,Math.atan2(-label.normal.x,-label.normal.z),1,'#eeede1',label.width,label.length);
     const goreRing=[...departurePaint.outline,departurePaint.outline[0]].map(p=>[p.x,p.z] as polygonClipping.Pair);
     const goreSurface=polygonClipping.intersection(roadSurface,[[goreRing]]);
-    const forkGeometries=[departurePaint.left,departurePaint.right,departurePaint.nose].map(points=>paintStripGeometry(points,markingDimensions.islandBorder,roadSurface,.054));
-    this.continuousWhite.push(...[departurePaint.left,departurePaint.right,departurePaint.nose].map(points=>({points,width:markingDimensions.islandBorder})));
-    // Clip the chevron mitres to the gore: their acute apices must never produce
-    // spikes or little triangles outside the narrowing outline.
-    forkGeometries.push(...departurePaint.chevrons.map(points=>paintStripGeometry(points,markingDimensions.islandStripe,goreSurface,.054)));
+    // Carry the divider straight into the left border as one stroked path.
+    // This removes the two separate end caps at the visible seam.
+    const joinedBorder=[...departureDivider,...departurePaint.left.slice(1)];
+    // The nose is already part of course-edge-lines; do not paint it twice.
+    const forkGeometries=[joinedBorder,departurePaint.right].map(points=>paintStripGeometry(points,departureHatching.lineWidth,roadSurface,departurePaintHeight));
+    forkGeometries.push(...departurePaint.chevrons.map(points=>paintStripGeometry(points,departureHatching.lineWidth,goreSurface,departurePaintHeight)));
+    const divider=new T.Group();divider.name='paint-departure-divider';divider.userData.joinedPaint=true;
     const fork=new T.Mesh(mergeGeometries(forkGeometries)!,this.white);forkGeometries.forEach(g=>g.dispose());
-    fork.name='paint-departure-hatching';fork.userData.preserveMesh=true;fork.receiveShadow=true;this.group.add(fork);
-    const outerGuide=this.strip(departurePaint.rightGuide,markingDimensions.islandBorder,this.white,.054);outerGuide.name='paint-departure-right-guide';outerGuide.userData.preserveMesh=true;
+    fork.name='paint-departure-hatching';fork.userData.preserveMesh=true;fork.receiveShadow=true;divider.add(fork);this.group.add(divider);
+    const outerGuide=this.strip(departurePaint.rightGuide,departureHatching.lineWidth,this.white,departurePaintHeight);outerGuide.name='paint-departure-right-guide';outerGuide.userData.preserveMesh=true;
     // Dashed yellow exercise entry/control lines visible in the reference video.
     const controlGeometries:T.BufferGeometry[]=[];
     for(const [start,end]of yellowControlLines){
@@ -288,10 +287,11 @@ export class CourseWorld {
     this.text('FINISH',-48.2,26.5,Math.PI/2,2,'#eeede1',2.6,1.2);this.text('FINISH',-48.2,22.5,Math.PI/2,2,'#eeede1',2.6,1.2);
     for(const placement of courseSigns){
       const p=courseSignPoint(placement);
-      const assembly=this.sign(placement.kind,p.x,p.z,placement.yaw,placement.mirror??false,placement.lower,undefined,placement.bottom);
+      const assembly=this.sign(placement.kind,p.x,p.z,placement.yaw,placement.mirror??false,placement.lower,undefined,placement.bottom,placement.id==='hill-descent'||placement.id==='hill-stop');
       assembly.name=placement.id;assembly.userData={...assembly.userData,placementId:placement.id,referenceVideo:'uz_video.mp4',referenceFrames:placement.frames,planPoint:[placement.x,placement.y]};
     }
-    for(const z of [-24,-23.3]){this.box(7,.07,.1,58,.045,z,this.pole);for(let x=54.5;x<61.5;x+=.5)this.box(.23,.04,1.9,x,.045,-23.65,curbMat);}
+    for(const z of [-26,-24.5])this.box(7.8,.07,.1,57.5,.045,z,this.pole);
+    for(let x=53.6;x<61.5;x+=.5)this.box(.23,.04,1.9,x,.045,-25.25,curbMat);
     this.trees=new TreeStand();this.group.add(this.trees.group);
     const facade=new T.MeshStandardMaterial({map:this.buildingTexture(),roughness:.85});
     for(let i=0;i<14;i++){const x=-96+i*15,h=8+(i%4)*3;this.box(12,h,10,x,h/2,-68-(i%3)*6,facade);}

@@ -3,6 +3,7 @@ import { afterHillBRoute,bTurnCourse,cdTurnCourse,perimeterExit,planArc } from '
 import { intersectionApproaches } from './intersection';
 export const mapPoint = (x: number, y: number): Vec2 => ({ x: (x - 640) * 0.1, z: (y - 530) * 0.1 });
 export const startLinePoint=mapPoint(232,935);
+export const finishLinePoint=mapPoint(145,775);
 const p = mapPoint;
 const path = (a: number[][]) => a.map(([x, y]) => p(x, y));
 const names: Record<ExerciseId, [string, string, string, string]> = {
@@ -40,7 +41,7 @@ export const course: CourseDefinition = {
   ],
   exercises: [
     exercise('start',320,950,200,950,Math.PI/2,{radius:2}),
-    exercise('pedestrian',510,950,420,950,Math.PI/2,{stop:{point:p(475,950),normal:{x:1,z:0}}}),
+    exercise('pedestrian',510,950,420,950,Math.PI/2,{stop:{point:p(462,950),normal:{x:1,z:0}}}),
     exercise('hill',850,950,620,950,Math.PI/2,{stop:{point:p(770,950),normal:{x:1,z:0}}}),
     exercise('rightAngle',715,745,1235,805,Math.PI,{timeLimit:120,indicator:'right'}),
     exercise('intersection',655,410,655,650,Math.PI,{stop:{point:{...intersectionApproaches[0].stop,x:1.5},normal:intersectionApproaches[0].normal,light:true}}),
@@ -50,7 +51,7 @@ export const course: CourseDefinition = {
     exercise('acceleration',600,100,1015,100,-Math.PI/2,{radius:4}),
     exercise('emergency',45,410,45,220,0,{radius:4}),
     exercise('parallel',390,600,275,561,Math.PI/2,{parking:{center:p(390,600),yaw:Math.PI/2,width:3.1,length:6.5},radius:2}),
-    exercise('finish',175,795,520,795,-Math.PI/2,{indicator:'right',radius:3}),
+    exercise('finish',145,795,520,795,-Math.PI/2,{indicator:'right',radius:3}),
   ],
   route: path([
     [200,950],[320,950],[475,950],[510,950],[660,950],[770,950],[850,950],...afterHillBRoute,
@@ -59,7 +60,7 @@ export const course: CourseDefinition = {
     [205,275],[205,400],[215,465],[265,490],[545,490],[545,525],[700,525],[1165,525],[1235,450],[1235,410],[1235,315],[1235,255],
     [1200,150],[1100,100],[1015,100],[600,100],[200,100],[80,150],[45,240],[45,410],[45,505],
     [100,561],[445,561],[425,575],[420,600],[390,600],[410,590],[425,570],[445,561],[490,561],[520,530],[540,530],
-    ...planArc(540,610,80,-90,0).slice(1),[620,680],...planArc(545,680,75,0,90).slice(1),[520,795],[175,795],
+    ...planArc(540,610,80,-90,0).slice(1),[620,680],...planArc(545,680,75,0,90).slice(1),[520,795],[145,795],
   ]),
 };
 course.roads.push({points:path(cdTurnCourse),width:5.2,smooth:false});

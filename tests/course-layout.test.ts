@@ -22,14 +22,14 @@ describe('complete layout from the supplied plan and video overview',()=>{
     expect(p.project(start.point).x).toBeLessThan(p.project(hill.point).x);
     expect(p.project(start.point).y).toBeGreaterThan(p.project(finish.point).y);
     expect(start.yaw).toBe(Math.PI/2);expect(finish.yaw).toBe(-Math.PI/2);
-    expect(finish.point).toEqual(mapPoint(175,795));
+    expect(finish.point).toEqual(mapPoint(145,795));
     expect(p.project(course.exercises[6].point).x).toBeLessThan(p.project(course.exercises[5].point).x);
     for(const e of course.exercises.filter(e=>e.parking))for(const side of [-1,1])for(const end of [-1,1]){
       expect(roadDistance(localPoint(e.point,e.parking!.yaw,side*1.735/2,end*4.479/2)),`${e.id} vehicle corner`).toBeLessThan(-.2);
     }
   });
   it('follows the plan arrows in the paired perimeter lanes',()=>{
-    for(const [x,y,nx,nz]of [[1070,100,-1,0],[570,140,1,0],[400,140,1,0],[45,385,0,1],[80,225,0,-1],[1235,425,0,-1],[1195,425,0,1]]){
+    for(const [x,y,nx,nz]of [[1061,98,-1,0],[558,138,1,0],[413.5,135,1,0],[45,408,0,1],[83.5,247,0,-1],[1232.5,220,0,-1],[1195.5,225,0,1]]){
       const p=mapPoint(x,y),arrow=paintedArrows.find(a=>Math.hypot(a.point.x-p.x,a.point.z-p.z)<.01);
       expect(arrow?.normal,`arrow at plan ${x},${y}`).toEqual({x:nx,z:nz});
     }

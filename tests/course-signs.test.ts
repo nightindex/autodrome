@@ -1,27 +1,34 @@
 import {describe,expect,it} from 'vitest';
 import {courseSigns,courseSignPoint} from '../src/data/course-signs';
 import {signBoardLayout,signSpecifications} from '../src/render/road-signs';
-import {boundaryLoops,roadDistance} from '../src/render/course-world';
-import {hillEdgeSections} from '../src/render/hill-structure';
+import {roadDistance} from '../src/render/course-world';
+import {hillHeight} from '../src/data/course';
+import {roadPaint} from '../src/render/road-geometry';
 import {intersectionApproaches} from '../src/data/intersection';
 
 describe('sign assemblies surveyed from uz_video.mp4',()=>{
   it('keeps every surveyed post off the pavement and retains reviewable frame evidence',()=>{
     expect(new Set(courseSigns.map(s=>s.id)).size).toBe(courseSigns.length);
     for(const sign of courseSigns){
-      expect(roadDistance(courseSignPoint(sign)),sign.id).toBeGreaterThanOrEqual(.3);
+      if(sign.id!=='hill-stop'&&sign.id!=='hill-descent')expect(roadDistance(courseSignPoint(sign)),sign.id).toBeGreaterThanOrEqual(.3);
       expect(sign.frames.length,sign.id).toBeGreaterThan(0);
       expect(sign.frames.every(t=>t>=0&&t<701),sign.id).toBe(true);
     }
   });
-  it('keeps the hill posts and entire boards beyond the concrete edging',()=>{
-    const edges=hillEdgeSections(boundaryLoops);
-    for(const sign of courseSigns.filter(s=>s.id==='hill-ascent'||s.id==='hill-stop')){
-      const p=courseSignPoint(sign),outer=edges.filter(e=>Math.min(e.a.x,e.b.x)<=p.x&&Math.max(e.a.x,e.b.x)>=p.x).reduce((z,e)=>Math.max(z,e.outerA.z,e.outerB.z),-Infinity);
-      expect(Number.isFinite(outer),sign.id).toBe(true);
-      const halfWidth=Math.abs(Math.sin(sign.yaw))*signSpecifications[sign.kind].width/2;
-      expect(p.z-halfWidth-outer,sign.id).toBeGreaterThan(.1);
+  it('places the hill posts on the deck between the yellow line and the concrete edge',()=>{
+    const signs=courseSigns.filter(s=>s.id==='hill-stop'||s.id==='hill-descent');
+    expect(signs).toHaveLength(2);
+    for(const sign of signs){
+      const p=courseSignPoint(sign),distance=-roadDistance(p);
+      expect(hillHeight(p.x,p.z),sign.id).toBeGreaterThan(0);
+      expect(distance,sign.id).toBeGreaterThan(.034);
+      expect(distance+.034,sign.id).toBeLessThan(roadPaint.edgeInset);
     }
+    const stop=courseSignPoint(signs.find(s=>s.id==='hill-stop')!),descent=courseSignPoint(signs.find(s=>s.id==='hill-descent')!),ascent=courseSignPoint(courseSigns.find(s=>s.id==='hill-ascent')!);
+    expect(stop.x).toBe(13);
+    expect(descent.x).toBe(22);
+    expect(ascent.x).toBe(2);
+    expect(roadDistance(ascent)).toBeGreaterThanOrEqual(.3);
   });
   it('keeps vehicle restrictions paired with the correct turn, and parking out of the garage exercise',()=>{
     for(const prefix of ['departure','snake','garage']){
@@ -30,6 +37,14 @@ describe('sign assemblies surveyed from uz_video.mp4',()=>{
     }
     expect(courseSigns.filter(s=>s.kind==='parking').map(s=>s.id)).toEqual(['parking-bay']);
     expect(courseSigns.find(s=>s.id==='acceleration-40-20')?.lower).toEqual(['minimum20']);
+  });
+  it('faces the C/D winding-road warning towards the approaching turn',()=>{
+    const sign=courseSigns.find(s=>s.id==='bend-cd-warning')!;
+    const p=courseSignPoint(sign),approach={x:57,z:24};
+    const dx=approach.x-p.x,dz=approach.z-p.z,length=Math.hypot(dx,dz);
+    const facing=(Math.sin(sign.yaw)*dx+Math.cos(sign.yaw)*dz)/length;
+    expect(facing).toBeGreaterThan(.9);
+    expect(Math.cos(sign.yaw)).toBeGreaterThan(.4);
   });
   it('orders the railway approach boards towards the actual crossing',()=>{
     const ids=['east-end-left','railway-distance-two','railway-warning','railway-stop'];

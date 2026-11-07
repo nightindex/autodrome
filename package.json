@@ -53,7 +53,12 @@
     "test:yellow-edge": "node scripts/yellow-edge-check.mjs after",
     "test:trees": "node scripts/tree-review.mjs after",
     "test:curbs": "node scripts/curb-review.mjs after",
-    "reference:frames": "node scripts/extract-reference-frames.mjs"
+    "reference:frames": "node scripts/extract-reference-frames.mjs",
+    "test:plan-markings": "node scripts/plan-markings-check.mjs",
+    "test:finish-split": "node scripts/finish-split-check.mjs",
+    "test:north-split": "node scripts/north-split-check.mjs",
+    "test:sign-edges": "node scripts/sign-edge-check.mjs",
+    "test:departure-seam": "node scripts/departure-seam-check.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",

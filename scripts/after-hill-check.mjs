@@ -61,7 +61,7 @@ try{
   // Preserve the original map. Overlay the actual runtime boundary and B guide.
   const path=points=>points.map(([x,y],i)=>`${i?'L':'M'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
   const overlay=Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1072"><defs><clipPath id="area"><rect x="630" y="540" width="625" height="435"/></clipPath></defs><g clip-path="url(#area)" fill="none" stroke-linejoin="round"><g stroke="#ff20bf" stroke-width="1.8">${geometry.boundaryLoops.map(points=>`<path d="${path(points)} Z"/>`).join('')}</g><path d="${path(geometry.route)}" stroke="#ff7d00" stroke-width="3" stroke-dasharray="8 5"/></g></svg>`);
-  const comparison=await sharp('2026-03-19_17-47-25_3UKDK1HJ4R.jpg').composite([{input:overlay}]).png().toBuffer();
+  const comparison=await sharp('images/2026-03-19_17-47-25_3UKDK1HJ4R.jpg').composite([{input:overlay}]).png().toBuffer();
   await sharp(comparison).extract({left:620,top:520,width:650,height:470}).resize(1300,940).png().toFile(`${directory}/plan-overlay.png`);
   await page.locator('.minimap').screenshot({path:`${directory}/minimap.png`});
   await page.addStyleTag({content:'#hud,#menu-shell,#modal,.vignette,#toast{display:none!important}dialog::backdrop{display:none}'});

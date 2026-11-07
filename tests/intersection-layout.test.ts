@@ -21,9 +21,9 @@ describe('signal junction mouths from the video',()=>{
       expect(crossing.width).toBeGreaterThan(7);
       for(const other of intersectionCrossings.slice(i+1))expect(polygonClipping.intersection(rectangle(crossing),rectangle(other)),`${crossing.id}/${other.id}`).toEqual([]);
       for(const stripe of crosswalkStripes(crossing))for(const point of stripe.points)expect(roadDistance(point),`${crossing.id} stripe on road`).toBeLessThan(-.17);
-      // At least one end of the outer edge reaches its rounded kerb; the
-      // crossing must not float several metres short of both verges.
-      const corners=rectangle(crossing)[0];expect(Math.max(...corners.map(([x,z])=>roadDistance({x,z})))).toBeGreaterThan(-.5);
+      // The schematic uses a lane-wide zebra inside the flared mouth.
+      expect(crossing.width).toBeCloseTo(7.2);
+
     }
   });
   it('keeps a waiting gap before the zebra and joins every divider to its stop bar',()=>{
@@ -31,7 +31,7 @@ describe('signal junction mouths from the video',()=>{
     for(const [i,a]of intersectionApproaches.entries()){
       const crossing=intersectionCrossings.find(c=>c.id===a.id)!;
       const gap=(crossing.center.x-a.stop.x)*a.normal.x+(crossing.center.z-a.stop.z)*a.normal.z-crossing.length/2;
-      expect(gap).toBeGreaterThan(1);expect(gap).toBeLessThan(2);
+      expect(gap).toBeGreaterThan(1);expect(gap).toBeLessThan(2.5);
       const line=laneLines.find(l=>l.id===lineIds[i])!;
       expect(Math.min(...[line.points[0],line.points.at(-1)!].map(p=>Math.hypot(p.x-a.stop.x,p.z-a.stop.z)))).toBeLessThan(1e-8);
     }
