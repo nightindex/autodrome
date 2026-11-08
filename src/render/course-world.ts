@@ -277,10 +277,10 @@ export class CourseWorld {
       const head=new TrafficLight(signalAxis(n));head.group.position.set(signalPosition.x,0,signalPosition.z);head.group.rotation.y=yaw;head.group.userData.approach=approach.id;this.trafficLights.push(head);this.group.add(head.group);
       const collider=this.physics.createCollider(RAPIER.ColliderDesc.cylinder(1.62,.04).setTranslation(signalPosition.x,1.62,signalPosition.z));this.obstacles.add(collider.handle);
       const priority=createRoadSign(n.z?'priority':'yield',false,undefined,{bottom:1.05,post:false});priority.name=`signal-${approach.id}-priority`;priority.position.set(signalPosition.x,0,signalPosition.z);priority.rotation.y=yaw;priority.userData.referenceFrames=n.z?[287,412]:[570,645];this.group.add(priority);
-      const stopPost=roadsidePosition({x:p.x+n.x*.35,z:p.z+n.z*.35},n);this.sign('stopPlate',stopPost.x-right.x*.15,stopPost.z-right.z*.15,yaw,false,undefined,undefined,1.35).name=`signal-${approach.id}-stop-board`;
+      const stopPost=roadsidePosition({x:p.x+n.x*.35,z:p.z+n.z*.35},n);this.sign('stopPlate',stopPost.x,stopPost.z,yaw,false,undefined,undefined,1.35).name=`signal-${approach.id}-stop-board`;
       const pedestrian=createRoadSign('pedestrian',n.x>0||n.z>0,undefined,{center:2.5,post:false});pedestrian.position.set(signalPosition.x-right.x*.75,0,signalPosition.z-right.z*.75);pedestrian.rotation.y=yaw;this.group.add(pedestrian);
       const bracket=new T.Mesh(new T.CylinderGeometry(.017,.017,.75,10),this.pole);bracket.rotation.z=Math.PI/2;bracket.position.set(-.375,2.5,-.09);head.group.add(bracket);
-      const direction=roadsidePosition({x:p.x-n.x*1.6,z:p.z-n.z*1.6},n);this.sign(approach.turn??'straight',direction.x+right.x*1.5,direction.z+right.z*1.5,yaw,false,undefined,undefined,1.5).name=`signal-${approach.id}-direction`;
+      const direction=roadsidePosition({x:p.x-n.x*1.6,z:p.z-n.z*1.6},n);this.sign(approach.turn??'straight',direction.x,direction.z,yaw,false,undefined,undefined,1.5).name=`signal-${approach.id}-direction`;
     }
     for(const marking of roadStopLines){const line=this.strip(marking.points,marking.width,this.white,.055);line.name=marking.name;line.userData={preserveMesh:true,normal:marking.normal,width:marking.width};}
     this.text('START',startLinePoint.x-1.4,42,-Math.PI/2,2,'#eeede1',2.8,1.2);this.text('START',startLinePoint.x-1.4,38.5,-Math.PI/2,2,'#eeede1',2.8,1.2);

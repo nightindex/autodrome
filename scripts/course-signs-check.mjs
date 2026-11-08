@@ -33,14 +33,17 @@ try{
   await page.addStyleTag({content:'#hud,#menu-shell,#modal,.vignette,#toast{display:none!important}dialog::backdrop{display:none}'});
   await page.evaluate(async()=>{const T=await import('/node_modules/three/build/three.module.js'),s=window.__avtodrom.scene,draw=s.render.bind(s);window.signAuditPose={eye:[-25,12,50],target:[7,1,40],fov:58};s.render=(...args)=>{draw(...args);s.guide.visible=s.goal.visible=s.car.visible=false;const p=window.signAuditPose;s.camera.clearViewOffset();s.camera.fov=p.fov;s.camera.updateProjectionMatrix();s.camera.position.fromArray(p.eye);s.camera.lookAt(new T.Vector3(...p.target));s.renderer.setViewport(0,0,innerWidth,innerHeight);s.renderer.render(s.scene,s.camera);};});
   for(const [name,pose]of [
-    ['start',{eye:[-27,7,47],target:[6,1.6,41],fov:52}],
+    ['start',{eye:[-46,8,53],target:[-21,1,41.5],fov:52}],
     ['ramp-exit',{eye:[48,12,55],target:[57,1,30],fov:55}],
     ['b-cd-bends',{eye:[50,18,36],target:[27,0,17],fov:55}],
+    ['cd-warning',{eye:[57,7,23],target:[49,1,13],fov:48}],
+    ['b-warning',{eye:[43,6,13],target:[34,1,7],fov:48}],
+    ['bend-right-turns',{eye:[25,16,43],target:[13,0,24],fov:48}],
     ['junction',{eye:[12,10,20],target:[0,1,-3],fov:60}],
     ['snake',{eye:[-12,15,-49],target:[14,0,-27],fov:57}],
-    ['garages',{eye:[-5,20,-2],target:[-30,0,-18],fov:65}],
+    ['garages',{eye:[0,17,0],target:[-24,0,-13],fov:65}],
     ['railway',{eye:[52,8,-8],target:[61,1.7,-28],fov:55}],
-    ['speed',{eye:[32,7,-48],target:[-22,1,-43],fov:50}],
+    ['speed',{eye:[46,8,-39],target:[12,1,-44],fov:50}],
     ['parking-finish',{eye:[-25,15,25],target:[-35,0,9],fov:60}],
   ]){await page.evaluate(p=>window.signAuditPose=p,pose);await page.waitForTimeout(220);await page.screenshot({path:`${directory}/${name}.png`});}
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.signAuditPose={eye:[-12,18,-49],target:[14,1,-27],fov:80});await page.waitForTimeout(220);await page.screenshot({path:`${directory}/mobile.png`});

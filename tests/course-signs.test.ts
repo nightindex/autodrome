@@ -2,7 +2,8 @@ import {describe,expect,it} from 'vitest';
 import {courseSigns,courseSignPoint} from '../src/data/course-signs';
 import {signBoardLayout,signSpecifications} from '../src/render/road-signs';
 import {roadDistance} from '../src/render/course-world';
-import {hillHeight} from '../src/data/course';
+import {hillHeight,startLinePoint,finishLinePoint,course} from '../src/data/course';
+import {yellowControlLines} from '../src/data/road-markings';
 import {roadPaint} from '../src/render/road-geometry';
 import {intersectionApproaches} from '../src/data/intersection';
 
@@ -37,6 +38,10 @@ describe('sign assemblies surveyed from uz_video.mp4',()=>{
     }
     expect(courseSigns.filter(s=>s.kind==='parking').map(s=>s.id)).toEqual(['parking-bay']);
     expect(courseSigns.find(s=>s.id==='acceleration-40-20')?.lower).toEqual(['minimum20']);
+    // The C/D bend has a standalone right-turn sign; the B approach retains
+    // the yield/right-turn pair seen in the same frame.
+    expect(courseSigns.find(s=>s.id==='bend-cd-right')?.lower??[]).toEqual([]);
+    expect(courseSigns.find(s=>s.id==='bend-b-yield-right')?.lower).toEqual(['right']);
   });
   it('faces the C/D winding-road warning towards the approaching turn',()=>{
     const sign=courseSigns.find(s=>s.id==='bend-cd-warning')!;
@@ -51,6 +56,34 @@ describe('sign assemblies surveyed from uz_video.mp4',()=>{
     const signs=ids.map(id=>courseSigns.find(s=>s.id===id)!);
     for(let i=1;i<signs.length;i++)expect(signs[i].y).toBeLessThan(signs[i-1].y);
     expect(signs[0].lower).toEqual(['railBars3']);expect(signs[2].lower).toEqual(['railBars1']);
+    expect(courseSignPoint(signs[3]).z).toBeCloseTo(course.exercises.find(e=>e.id==='railway')!.stop!.point.z);
+  });
+  it('faces the garage turn boards towards the westbound approach from the junction',()=>{
+    const approach={x:-2,z:-4.2};
+    for(const id of ['garage-b-right','garage-cd-right','garage-end-right','garage-right-chevron']){
+      const sign=courseSigns.find(s=>s.id===id)!,p=courseSignPoint(sign),dx=approach.x-p.x,dz=approach.z-p.z;
+      expect((Math.sin(sign.yaw)*dx+Math.cos(sign.yaw)*dz)/Math.hypot(dx,dz),id).toBeGreaterThan(0);
+    }
+  });
+  it('anchors the northern speed restrictions to the exercise control marks',()=>{
+    const acceleration=courseSignPoint(courseSigns.find(s=>s.id==='acceleration-40-20')!),limit=courseSignPoint(courseSigns.find(s=>s.id==='northwest-speed20')!);
+    expect(yellowControlLines.some(([a,b])=>Math.abs(a.x-acceleration.x)<1e-6&&Math.abs(b.x-acceleration.x)<1e-6&&a.z< -40)).toBe(true);
+    expect(yellowControlLines.some(([a,b])=>Math.abs(a.x-limit.x)<1e-6&&Math.abs(b.x-limit.x)<1e-6&&a.z< -40)).toBe(true);
+  });
+  it('puts FINISH on the driver\'s right verge rather than across the two lanes',()=>{
+    const sign=courseSignPoint(courseSigns.find(s=>s.id==='finish-board')!);
+    expect(sign.x).toBeCloseTo(finishLinePoint.x);
+    expect(sign.z).toBeLessThan(finishLinePoint.z);
+    expect(roadDistance(sign)).toBeGreaterThanOrEqual(.3);
+  });
+  it('shows both opposing start-crossing signs to drivers leaving the start',()=>{
+    const near=courseSigns.find(s=>s.id==='start-crossing-near')!,far=courseSigns.find(s=>s.id==='start-crossing-far')!;
+    expect(near.x).toBe(far.x);
+    expect(far.mirror).toBe(true);expect(near.mirror??false).toBe(false);
+    for(const sign of [near,far]){
+      const p=courseSignPoint(sign),dx=startLinePoint.x-p.x,dz=startLinePoint.z-p.z;
+      expect((Math.sin(sign.yaw)*dx+Math.cos(sign.yaw)*dz)/Math.hypot(dx,dz),sign.id).toBeGreaterThan(.9);
+    }
   });
   it('uses the observed signal approach directions',()=>{
     expect(intersectionApproaches.find(a=>a.id==='south')?.turn).toBeUndefined();
