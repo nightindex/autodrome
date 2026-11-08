@@ -11,11 +11,14 @@ page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()
 const check=(name,value,detail)=>{assert(value,`${name}: ${JSON.stringify(detail)}`);checks.push(name);};
 const snapshot=()=>page.evaluate(()=>window.__avtodrom.snapshot().telemetry);
 try{
- await page.goto('http://127.0.0.1:5173/');await page.waitForFunction(()=>window.__avtodrom?.snapshot().loaded,null,{timeout:60000});await page.click('#lang');await page.click('#practice');
+ await page.goto('http://127.0.0.1:5173/');await page.waitForFunction(()=>window.__avtodrom?.snapshot().loaded,null,{timeout:60000});await page.click('#lang');await page.click('#practice');await page.click('#controls-button');
  for(const [width,height]of [[1440,960],[1024,640],[900,700],[390,844]]){
   await page.setViewportSize({width,height});
-  const boxes=await page.locator('#positionlights-button,#headlights-button,#foglights-button,#reset-button').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {id:n.id,left:r.left,right:r.right,top:r.top,bottom:r.bottom};}));
-  check(`${width}x${height}: light and reset buttons remain separate and onscreen`,boxes.every((r,i)=>r.left>=0&&r.right<=width&&r.top>=0&&r.bottom<=height&&boxes.slice(i+1).every(other=>r.right<=other.left||other.right<=r.left||r.bottom<=other.top||other.bottom<=r.top)),boxes);
+  const boxes=[];
+  for(const id of ['positionlights-button','headlights-button','foglights-button','reset-button']){
+   const button=page.locator(`#${id}`);await button.scrollIntoViewIfNeeded();const r=await button.boundingBox();boxes.push({id,...r});
+   check(`${width}x${height}: ${id} is reachable and onscreen`,r&&r.x>=0&&r.x+r.width<=width&&r.y>=0&&r.y+r.height<=height&&r.height>=44,r);
+  }
   await page.screenshot({path:`${directory}/hud-${width}.png`});
  }
  await page.setViewportSize({width:1440,height:960});
@@ -31,7 +34,7 @@ try{
  await page.keyboard.press('KeyQ');const phases=[];
  for(let i=0;i<8;i++){await page.waitForTimeout(120);phases.push(await page.evaluate(()=>{const s=window.__avtodrom.scene,visible=name=>s.car.children.some(n=>n.name===name&&n.visible);return {front:visible('front-indicator-left-glow'),rear:visible('rear-left-glow'),right:visible('front-indicator-right-glow')};}));}
  check('Q flashes the front left lamp in phase with the rear and leaves the right dark',phases.every(p=>p.front===p.rear&&!p.right)&&phases.some(p=>p.front)&&phases.some(p=>!p.front),phases);
- await page.keyboard.press('KeyQ');await page.keyboard.press('Escape');
+ await page.keyboard.press('KeyQ');await page.click('#controls-close');await page.keyboard.press('Escape');
  await page.addStyleTag({content:'#hud,#menu-shell,#modal,.vignette,#toast{display:none!important}dialog::backdrop{display:none}'});
  await page.evaluate(async()=>{
   const T=await import('/node_modules/three/build/three.module.js'),s=window.__avtodrom.scene,render=s.render.bind(s);s.guide.visible=s.goal.visible=false;

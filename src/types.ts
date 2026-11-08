@@ -40,6 +40,7 @@ export interface RuleDefinition {
 export interface ExamEvent { ruleId: number; time: number; points: number; exercise: ExerciseId; key: string }
 export interface ExamResult { date: string; mode: Mode; elapsed: number; score: number; passed: boolean; completed: boolean; events: ExamEvent[] }
 export interface Settings {
+  curbStyle:'yellow-black'|'white';
   mirrors:import('./render/mirror-adjustment').MirrorAdjustments;
   language: Language; quality: 'low' | 'medium' | 'high'; volume: number;
   assist: boolean; steeringAssist: boolean; examMinutes: number; bindings: Record<string, string>; results: ExamResult[];

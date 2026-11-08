@@ -1,4 +1,5 @@
 import type { Settings } from '../types';
+import {icon} from './icons';
 import { mirrorLimits,readMirrorAdjustments,type MirrorSide } from '../render/mirror-adjustment';
 
 const labels={
@@ -13,7 +14,7 @@ export class MirrorControls {
   private panel:HTMLElement;private toggle:HTMLButtonElement;
   constructor(private hud:HTMLElement,private settings:Settings,private change:(persist:boolean)=>void,private preview:(side:MirrorSide|null)=>void,activate:()=>void){
     const c=labels[settings.language],signal=this.abort.signal;
-    this.toggle=document.createElement('button');this.toggle.id='mirrors-button';this.toggle.textContent=c.title;
+    this.toggle=document.createElement('button');this.toggle.id='mirrors-button';this.toggle.innerHTML=`${icon('mirror')}<span>${c.title}</span>`;this.toggle.title=c.title;this.toggle.setAttribute('aria-label',c.title);
     this.toggle.setAttribute('aria-expanded','false');this.toggle.setAttribute('aria-controls','mirror-controls');
     hud.querySelector('.header-controls')!.prepend(this.toggle);
     this.panel=document.createElement('section');this.panel.id='mirror-controls';this.panel.hidden=true;this.panel.setAttribute('aria-label',c.title);

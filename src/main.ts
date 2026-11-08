@@ -1,4 +1,5 @@
 import './style.css';
+import './ui/hud.css';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { course, itinerary } from './data/course';
 import { Vehicle } from './simulation/vehicle';
@@ -27,12 +28,13 @@ const ui=new Interface(settings,{
   lights:action=>{if(state==='driving')switchLights(action);},
   mirrorsChanged:persist=>{scene?.setMirrorAdjustments(settings.mirrors);if(persist)saveSettings(settings);},
   mirrorSelect:side=>{mirrorPreviewLook=side==='left'?1:side==='right'?-1:undefined;},
-  start,pause,resume,menu:goMenu,reset:()=>start(mode,selectedIndex),camera:()=>scene?.cycleCamera(),
-  settingsChanged:()=>{saveSettings(settings);input.bindings=settings.bindings;audio.volume=settings.volume;scene?.setQuality(settings.quality);scene?.setMirrorAdjustments(settings.mirrors);},
+  start,pause,resume,menu:goMenu,reset:()=>start(mode,selectedIndex),recover,camera:()=>scene?.cycleCamera(),
+  settingsChanged:()=>{saveSettings(settings);input.bindings=settings.bindings;audio.volume=settings.volume;scene?.setQuality(settings.quality);scene?.setCurbStyle(settings.curbStyle);scene?.setMirrorAdjustments(settings.mirrors);},
 });
 input.onAction=action=>{
   if(action==='pause'){state==='driving'?pause():state==='paused'?resume():null;return;}
   if(state!=='driving')return;
+  if(action==='map'){ui.toggleMap();return;}
   if(action==='camera'){scene.cycleCamera();return;}
   if(['positionLights','headlights','fogLights'].includes(action)){switchLights(action);return;}
   const assist=mode==='practice'&&settings.assist;
@@ -42,6 +44,14 @@ input.onAction=action=>{
 function switchLights(action:string){
   if(action==='fogLights'&&!vehicle.canUseFogLights){ui.toast(label('fogLightsRequirement',settings.language));return;}
   vehicle.action(action);
+}
+function recover(){
+  if(state!=='driving'||mode!=='practice'||!vehicle.canRecover)return;
+  input.clear();accumulator=0;
+  if(!vehicle.recover()){ui.toast(ui.c.recoveryBlocked);return;}
+  // Teleporting is not a driven crossing of a stop/finish line.
+  tracker.previous=null;tracker.goalTime=0;
+  ui.recovery(false);ui.toast(ui.c.recovered);
 }
 function start(nextMode:Mode,index?:number){
   if(!ui.ready)return;
@@ -89,6 +99,7 @@ function frame(now:number){
     scene.cabinControlLabel=settings.language==='ru'?'Регулировка зеркал':'Ko‘zgularni sozlash';
     scene.render(vehicle,dt,now/1000,state==='menu',mirrorPreviewLook??(+input.down('lookRight')-+input.down('lookLeft')));
     const t=vehicle.telemetry();audio.update(t.rpm,t.throttle,t.engine,state!=='driving');
+    ui.recovery(state==='driving'&&mode==='practice'&&vehicle.canRecover);
     uiAccumulator+=dt;if(uiAccumulator>.08&&state!=='menu'){uiAccumulator=0;ui.update(t,engine,tracker.current,tracker.index,tracker.exercises.length,scene.cameraMode,scene.fps,selectedIndex!==undefined);}
   }
   requestAnimationFrame(frame);
@@ -99,7 +110,7 @@ async function boot(){
   try{
     await Promise.all([RAPIER.init(),loadDirectionSignArtwork()]);physics=new RAPIER.World({x:0,y:-9.81,z:0});vehicle=new Vehicle(physics,new Set());
     vehicle.reset(course.exercises[0].spawn,course.exercises[0].yaw);
-    scene=new GameScene(ui.viewport,vehicle);scene.setQuality(settings.quality);scene.setMirrorAdjustments(settings.mirrors);
+    scene=new GameScene(ui.viewport,vehicle);scene.setQuality(settings.quality);scene.setCurbStyle(settings.curbStyle);scene.setMirrorAdjustments(settings.mirrors);
     scene.onCabinMirrorSwitch=()=>{if(state==='driving')ui.openMirrorControls();};
     requestAnimationFrame(frame);await scene.loadCar(v=>ui.progress(v));ui.setReady();
     // Diagnostics are read-only in production. Test controls are gated by Vite's dev mode.

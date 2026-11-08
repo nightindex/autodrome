@@ -8,7 +8,7 @@ const directory='test-results/minimap';await mkdir(directory,{recursive:true});
 const page=await browser.newPage({viewport:{width:1366,height:768}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
 try{
   await page.goto('http://127.0.0.1:5173/');await page.waitForFunction(()=>window.__avtodrom?.snapshot().loaded,{timeout:60000});
-  await page.click('#lang');await page.click('#practice');await page.waitForTimeout(500);
+  await page.click('#lang');await page.click('#practice');assert(await page.locator('.minimap').isHidden());await page.click('#map-button');await page.waitForTimeout(500);
   await page.locator('.minimap').screenshot({path:`${directory}/desktop-map.png`});await page.screenshot({path:`${directory}/desktop-driving.png`});
   assert((await page.locator('.minimap').innerText()).includes('Цель'));
   const geometry=await page.evaluate(async()=>{
@@ -31,8 +31,8 @@ try{
   const before=await page.locator('.minimap canvas').evaluate(c=>c.toDataURL());await page.keyboard.down('KeyW');await page.keyboard.up('ShiftLeft');await page.waitForTimeout(1100);await page.keyboard.up('KeyW');
   const after=await page.locator('.minimap canvas').evaluate(c=>c.toDataURL());assert.notEqual(before,after);assert((await page.evaluate(()=>window.__avtodrom.snapshot())).telemetry.speed>1);
   await page.keyboard.down('ShiftLeft');await page.keyboard.down('KeyS');await page.waitForTimeout(1500);await page.keyboard.up('KeyS');await page.keyboard.up('ShiftLeft');
-  await page.keyboard.press('Escape');await page.click('#modal #menu');
-  await page.click('#exercises');await page.click('[data-exercise="6"]');await page.waitForTimeout(300);await page.locator('.minimap').screenshot({path:`${directory}/garage-map.png`});
+  await page.click('#pause-button');await page.click('#modal #menu');
+  await page.click('#exercises');await page.click('[data-exercise="6"]');await page.click('#map-button');await page.waitForTimeout(300);await page.locator('.minimap').screenshot({path:`${directory}/garage-map.png`});
   await page.setViewportSize({width:1024,height:600});await page.waitForTimeout(250);await page.locator('.minimap').screenshot({path:`${directory}/compact-map.png`});await page.screenshot({path:`${directory}/compact-driving.png`});
   await page.setViewportSize({width:375,height:667});await page.waitForTimeout(250);await page.locator('.minimap').screenshot({path:`${directory}/narrow-map.png`});
   const layout=await page.locator('.minimap').evaluate(e=>({width:e.clientWidth,scrollWidth:e.scrollWidth,legend:e.querySelector('footer').innerText}));assert(layout.scrollWidth<=layout.width);

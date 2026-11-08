@@ -21,6 +21,7 @@ import { departureMarkingPaths } from './departure-markings';
 import { addStaticObstacle } from '../simulation/static-collision';
 import { markingDimensions } from '../data/marking-standards';
 import {courseSigns,courseSignPoint} from '../data/course-signs';
+import {CurbAppearance} from './curb-appearance';
 export { signalState } from '../data/traffic-signals';
 
 export interface RoadSamples { points: Vec2[]; width: number }
@@ -142,7 +143,14 @@ export class CourseWorld {
   private continuousWhite:PaintPath[]=[];
   private yellow=new T.MeshStandardMaterial({color:0xefcc59,roughness:.9});
   private pole=new T.MeshStandardMaterial({color:0x65726a,metalness:.55,roughness:.55});
-  constructor(public physics:RAPIER.World){this.build();this.batchStaticGeometry();}
+  private curbAppearance:CurbAppearance;
+  constructor(public physics:RAPIER.World){
+    this.build();
+    const meshes:T.Mesh<T.BufferGeometry,T.MeshStandardMaterial>[]=[];
+    // Raised ramp walls retain their neutral concrete finish in either curb style.
+    this.group.traverse(node=>{if(node instanceof T.Mesh&&node.material instanceof T.MeshStandardMaterial&&['course-curbs','intersection-curbs','departure-curbs'].includes(node.name))meshes.push(node);});
+    this.curbAppearance=new CurbAppearance(meshes,boundaryLoops);this.setCurbStyle('yellow-black');this.batchStaticGeometry();
+  }
   private batchStaticGeometry(){
     this.group.updateMatrixWorld(true);const batches=new Map<T.Material,T.Mesh[]>();
     this.group.traverse(n=>{if(n instanceof T.Mesh && !(n instanceof T.InstancedMesh)&&!Array.isArray(n.material)&&!n.userData.preserveMesh&&!/^sign-.*-(front|back)$/.test(n.name)){const batch=batches.get(n.material)??[];batch.push(n);batches.set(n.material,batch);}});
@@ -307,5 +315,6 @@ export class CourseWorld {
   }
   private buildingTexture(){const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d')!;ctx.fillStyle='#b7c1b9';ctx.fillRect(0,0,256,256);for(let x=12;x<256;x+=34)for(let y=12;y<256;y+=38){ctx.fillStyle='#567372';ctx.fillRect(x,y,20,25);ctx.fillStyle='#849d96';ctx.fillRect(x+2,y+2,7,20);}const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;return t;}
   setTreeQuality(quality:Settings['quality']){this.trees?.setQuality(quality);}
+  setCurbStyle(style:Settings['curbStyle']){this.curbAppearance.setStyle(style);this.group.userData.curbStyle=style;}
   update(time:number){this.trees?.update(time);this.trafficLights.forEach(light=>light.update(time));}
 }

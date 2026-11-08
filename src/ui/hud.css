@@ -1,0 +1,91 @@
+/* Driving overlays: keep the centre of the road clear; reveal secondary tools on demand. */
+#hud{--hud-ink:#214c3d;--hud-secondary:#536950;--hud-paper:#f7f6ec;--hud-gap:24px}
+.drive-header{height:76px;padding:0 var(--hud-gap);background:#f7f6ecf5;gap:20px;z-index:12}
+.header-controls{gap:6px;align-items:center}
+.header-controls button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:10px 12px;color:var(--hud-ink);border-radius:6px;font-size:12px}
+.header-controls button svg{flex-shrink:0}
+.header-controls button:hover{background:#e5e9dc}
+.header-controls button[aria-expanded=true]{color:#fffdf2;background:var(--green);border-color:var(--green)}
+.header-controls kbd{margin:0;font-size:10px}
+.header-controls button[aria-expanded=true] kbd{background:#ffffff1a;color:inherit;border-color:#ffffff66}
+.exam-stats{gap:28px}
+.exam-stats span{color:var(--hud-secondary);font-size:9px;letter-spacing:.5px}
+.exam-stats small{color:var(--hud-secondary)}
+.exercise-card{top:96px;left:var(--hud-gap);width:272px;padding:16px 18px 0;background:#f7f6ecf5;box-shadow:none;border-color:#d6ddce}
+.exercise-eyebrow{font-size:10px;letter-spacing:.4px;color:var(--hud-secondary)}
+.exercise-card h2{font-size:20px;margin:9px 0}
+.exercise-card p{font-size:12px;color:#4c624b;line-height:1.6;margin:0 0 14px}
+.exercise-progress{margin:0 -18px}
+.instrument-panel{left:auto;right:var(--hud-gap);bottom:24px;transform:none;width:236px;padding:13px 18px;background:#f7f6ecf5;backdrop-filter:none;box-shadow:none;border-color:#d6ddce}
+.instrument-top{color:var(--hud-secondary);font-size:9px;letter-spacing:1.5px}
+.speed-row strong{font-size:52px}.gear-box strong{font-size:34px}
+.speed-row span,.rpm-labels,.rpm-labels small,.pedals span{color:var(--hud-secondary)}
+.vehicle-status{font-size:10px;letter-spacing:.3px;padding:10px 0}
+.vehicle-status .warn{color:#8c5b1d}.vehicle-status .ok{color:#326644}.vehicle-status .off{color:#697960}
+.pedals span{font-size:8px;letter-spacing:0}
+.startup-hint{position:absolute;left:var(--hud-gap);bottom:24px;max-width:300px;padding:12px 16px;background:#214c3df5;color:#fffdf2;font-size:12px;line-height:1.7;border-radius:6px}
+#hud[data-controls-open=true] .startup-hint{display:none}
+#hud[data-controls-open=true] .exercise-card{display:none}
+#recovery-prompt{position:absolute;left:50%;bottom:32px;transform:translateX(-50%);width:280px;max-width:calc(100vw - 24px);padding:14px 16px;background:var(--hud-paper);border:1px solid #cbd5c1;border-radius:8px;z-index:11;pointer-events:auto}
+#recovery-prompt p{margin:0 0 10px;font-size:13px;color:var(--hud-ink)}
+#recover-button{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:44px;padding:10px 12px;background:var(--green);color:#fffdf2;border-radius:5px;font-size:13px;font-weight:600}
+#recover-button:hover{background:#163c2d}
+.hud-popover{pointer-events:auto;background:var(--hud-paper);color:var(--hud-ink);border:1px solid #cbd5c1;border-radius:8px;box-shadow:none;overflow:auto;overscroll-behavior:contain;z-index:10}
+.popover-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px 8px 16px;border-bottom:1px solid #d8dfce}
+.popover-heading h2{font-size:14px;font-weight:600;margin:0;letter-spacing:0}
+#hud .popover-heading button{display:inline-flex;position:static;align-items:center;justify-content:center;width:44px;height:44px;background:transparent;color:var(--hud-ink);border-radius:5px;padding:0;text-shadow:none;flex-shrink:0}
+#hud .popover-heading button:hover{background:#e5e9dc}
+#route-map{right:var(--hud-gap);bottom:267px;width:300px;max-height:calc(100dvh - 363px)}
+#route-map canvas{width:100%;height:auto;max-height:calc(100dvh - 459px);object-fit:contain;background:#f4f5ec}
+#route-map footer{padding:10px 16px;font-size:11px;color:#425b48}
+#driving-controls{display:block;left:var(--hud-gap);top:96px;bottom:auto;width:320px;max-width:calc(100vw - 48px);max-height:calc(100dvh - 120px);padding:0 16px 16px;text-shadow:none;font-size:12px}
+#driving-controls .popover-heading{position:sticky;top:0;z-index:1;margin:0 -16px;background:var(--hud-paper)}
+#driving-controls .drive-shortcuts{display:grid;width:100%;gap:8px;font-size:12px;line-height:1.6;color:var(--hud-ink);margin:14px 0;max-width:none;background:none;padding:0;border:0}
+#driving-controls .drive-shortcuts>div{display:flex;justify-content:space-between;align-items:center;gap:12px}
+#driving-controls .assist-status{display:flex;width:100%;flex-wrap:wrap;gap:6px;background:none;border:0;padding:0}
+#driving-controls .assist-status span{font-size:10px;color:var(--hud-secondary)}
+#driving-controls h3{font-size:12px;font-weight:600;margin:18px 0 8px}
+#driving-controls .light-controls{display:grid;width:100%;gap:6px;background:none;border:0;padding:0}
+#driving-controls .light-controls button,#driving-controls #reset-button{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;font-size:12px;padding:10px 12px;background:#e9edde;color:var(--hud-ink);text-shadow:none;border:1px solid #cbd5c1;border-radius:5px;position:static}
+#driving-controls .light-controls button[aria-pressed=true]{background:var(--green);color:#fffdf2}
+#driving-controls button[aria-disabled=true]{opacity:1;color:#62715a}
+#driving-controls .light-controls button:hover,#driving-controls #reset-button:hover{border-color:var(--green)}
+#driving-controls #reset-button{width:100%;margin-top:18px;justify-content:center;background:transparent}
+#driving-controls kbd{opacity:1;font:11px 'Segoe UI',sans-serif;margin:0}
+.provisional-note{right:var(--hud-gap);font-size:8px}
+#mirror-controls{top:96px;left:var(--hud-gap);right:auto;background:var(--hud-paper);border-color:#cbd5c1;box-shadow:none;border-radius:8px;max-height:calc(100dvh - 120px);overflow:auto}
+#hud[data-mirror-adjusting=true] .startup-hint{display:none}
+#mirror-controls button{min-height:44px}
+#mirror-controls .mirror-pad{grid-template-columns:repeat(3,44px);grid-template-rows:repeat(3,44px)}
+@media(max-width:1150px){.header-controls button span{display:none}.drive-brand{font-size:13px}.header-controls button{padding:10px}.header-controls kbd{display:none}}
+@media(max-width:650px){
+ #hud{--hud-gap:12px}.drive-header{height:112px;display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:8px 12px}
+ .drive-brand{gap:8px}.drive-brand>div{font-size:12px}.drive-brand small{font-size:9px;letter-spacing:0}
+ .exam-stats{gap:16px}.exam-stats span{font-size:8px;letter-spacing:0}.exam-stats strong{font-size:20px}
+ .header-controls{grid-column:1/-1;justify-content:flex-end;gap:6px}.header-controls button{min-width:44px;padding:8px}
+ .header-controls #map-button span,.header-controls #controls-button span{display:inline;font-size:11px}
+ .exercise-card{top:124px;width:224px;padding:12px 14px 0}.exercise-card h2{font-size:17px;margin:6px 0}.exercise-card p{font-size:11px;line-height:1.5;margin-bottom:10px}.exercise-eyebrow{font-size:9px}.exercise-progress{margin:0 -14px}
+ .instrument-panel{left:auto;right:12px;bottom:20px;width:188px;padding:10px 14px}.instrument-top{font-size:8px}.speed-row strong{font-size:44px}.gear-box{padding-left:14px}.gear-box strong{font-size:30px}.vehicle-status{font-size:9px}.pedals span{font-size:7px}
+ .startup-hint{bottom:20px;max-width:calc(100vw - 224px);padding:10px;font-size:10px;line-height:1.6}
+ #route-map{bottom:244px;width:min(300px,calc(100vw - 24px));max-height:calc(100dvh - 368px)}
+ #route-map canvas{max-height:calc(100dvh - 465px)}
+ #driving-controls{left:12px;top:124px;bottom:auto;max-width:calc(100vw - 24px);max-height:calc(100dvh - 368px)}
+ #mirror-controls{top:124px;left:12px;right:auto;max-height:calc(100dvh - 368px);width:224px}
+ #hud[data-mirror-adjusting=true] .exercise-card{display:none}
+ .stall-warning{bottom:250px}.provisional-note{font-size:7px}
+ #recovery-prompt{bottom:248px}
+}
+@media(max-height:600px) and (min-width:651px){
+ .drive-header{height:64px}.exercise-card{top:80px;width:240px;padding-top:12px}.exercise-card h2{font-size:17px}
+ #route-map{top:80px;bottom:auto;right:272px;width:260px;max-height:calc(100dvh - 104px)}
+ #route-map canvas{max-height:calc(100dvh - 202px)}
+ #driving-controls{top:80px;bottom:auto;max-height:calc(100dvh - 100px)}
+ #mirror-controls{top:80px;max-height:calc(100dvh - 100px)}
+ .startup-hint{max-width:280px;font-size:11px}
+}
+@media(max-height:500px) and (min-width:651px){
+ .instrument-panel{width:200px;padding:10px 14px}.instrument-top{font-size:8px}.speed-row{margin:6px 0}.speed-row strong{font-size:42px}.gear-box strong{font-size:28px}
+ .instrument-panel .pedals,.rpm-labels{display:none}.vehicle-status{padding-bottom:0}
+ #route-map{right:236px}
+}
+@media(prefers-reduced-motion:reduce){#hud button{transition:none}}

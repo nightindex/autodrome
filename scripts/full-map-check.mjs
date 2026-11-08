@@ -9,7 +9,7 @@ const directory='test-results/full-map';await mkdir(directory,{recursive:true});
 const page=await browser.newPage({viewport:{width:1440,height:960}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
 try{
   await page.goto('http://127.0.0.1:5173/');await page.waitForFunction(()=>window.__avtodrom?.snapshot().loaded,null,{timeout:60000});
-  await page.click('#practice');await page.waitForTimeout(600);await page.keyboard.press('Escape');
+  await page.click('#practice');await page.click('#map-button');await page.waitForTimeout(600);await page.click('#pause-button');
   const geometry=await page.evaluate(async()=>{
     const T=await import('/node_modules/three/build/three.module.js'),{roadSurface,roadDistance,boundaryLoops}=await import('/src/render/course-world.ts');
     const {course,mapPoint}=await import('/src/data/course.ts'),{mapProjection}=await import('/src/ui/map-projection.ts'),{mapRouteLeg}=await import('/src/ui/map-route.ts'),{itinerary}=await import('/src/data/course.ts');

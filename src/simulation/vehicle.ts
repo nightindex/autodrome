@@ -65,6 +65,38 @@ export class Vehicle {
       tyre.setRotationWrtParent(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2));
     });
   }
+  /** Only offer recovery after a car on its side/roof has slowed down. */
+  get canRecover(){
+    const q=this.body.rotation(),v=this.body.linvel();
+    return 1-2*(q.x*q.x+q.z*q.z)<.25&&Math.hypot(v.x,v.y,v.z)<3;
+  }
+  recover(){
+    if(!this.canRecover)return false;
+    const rotation=new T.Quaternion().copy(this.body.rotation()),forward=new T.Vector3(0,0,1).applyQuaternion(rotation),right=new T.Vector3(1,0,0).applyQuaternion(rotation);
+    const yaw=Math.hypot(forward.x,forward.z)>.1?Math.atan2(forward.x,forward.z):Math.atan2(-right.z,right.x),upright=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),yaw);
+    const origin=this.body.translation(),clearance=new RAPIER.Cuboid(.96,.5,2.3);
+    // Keep the current location where possible; step clear of a kerb or post.
+    let placement:{x:number;y:number;z:number}|undefined;
+    for(const radius of [0,1.25,2.5,4]){
+      for(let i=0;i<(radius===0?1:8);i++){
+        const angle=yaw+Math.PI+i*Math.PI/4,x=origin.x+Math.sin(angle)*radius,z=origin.z+Math.cos(angle)*radius;
+        const heights=[hillHeight(x,z)];
+        for(const side of [-.96,.96])for(const end of [-2.3,2.3]){
+          const corner=localPoint({x,z},yaw,side,end);heights.push(hillHeight(corner.x,corner.z));
+        }
+        const y=Math.max(...heights)+.78;
+        if(!this.world.intersectionWithShape({x,y:y-.1,z},upright,clearance,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body,c=>this.obstacles.has(c.handle))){placement={x,y,z};break;}
+      }
+      if(placement)break;
+    }
+    if(!placement)return false;
+    const saved={time:this.time,belt:this.belt,engine:this.drivetrain.engine,ignition:this.ignitionOn,indicator:this.indicator,hazards:this.hazards,positionLights:this.positionLights,headlights:this.headlights,fogLights:this.fogLights};
+    this.reset(placement,yaw);this.body.setTranslation(placement,true);
+    this.time=saved.time;this.belt=saved.belt;this.ignitionOn=saved.ignition;this.indicator=saved.indicator;this.hazards=saved.hazards;
+    this.positionLights=saved.positionLights;this.headlights=saved.headlights;this.fogLights=saved.fogLights;
+    if(saved.engine)this.drivetrain.ignite();
+    return true;
+  }
   action(action:string,assist=false){
     if(action==='positionLights'){this.positionLights=!this.positionLights;if(!this.positionLights){this.headlights=false;this.fogLights=false;}}
     if(action==='headlights'){this.headlights=!this.headlights;if(this.headlights)this.positionLights=true;}

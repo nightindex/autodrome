@@ -1,5 +1,5 @@
 export const defaultBindings: Record<string,string> = {
-  positionLights:'KeyG',headlights:'KeyL',fogLights:'KeyF',
+  positionLights:'KeyG',headlights:'KeyL',fogLights:'KeyF',map:'KeyM',
   throttle:'KeyW',brake:'KeyS',left:'KeyA',right:'KeyD',clutch:'ShiftLeft',
   gear1:'Digit1',gear2:'Digit2',gear3:'Digit3',gear4:'Digit4',gear5:'Digit5',reverse:'KeyR',neutral:'KeyN',
   handbrake:'Space',indicatorLeft:'KeyQ',indicatorRight:'KeyE',hazards:'KeyH',belt:'KeyB',ignition:'KeyI',camera:'KeyC',pause:'Escape',lookLeft:'KeyZ',lookRight:'KeyX',

@@ -121,6 +121,7 @@ export class GameScene {
     const beam=new T.Mesh(new T.CylinderGeometry(.03,.03,2.3,8),new T.MeshBasicMaterial({color:0xedd18b,transparent:true,opacity:.6}));beam.position.y=1.15;this.goal.add(beam);
   }
   setGoal(point:Vec2,visible:boolean){this.goal.position.set(point.x,hillHeight(point.x,point.z)+.06,point.z);this.goal.visible=visible;this.guide.visible=visible;}
+  setCurbStyle(style:Settings['curbStyle']){this.world.setCurbStyle(style);}
   setQuality(q:Settings['quality']){if(this.quality===q)return;this.quality=q;this.world.setTreeQuality(q);const mirrorScale=q==='low'?.5:q==='medium'?.75:1;this.mirrorTarget.setSize(512*mirrorScale,160*mirrorScale);for(const target of this.sideTargets)target.setSize(256*mirrorScale,144*mirrorScale);this.renderer.setPixelRatio(Math.min(devicePixelRatio,q==='high'?1.75:q==='medium'?1.25:1));this.renderer.shadowMap.enabled=q!=='low';this.sun.shadow.mapSize.set(2048,2048);this.sun.shadow.map?.dispose();this.sun.shadow.map=null;this.resize();}
   resize(){const w=window.innerWidth,h=window.innerHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
   cycleCamera(){this.cameraMode=this.cameraMode==='chase'?'cockpit':this.cameraMode==='cockpit'?'overview':'chase';}
