@@ -13,7 +13,7 @@ import { stableShadowTarget,shadowSpan,sunOffset } from './shadow-stability';
 import { rigCarWheel,updateCarWheel,carBodyLift,type CarWheel } from './car-wheels';
 import { configureCarShadows } from './car-shadows';
 import { carAssetVersion } from './car-asset-version';
-import { moveMirrorAngle,readMirrorAdjustments,sideMirrorDirection,type MirrorAdjustments } from './mirror-adjustment';
+import { moveMirrorAngle,readMirrorAdjustments,sideMirrorDirection,sideMirrorView,type MirrorAdjustments } from './mirror-adjustment';
 
 export class GameScene {
   onCabinMirrorSwitch:()=>void=()=>{};
@@ -46,7 +46,7 @@ export class GameScene {
     this.scene.environmentIntensity=.18;this.scene.add(new T.HemisphereLight(0xe0f1ff,0x7b8462,.65));this.sun.position.copy(sunVector.multiplyScalar(50));this.sun.castShadow=true;
     Object.assign(this.sun.shadow.camera,{left:-shadowSpan/2,right:shadowSpan/2,top:shadowSpan/2,bottom:-shadowSpan/2,near:1,far:110});this.sun.shadow.mapSize.set(2048,2048);this.sun.shadow.bias=-.00015;this.sun.shadow.normalBias=.018;this.sun.shadow.radius=1.5;
     this.scene.add(this.sun,this.sun.target);
-    this.world=new CourseWorld(vehicle.world);vehicle.obstacles=this.world.obstacles;vehicle.surfaceAt=point=>roadDistance(point)<=0?'asphalt':'grass';this.scene.add(this.world.group,this.car,this.guide,this.goal);
+    this.world=new CourseWorld(vehicle.world);vehicle.obstacles=this.world.obstacles;vehicle.traversableSurfaces=this.world.traversableSurfaces;vehicle.surfaceAt=point=>roadDistance(point)<=0?'asphalt':'grass';this.scene.add(this.world.group,this.car,this.guide,this.goal);
     this.createGuide();
     window.addEventListener('resize',()=>this.resize());this.resize();
   }
@@ -172,6 +172,7 @@ export class GameScene {
         if(which===0){
           // Digital rear-camera mirror: a wide exterior view, clear of the
           // rear seats and headrests, with the road below the horizon.
+          this.mirrorCamera.near=.025;
           this.mirrorCamera.position.copy(this.car.localToWorld(new T.Vector3(0,.55,-vehicleConfig.length/2-.025)));
           this.mirrorCamera.lookAt(this.car.localToWorld(new T.Vector3(0,-.45,-12.26)));this.mirrorCamera.aspect=3.2;this.mirrorCamera.fov=42;
         }
@@ -180,10 +181,14 @@ export class GameScene {
           this.mirrorCamera.position.add(new T.Vector3(-side*.48,0,-.88).applyQuaternion(this.car.quaternion).multiplyScalar(.012));
           const angles=this.mirrorAngles[i===0?'left':'right'];
           // Turning mirror glass deflects its reflected view by twice the angle.
-          const back=sideMirrorDirection(i===0?'left':'right',angles).applyQuaternion(this.car.quaternion);this.mirrorCamera.lookAt(this.mirrorCamera.position.clone().addScaledVector(back,20));this.mirrorCamera.aspect=1.78;this.mirrorCamera.fov=62;target=this.sideTargets[i];}
+          const back=sideMirrorDirection(i===0?'left':'right',angles).applyQuaternion(this.car.quaternion);this.mirrorCamera.lookAt(this.mirrorCamera.position.clone().addScaledVector(back,20));
+          this.mirrorCamera.near=sideMirrorView.near;this.mirrorCamera.aspect=sideMirrorView.aspect;this.mirrorCamera.fov=sideMirrorView.fov;target=this.sideTargets[i];}
         this.mirrorCamera.updateProjectionMatrix();
         const carVisible=this.car.visible,glassVisible=panes.map(pane=>pane?.visible),autoShadow=renderer.shadowMap.autoUpdate,previousTarget=renderer.getRenderTarget();
-        this.car.visible=false;panes.forEach(pane=>{if(pane)pane.visible=false;});
+        // Side mirrors need the real body as a distance reference. Hide only
+        // the live panes to avoid recursive feedback; the exterior rear camera
+        // remains clear of the cabin and rear bodywork.
+        this.car.visible=which!==0&&carVisible;panes.forEach(pane=>{if(pane)pane.visible=false;});
         renderer.shadowMap.autoUpdate=false;
         try{renderer.setRenderTarget(target);renderer.render(this.scene,this.mirrorCamera);}
         finally{renderer.setRenderTarget(previousTarget);renderer.shadowMap.autoUpdate=autoShadow;this.car.visible=carVisible;panes.forEach((pane,i)=>{if(pane)pane.visible=glassVisible[i]!;});}

@@ -57,6 +57,8 @@ describe('sign assemblies surveyed from uz_video.mp4',()=>{
     for(let i=1;i<signs.length;i++)expect(signs[i].y).toBeLessThan(signs[i-1].y);
     expect(signs[0].lower).toEqual(['railBars3']);expect(signs[2].lower).toEqual(['railBars1']);
     expect(courseSignPoint(signs[3]).z).toBeCloseTo(course.exercises.find(e=>e.id==='railway')!.stop!.point.z);
+    const exit=courseSigns.find(s=>s.id==='railway-exit-left')!;
+    expect(exit.kind).toBe('left');expect(exit.y).toBeLessThan(270);expect(exit.x).toBeGreaterThan(1254);expect(exit.yaw).toBe(0);
   });
   it('faces the garage turn boards towards the westbound approach from the junction',()=>{
     const approach={x:-2,z:-4.2};

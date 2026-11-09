@@ -1,11 +1,16 @@
 import type { CourseDefinition, Exercise, ExerciseId, Vec2 } from '../types';
 import { afterHillBRoute,bTurnCourse,cdTurnCourse,perimeterExit,planArc } from './after-hill';
 import { intersectionApproaches } from './intersection';
+import { parkingControlLines,parkingControlWidth,parkingTargetPlan } from './parking-control-lines';
 export const mapPoint = (x: number, y: number): Vec2 => ({ x: (x - 640) * 0.1, z: (y - 530) * 0.1 });
 export const startLinePoint=mapPoint(232,935);
 export const finishLinePoint=mapPoint(145,775);
 const p = mapPoint;
 const path = (a: number[][]) => a.map(([x, y]) => p(x, y));
+const parkingControl=(id:string,wheels:readonly number[])=>({
+  points:parkingControlLines.find(line=>line.id===id)!.points.map(([x,y])=>p(x,y)) as [Vec2,Vec2],
+  width:parkingControlWidth,wheels,
+});
 const names: Record<ExerciseId, [string, string, string, string]> = {
   start: ['Start', 'Старт', 'Kamarni taqing. Dvigatelni yoqing, 1-uzatma va chap burilish chirog‘ini tanlang.', 'Пристегнитесь. Запустите двигатель, включите первую передачу и левый поворотник.'],
   pedestrian: ['Piyodalar o‘tish joyi', 'Пешеходный переход', 'Stop chizig‘iga 1 metrdan yaqin to‘xtang. 3 soniya kuting.', 'Остановитесь не далее 1 метра от стоп-линии. Подождите 3 секунды.'],
@@ -13,11 +18,11 @@ const names: Record<ExerciseId, [string, string, string, string]> = {
   rightAngle: ['90° burilishlar', 'Повороты на 90°', 'Yo‘nalish bo‘ylab sekin yuring. G‘ildiraklar sariq chiziqdan chiqmasin.', 'Следуйте по поворотам медленно. Не пересекайте жёлтые линии колёсами.'],
   intersection: ['Chorraha', 'Перекрёсток', 'Svetoforga qarang. Qizilda stop chizig‘ini kesmang; yashilda yo‘lni davom ettiring.', 'Следите за светофором. На красный стойте перед линией; на зелёный продолжайте.'],
   snake: ['Ilon izi', 'Змейка', 'Egri yo‘ldan chiziqlarga tegmasdan o‘ting. Vaqt: 2 daqiqa.', 'Пройдите извилистый участок, не касаясь линий. Время: 2 минуты.'],
-  garage: ['Boksga kirish', 'Въезд в бокс', 'Boks yonidan o‘ting, R ni tanlang va orqaga kirib to‘xtang. G‘ildiraklarni sariq chiziqqa qo‘ying.', 'Проедьте мимо бокса, включите R, сдайте назад и остановитесь колёсами на жёлтой линии.'],
+  garage: ['Boksga kirish', 'Въезд в бокс', 'Boks yonidan o‘ting, R ni tanlang va orqaga kiring. Ikkala orqa g‘ildirakni oq chiziqqa qo‘yib to‘xtang.', 'Проедьте мимо бокса, включите R и сдайте назад. Остановитесь обоими задними колёсами на белой линии.'],
   railway: ['Temiryo‘l kesishmasi', 'Железнодорожный переезд', 'Stop chizig‘ida to‘xtang va 3 soniya kuting. Keyin relslardan o‘ting.', 'Остановитесь перед стоп-линией на 3 секунды, затем пересеките пути.'],
   acceleration: ['Tezlanish', 'Разгон', 'Ikkinchi uzatmaga o‘ting. Tezlikni 20–40 km/soat orasida saqlang.', 'Включите вторую передачу. Держите скорость в пределах 20–40 км/ч.'],
   emergency: ['Favqulodda to‘xtash', 'Аварийная остановка', 'Signalni kuting. 2 soniyada to‘xtang, 3 soniyada avariya chirog‘ini yoqing.', 'Дождитесь сигнала. Остановитесь за 2 секунды, включите аварийку за 3 секунды.'],
-  parallel: ['Parallel parkovka', 'Параллельная парковка', 'Cho‘ntakka orqaga parallel kiring. Belgilangan chiziqda to‘xtang.', 'Сдайте назад в карман параллельно дороге. Остановитесь на контрольной линии.'],
+  parallel: ['Parallel parkovka', 'Параллельная парковка', 'Cho‘ntakka orqaga parallel kiring. Ikkala o‘ng g‘ildirakni oq chiziqqa qo‘yib to‘xtang.', 'Сдайте назад в карман параллельно дороге. Остановитесь обоими правыми колёсами на белой линии.'],
   finish: ['Finish', 'Финиш', 'O‘ng burilish chirog‘ini yoqing. Finishdan o‘ting va to‘xtang.', 'Включите правый поворотник. Пересеките финиш и остановитесь.'],
 };
 function exercise(id: ExerciseId, x: number, y: number, sx: number, sy: number, yaw: number, extra: Partial<Exercise> = {}): Exercise {
@@ -46,20 +51,20 @@ export const course: CourseDefinition = {
     exercise('rightAngle',715,745,1235,805,Math.PI,{timeLimit:120,indicator:'right'}),
     exercise('intersection',655,410,655,650,Math.PI,{stop:{point:{...intersectionApproaches[0].stop,x:1.5},normal:intersectionApproaches[0].normal,light:true}}),
     exercise('snake',950,445,760,205,0,{timeLimit:120}),
-    exercise('garage',175,275,205,380,Math.PI,{parking:{center:p(175,275),yaw:Math.PI/2,width:3.3,length:6},radius:2}),
+    exercise('garage',...parkingTargetPlan.garage,205,380,Math.PI,{parking:{center:p(...parkingTargetPlan.garage),yaw:Math.PI/2,width:3.3,length:6,controlLine:parkingControl('garage-left-stop',[2,3])},radius:2}),
     exercise('railway',1235,255,1235,410,Math.PI,{stop:{point:p(1235,315),normal:{x:0,z:-1}}}),
     exercise('acceleration',600,100,1015,100,-Math.PI/2,{radius:4}),
     exercise('emergency',45,410,45,220,0,{radius:4}),
-    exercise('parallel',390,600,275,561,Math.PI/2,{parking:{center:p(390,600),yaw:Math.PI/2,width:3.1,length:6.5},radius:2}),
+    exercise('parallel',...parkingTargetPlan.parallel,275,561,Math.PI/2,{parking:{center:p(...parkingTargetPlan.parallel),yaw:Math.PI/2,width:3.1,length:6.5,controlLine:parkingControl('parking-right-stop',[0,2])},radius:2}),
     exercise('finish',145,795,520,795,-Math.PI/2,{indicator:'right',radius:3}),
   ],
   route: path([
     [200,950],[320,950],[475,950],[510,950],[660,950],[770,950],[850,950],...afterHillBRoute,
     [655,550],[655,410],[655,200],[655,140],[730,140],[760,165],[760,200],[760,230],[760,340],[785,390],[820,405],[855,395],[890,362],[920,370],[955,400],[960,425],[950,445],
-    [960,470],[900,490],[635,490],[265,490],[205,440],[205,380],[205,225],[205,275],[175,275],
+    [960,470],[900,490],[635,490],[265,490],[205,440],[205,380],[205,225],[205,275],parkingTargetPlan.garage,
     [205,275],[205,400],[215,465],[265,490],[545,490],[545,525],[700,525],[1165,525],[1235,450],[1235,410],[1235,315],[1235,255],
     [1200,150],[1100,100],[1015,100],[600,100],[200,100],[80,150],[45,240],[45,410],[45,505],
-    [100,561],[445,561],[425,575],[420,600],[390,600],[410,590],[425,570],[445,561],[490,561],[520,530],[540,530],
+    [100,561],[445,561],[425,575],[420,parkingTargetPlan.parallel[1]],parkingTargetPlan.parallel,[410,590],[425,570],[445,561],[490,561],[520,530],[540,530],
     ...planArc(540,610,80,-90,0).slice(1),[620,680],...planArc(545,680,75,0,90).slice(1),[520,795],[145,795],
   ]),
 };

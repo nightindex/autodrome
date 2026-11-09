@@ -6,6 +6,7 @@ import { mapRouteLeg } from './map-route';
 import { roadArrowOutline } from '../render/road-arrows';
 import { crosswalkStripes } from '../render/crosswalk';
 import { laneLines,laneGores,lanePaintPaths } from '../data/lane-markings';
+import {railwayCrossing,railwayRailCenters,railwaySleeperCenters} from '../data/railway';
 
 const colors={paper:'#f4f5ec',grass:'#b7c6a5',road:'#5d6868',edge:'#f5f4e7',route:'#f4ca70',car:'#075a47',goal:'#e4b346'};
 let cachedBase:HTMLCanvasElement|undefined;
@@ -57,7 +58,18 @@ export class Minimap {
     for(const arrow of coursePaintedArrows){const outline=roadArrowOutline(arrow);
       ctx.beginPath();outline.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});ctx.closePath();ctx.fill();
     }
-    for(const z of [-24,-23.3]){const a=project({x:54.5,z}),b=project({x:61.5,z});ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+    ctx.strokeStyle='#aaa89b';ctx.lineWidth=Math.max(.8,railwayCrossing.sleeperWidth*p.scale);
+    for(const x of railwaySleeperCenters){
+      const a=project({x:railwayCrossing.center.x+x,z:railwayCrossing.center.z-railwayCrossing.gauge/2});
+      const b=project({x:railwayCrossing.center.x+x,z:railwayCrossing.center.z+railwayCrossing.gauge/2});
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    }
+    ctx.strokeStyle='#55574e';ctx.lineWidth=Math.max(.8,railwayCrossing.headWidth*p.scale);
+    for(const offset of railwayRailCenters){
+      const {center,length}=railwayCrossing,z=center.z+offset;
+      const a=project({x:center.x-length/2,z}),b=project({x:center.x+length/2,z});
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    }
     // A fine route stays subordinate to the driver and current destination.
     ctx.beginPath();course.route.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});
     ctx.strokeStyle=colors.route;ctx.globalAlpha=.25;ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.setLineDash([6,7]);ctx.stroke();ctx.restore();

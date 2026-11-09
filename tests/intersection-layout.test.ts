@@ -3,7 +3,7 @@ import polygonClipping,{type Polygon} from 'polygon-clipping';
 import { intersectionApproaches } from '../src/data/intersection';
 import { course,itinerary } from '../src/data/course';
 import { laneLines } from '../src/data/lane-markings';
-import { intersectionCrossings,roadDistance } from '../src/render/course-world';
+import { intersectionCrossings,pedestrianSignalPositions,vehicleSignalStations,roadDistance } from '../src/render/course-world';
 import { crosswalkStripes } from '../src/render/crosswalk';
 import { localPoint } from '../src/simulation/math';
 
@@ -15,6 +15,25 @@ const rectangle=(c:typeof intersectionCrossings[number]):Polygon=>{
   ] as [number,number]);return [points];
 };
 describe('signal junction mouths from the video',()=>{
+  it('mounts signals for both ends of each zebra on the four shared corner posts',()=>{
+    expect(pedestrianSignalPositions).toHaveLength(8);
+    expect(vehicleSignalStations).toHaveLength(4);
+    for(const crossing of intersectionCrossings){
+      const pair=pedestrianSignalPositions.filter(p=>p.crossingId===crossing.id);expect(pair).toHaveLength(2);
+      for(const [i,head]of pair.entries()){
+        expect(roadDistance(head.point),head.id).toBeGreaterThanOrEqual(.45);
+        const dx=head.point.x-crossing.center.x,dz=head.point.z-crossing.center.z;
+        expect(Math.abs(-dx*crossing.normal.z+dz*crossing.normal.x)).toBeGreaterThan(crossing.width/2+.5);
+        expect(head.point).toEqual(vehicleSignalStations.find(s=>s.id===head.stationId)!.point);
+        const other=pair[1-i].point,distance=Math.hypot(other.x-head.point.x,other.z-head.point.z);
+        expect((Math.sin(head.yaw)*(other.x-head.point.x)+Math.cos(head.yaw)*(other.z-head.point.z))/distance).toBeGreaterThan(.97);
+      }
+    }
+    for(const station of vehicleSignalStations){
+      const mounts=pedestrianSignalPositions.filter(p=>p.stationId===station.id);expect(mounts).toHaveLength(2);
+      expect(Math.cos(mounts[0].yaw-mounts[1].yaw)).toBeCloseTo(0);
+    }
+  });
   it('spans the real road with four separate zebras, without intersecting stripes at the corners',()=>{
     expect(intersectionCrossings).toHaveLength(4);
     for(const [i,crossing]of intersectionCrossings.entries()){

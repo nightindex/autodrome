@@ -4,12 +4,15 @@ export interface MirrorAngles { yaw:number; pitch:number }
 export interface MirrorAdjustments { left:MirrorAngles; right:MirrorAngles }
 export type MirrorSide=keyof MirrorAdjustments;
 export const mirrorLimits={yaw:8,pitch:6};
+// Neutral view leaves a narrow body reference at the inner edge. The near
+// plane clears the mirror's own housing while retaining the adjacent doors.
+export const sideMirrorView={outward:.7,near:.2,fov:62,aspect:256/144} as const;
 
 /** Arrow coordinates: positive yaw looks car-right (-X), positive pitch looks up. */
 export function sideMirrorDirection(side:MirrorSide,angles:MirrorAngles):Vector3 {
   // A glass adjustment deflects the reflected view by twice its travel. Keep
   // azimuth and elevation independent so either pad axis preserves the other.
-  const radians=Math.PI/180,azimuth=(side==='left'?1:-1)*Math.atan(.24)-angles.yaw*2*radians;
+  const radians=Math.PI/180,azimuth=(side==='left'?1:-1)*Math.atan(sideMirrorView.outward)-angles.yaw*2*radians;
   const elevation=angles.pitch*2*radians,horizontal=Math.cos(elevation);
   return new Vector3(Math.sin(azimuth)*horizontal,Math.sin(elevation),-Math.cos(azimuth)*horizontal).normalize();
 }

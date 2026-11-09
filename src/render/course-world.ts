@@ -13,6 +13,9 @@ import { createRoadSign,type SignKind } from './road-signs';
 import { createHillStructure,hillColliderData } from './hill-structure';
 import { TreeStand } from './trees';
 import { TrafficLight } from './traffic-light';
+import {PedestrianTrafficLight} from './pedestrian-traffic-light';
+import {pedestrianSignalLayout} from './pedestrian-signal-layout';
+import {IntersectionSignalAssembly} from './intersection-signal-assembly';
 import { signalAxis } from '../data/traffic-signals';
 import { intersectionApproaches } from '../data/intersection';
 import { fitCrosswalk,crosswalkStripes } from './crosswalk';
@@ -22,6 +25,9 @@ import { addStaticObstacle } from '../simulation/static-collision';
 import { markingDimensions } from '../data/marking-standards';
 import {courseSigns,courseSignPoint} from '../data/course-signs';
 import {CurbAppearance} from './curb-appearance';
+import {createRailwayCrossing} from './railway-crossing';
+import {addRailwayColliders} from '../simulation/railway-collision';
+import {railwayDeckBounds,railwayMarkings} from '../data/railway';
 export { signalState } from '../data/traffic-signals';
 
 export interface RoadSamples { points: Vec2[]; width: number }
@@ -51,7 +57,8 @@ export const intersectionCrossings=intersectionApproaches.map(a=>{
 export const boundaryLoops=roadBoundaryLoops(roadSurface);
 export const curbSections=boundarySections(boundaryLoops,-.025,-.025-roadPaint.curbWidth,roadPaint.curbStripe);
 export const curbSurface=curbSurfaces(curbSections,roadSurface);
-const edgeSurface=boundaryPaintSurface(boundarySections(boundaryLoops,roadPaint.edgeInset,roadPaint.edgeInset+roadPaint.edgeWidth));
+const deck=railwayDeckBounds,railwayPaintGap:polygonClipping.MultiPolygon=[[[[deck.minX,deck.minZ],[deck.maxX,deck.minZ],[deck.maxX,deck.maxZ],[deck.minX,deck.maxZ],[deck.minX,deck.minZ]]]];
+const edgeSurface=polygonClipping.difference(boundaryPaintSurface(boundarySections(boundaryLoops,roadPaint.edgeInset,roadPaint.edgeInset+roadPaint.edgeWidth)),railwayPaintGap);
 // The reference video shows yellow outer edges from the ramp foot to the stop stripe.
 const hillStop=course.exercises.find(e=>e.id==='hill')!.stop!.point.x;
 const hillYellowZone:polygonClipping.MultiPolygon=[[[[hillProfile.start,hillBounds.minZ],[hillStop,hillBounds.minZ],[hillStop,hillBounds.maxZ],[hillProfile.start,hillBounds.maxZ],[hillProfile.start,hillBounds.minZ]]]];
@@ -71,6 +78,11 @@ export function roadDistance(p:Vec2){
   }
   return inside?-min:min;
 }
+export const vehicleSignalStations=intersectionApproaches.map(approach=>{
+  const n=approach.normal,p=approach.stop,right={x:-n.z,z:n.x},verge=roadsidePosition({x:p.x+n.x,z:p.z+n.z},n);
+  return {id:approach.id,point:{x:verge.x+right.x*.85,z:verge.z+right.z*.85},yaw:Math.atan2(-n.x,-n.z),axis:signalAxis(n)};
+});
+export const pedestrianSignalPositions=intersectionCrossings.flatMap(crossing=>pedestrianSignalLayout(crossing,vehicleSignalStations));
 /** Project onto a road running in the requested direction, rather than a crossing road. */
 export function roadFrame(point:Vec2,normal:Vec2){
   let best=Infinity,center={...point},width=course.laneWidth;
@@ -105,7 +117,12 @@ export function pedestrianCrossingLayout(){
 function stopStripe(name:string,point:Vec2,normal:Vec2,span:'road'|'lane'|'approach'){
   const right={x:-normal.z,z:normal.x},frame=roadFrame(point,normal);
   let center=span==='lane'?point:frame.center,low=-(frame.width-2*roadPaint.edgeInset)/2,high=-low;
-  if(span==='lane'){low=-course.laneWidth/2;high=-low;}
+  if(span==='lane'){
+    // Join the real divider and outer edge paint. A nominal centred 3.5 m
+    // stripe left a gap at the railway's L-shaped corner in the video view.
+    center={x:railwayMarkings.dividerX,z:point.z};low=0;
+    high=railwayDeckBounds.maxX-center.x-roadPaint.edgeInset-roadPaint.edgeWidth/2;
+  }
   if(span==='approach'){
     const mouth=fitCrosswalk(roadSurface,point,normal,.3);center=point;low=0;
     high=(mouth.center.x-point.x)*right.x+(mouth.center.z-point.z)*right.z+mouth.width/2;
@@ -136,8 +153,9 @@ function noiseTexture(base:[number,number,number],size=128){
   ctx.putImageData(data,0,0);const tex=new T.CanvasTexture(canvas);tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.colorSpace=T.SRGBColorSpace;tex.anisotropy=8;return tex;
 }
 export class CourseWorld {
-  group=new T.Group(); trafficLights:TrafficLight[]=[];
+  group=new T.Group(); trafficLights:TrafficLight[]=[];rearTrafficLights:TrafficLight[]=[];pedestrianLights:PedestrianTrafficLight[]=[];signalAssemblies:IntersectionSignalAssembly[]=[];
   obstacles=new Set<number>();
+  traversableSurfaces=new Set<number>();
   private trees:TreeStand|undefined;
   private white=new T.MeshStandardMaterial({color:0xecece1,roughness:.9});
   private continuousWhite:PaintPath[]=[];
@@ -203,15 +221,17 @@ export class CourseWorld {
     const whiteZone=polygonClipping.union(junctionZone,departureZone);
     const curbSeams: {axis:'x'|'z';value:number}[]=[...[-16,16,-1.5,63].map(value=>({axis:'x' as const,value})),...[-18,13,.5,46].map(value=>({axis:'z' as const,value}))];
     const continuousCurbs=polygonClipping.union(boundaryPaintSurface(curbSections));
+    const {start:rampStart,end:rampEnd}=hillProfile,{minZ,maxZ}=hillBounds;
+    const rampZone:polygonClipping.MultiPolygon=[[[[rampStart,minZ],[rampEnd,minZ],[rampEnd,maxZ],[rampStart,maxZ],[rampStart,minZ]]]];
     const junctionCurbs=polygonClipping.difference(polygonClipping.intersection(continuousCurbs,junctionZone),roadSurface);
-    const ordinaryCurbs={black:polygonClipping.difference(curbSurface.black,whiteZone),yellow:polygonClipping.difference(curbSurface.yellow,whiteZone)};
+    // Colour changes belong to the texture. Separate bevelled stripe solids
+    // cut a transverse groove into the top at every colour boundary.
+    const ordinaryCurbs={black:[],yellow:polygonClipping.difference(continuousCurbs,roadSurface,whiteZone,rampZone)};
     const curbs=new T.Mesh(curbGeometry(ordinaryCurbs,{height:.18,bevel:.02,color:0xe4e2d6,sideColor:0xa9ada5,seams:curbSeams}),new T.MeshStandardMaterial({vertexColors:true,roughness:.95}));curbs.name='course-curbs';curbs.userData={height:.18,stripeLength:roadPaint.curbStripe,sections:curbSections.length};curbs.receiveShadow=true;curbs.castShadow=true;this.group.add(curbs);
     // Match the departure kerb's 20 cm top: changing mesh regions must not
     // create a step across the continuous concrete edge beside the driver.
     const junctionGeometry=curbGeometry({black:[],yellow:junctionCurbs},{height:.18,bevel:.02,color:0xe4e2d6,sideColor:0xa9ada5,seams:curbSeams});
     const whiteCurbs=new T.Mesh(junctionGeometry,new T.MeshStandardMaterial({vertexColors:true,roughness:.94}));whiteCurbs.name='intersection-curbs';whiteCurbs.userData={preserveMesh:true,height:.18,bevel:.02};whiteCurbs.castShadow=whiteCurbs.receiveShadow=true;this.group.add(whiteCurbs);
-    const {start:rampStart,end:rampEnd}=hillProfile,{minZ,maxZ}=hillBounds;
-    const rampZone:polygonClipping.MultiPolygon=[[[[rampStart,minZ],[rampEnd,minZ],[rampEnd,maxZ],[rampStart,maxZ],[rampStart,minZ]]]];
     const departureCurbs=polygonClipping.difference(polygonClipping.intersection(continuousCurbs,departureZone),roadSurface,rampZone);
     const departureConcrete=new T.Mesh(curbGeometry({black:[],yellow:departureCurbs},{height:.18,bevel:.02,color:0xe4e2d6,sideColor:0xa9ada5,seams:curbSeams}),new T.MeshStandardMaterial({vertexColors:true,roughness:.94}));
     departureConcrete.name='departure-curbs';departureConcrete.userData={preserveMesh:true,height:.18,bevel:.02};departureConcrete.castShadow=departureConcrete.receiveShadow=true;this.group.add(departureConcrete);
@@ -280,14 +300,17 @@ export class CourseWorld {
       }
     }
     for(const approach of intersectionApproaches){
-      const n=approach.normal,p=approach.stop,right={x:-n.z,z:n.x};
-      const verge=roadsidePosition({x:p.x+n.x,z:p.z+n.z},n),signalPosition={x:verge.x+right.x*.85,z:verge.z+right.z*.85},yaw=Math.atan2(-n.x,-n.z);
-      const head=new TrafficLight(signalAxis(n));head.group.position.set(signalPosition.x,0,signalPosition.z);head.group.rotation.y=yaw;head.group.userData.approach=approach.id;this.trafficLights.push(head);this.group.add(head.group);
-      const collider=this.physics.createCollider(RAPIER.ColliderDesc.cylinder(1.62,.04).setTranslation(signalPosition.x,1.62,signalPosition.z));this.obstacles.add(collider.handle);
-      const priority=createRoadSign(n.z?'priority':'yield',false,undefined,{bottom:1.05,post:false});priority.name=`signal-${approach.id}-priority`;priority.position.set(signalPosition.x,0,signalPosition.z);priority.rotation.y=yaw;priority.userData.referenceFrames=n.z?[287,412]:[570,645];this.group.add(priority);
+      const n=approach.normal,p=approach.stop;
+      const station=vehicleSignalStations.find(s=>s.id===approach.id)!,signalPosition=station.point,yaw=station.yaw;
+      const mounts=pedestrianSignalPositions.filter(m=>m.stationId===approach.id).map(m=>({...m,yaw:m.yaw-yaw}));
+      const assembly=new IntersectionSignalAssembly(station.axis,mounts);assembly.group.name=`signal-assembly-${approach.id}`;assembly.group.position.set(signalPosition.x,0,signalPosition.z);assembly.group.rotation.y=yaw;
+      assembly.front.group.userData.approach=assembly.rear.group.userData.approach=approach.id;
+      this.trafficLights.push(assembly.front);this.rearTrafficLights.push(assembly.rear);this.pedestrianLights.push(...assembly.pedestrians);this.signalAssemblies.push(assembly);this.group.add(assembly.group);
+      const halfPostHeight=assembly.group.userData.postHeight/2;
+      const collider=this.physics.createCollider(RAPIER.ColliderDesc.cylinder(halfPostHeight,.043).setTranslation(signalPosition.x,halfPostHeight,signalPosition.z));this.obstacles.add(collider.handle);
+      const priority=this.sign(n.z?'priority':'yield',signalPosition.x-n.z*1.3,signalPosition.z+n.x*1.3,yaw,false,undefined,undefined,2);priority.name=`signal-${approach.id}-priority`;priority.userData.referenceFrames=n.z?[287,412]:[570,645];
       const stopPost=roadsidePosition({x:p.x+n.x*.35,z:p.z+n.z*.35},n);this.sign('stopPlate',stopPost.x,stopPost.z,yaw,false,undefined,undefined,1.35).name=`signal-${approach.id}-stop-board`;
-      const pedestrian=createRoadSign('pedestrian',n.x>0||n.z>0,undefined,{center:2.5,post:false});pedestrian.position.set(signalPosition.x-right.x*.75,0,signalPosition.z-right.z*.75);pedestrian.rotation.y=yaw;this.group.add(pedestrian);
-      const bracket=new T.Mesh(new T.CylinderGeometry(.017,.017,.75,10),this.pole);bracket.rotation.z=Math.PI/2;bracket.position.set(-.375,2.5,-.09);head.group.add(bracket);
+      const pedestrian=createRoadSign('pedestrian',n.x>0||n.z>0,undefined,{center:1.85,post:false});pedestrian.position.set(signalPosition.x,0,signalPosition.z);pedestrian.rotation.y=yaw;this.group.add(pedestrian);
       const direction=roadsidePosition({x:p.x-n.x*1.6,z:p.z-n.z*1.6},n);this.sign(approach.turn??'straight',direction.x,direction.z,yaw,false,undefined,undefined,1.5).name=`signal-${approach.id}-direction`;
     }
     for(const marking of roadStopLines){const line=this.strip(marking.points,marking.width,this.white,.055);line.name=marking.name;line.userData={preserveMesh:true,normal:marking.normal,width:marking.width};}
@@ -298,8 +321,7 @@ export class CourseWorld {
       const assembly=this.sign(placement.kind,p.x,p.z,placement.yaw,placement.mirror??false,placement.lower,undefined,placement.bottom,placement.id==='hill-descent'||placement.id==='hill-stop');
       assembly.name=placement.id;assembly.userData={...assembly.userData,placementId:placement.id,referenceVideo:'uz_video.mp4',referenceFrames:placement.frames,planPoint:[placement.x,placement.y]};
     }
-    for(const z of [-26,-24.5])this.box(7.8,.07,.1,57.5,.045,z,this.pole);
-    for(let x=53.6;x<61.5;x+=.5)this.box(.23,.04,1.9,x,.045,-25.25,curbMat);
+    this.group.add(createRailwayCrossing());addRailwayColliders(this.physics,this.traversableSurfaces);
     this.trees=new TreeStand();this.group.add(this.trees.group);
     const facade=new T.MeshStandardMaterial({map:this.buildingTexture(),roughness:.85});
     for(let i=0;i<14;i++){const x=-96+i*15,h=8+(i%4)*3;this.box(12,h,10,x,h/2,-68-(i%3)*6,facade);}
@@ -316,5 +338,5 @@ export class CourseWorld {
   private buildingTexture(){const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d')!;ctx.fillStyle='#b7c1b9';ctx.fillRect(0,0,256,256);for(let x=12;x<256;x+=34)for(let y=12;y<256;y+=38){ctx.fillStyle='#567372';ctx.fillRect(x,y,20,25);ctx.fillStyle='#849d96';ctx.fillRect(x+2,y+2,7,20);}const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;return t;}
   setTreeQuality(quality:Settings['quality']){this.trees?.setQuality(quality);}
   setCurbStyle(style:Settings['curbStyle']){this.curbAppearance.setStyle(style);this.group.userData.curbStyle=style;}
-  update(time:number){this.trees?.update(time);this.trafficLights.forEach(light=>light.update(time));}
+  update(time:number){this.trees?.update(time);this.trafficLights.forEach(light=>light.update(time));this.rearTrafficLights.forEach(light=>light.update(time));this.pedestrianLights.forEach(light=>light.update(time));}
 }

@@ -47,6 +47,7 @@ export const courseSigns:CourseSignPlacement[]=[
   {id:'railway-warning',kind:'railWarning',x:1264,y:385,yaw:north,lower:['railBars1'],frames:[435,655]},
   {id:'railway-distance-two',kind:'railBars2',x:1264,y:425,yaw:north,bottom:1.35,frames:[420,435]},
   {id:'railway-stop',kind:'railway',x:1263.3,y:315,yaw:north,bottom:1.5,frames:[435,450,655]},
+  {id:'railway-exit-left',kind:'left',x:1263.3,y:225,yaw:north,frames:[450,451]},
   {id:'acceleration-40-20',kind:'speed40',x:1018,y:70.5,yaw:west,lower:['minimum20'],bottom:1.5,frames:[460]},
   {id:'northwest-speed20',kind:'speed20',x:600,y:70.5,yaw:west,frames:[470,480]},
   {id:'northwest-left',kind:'left',x:195,y:70.5,yaw:west,frames:[470,480]},

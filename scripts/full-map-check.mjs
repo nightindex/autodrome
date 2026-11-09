@@ -15,13 +15,14 @@ try{
     const {course,mapPoint}=await import('/src/data/course.ts'),{mapProjection}=await import('/src/ui/map-projection.ts'),{mapRouteLeg}=await import('/src/ui/map-route.ts'),{itinerary}=await import('/src/data/course.ts');
     const s=window.__avtodrom.scene,mesh=s.world.group.getObjectByName('course-asphalt');s.world.group.updateMatrixWorld(true);
     const witnesses=[[80,300],[205,380],[175,275],[270,300],[330,300],[420,300],[500,300],[545,310],[655,350],[760,300],[820,405],[890,362],[960,425],[850,240],[1000,285],[1140,360],[1220,300],[120,600],[260,600],[390,600],[420,715],[620,660],[400,795],[400,950],[400,100],
-      [140,220],[140,350],[240,350],[320,200],[365,415],[465,300],[550,240],[550,370],[705,300],[800,450],[1020,400],[1000,190],[900,240],[200,650],[400,650],[550,650],[400,850]];
+      [140,220],[140,350],[240,350],[320,200],[365,415],[465,300],[550,240],[550,370],[330,334],[350,334],[705,300],[800,450],[1020,400],[1000,190],[900,240],[200,650],[400,650],[550,650],[400,850]];
     const sampled=witnesses.map(([x,y])=>{const p=mapPoint(x,y),distance=roadDistance(p),painted=!!new T.Raycaster(new T.Vector3(p.x,10,p.z),new T.Vector3(0,-1,0)).intersectObject(mesh)[0];return {x,y,distance,painted};});
     const p=mapProjection(roadSurface,720,552),goals=course.exercises.map(e=>({id:e.id,point:p.project(e.point)}));
     const first=mapRouteLeg(itinerary[4],4),second=mapRouteLeg(itinerary[7],7);
     return {sampled,islands:roadSurface.flatMap(p=>p.slice(1)).length,goals,firstJunction:first,secondJunction:second,loops:boundaryLoops.map(loop=>loop.map(p=>[p.x*10+640,p.z*10+530])),route:course.route.map(p=>[p.x*10+640,p.z*10+530])};
   });
-  assert.equal(geometry.islands,10);assert(geometry.sampled.every(s=>s.painted===(s.distance<0)),'3D pavement must agree with every plan witness');
+  assert.equal(geometry.islands,8);assert(geometry.sampled.every(s=>s.painted===(s.distance<0)),'3D pavement must agree with every plan witness');
+  assert(geometry.sampled.filter(s=>s.y===334).every(s=>s.distance>.25&&!s.painted),'The B/CD garage divider must remain grass in both sensing and rendering');
   assert.notDeepEqual(geometry.firstJunction,geometry.secondJunction);
   const path=points=>points.map(([x,y],i)=>`${i?'L':'M'}${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
   const svg=Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1072"><g fill="none" stroke-linejoin="round"><g stroke="#ff20bf" stroke-width="2">${geometry.loops.map(points=>`<path d="${path(points)} Z"/>`).join('')}</g><path d="${path(geometry.route)}" stroke="#ff8b00" stroke-width="2.5" stroke-dasharray="7 5"/></g></svg>`);

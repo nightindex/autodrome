@@ -8,12 +8,21 @@ import {course} from '../src/data/course';
 import {ExamEngine} from '../src/simulation/exam';
 import {exerciseFeedback} from '../src/ui/exercise-feedback';
 import type {VehicleTelemetry,Vec2} from '../src/types';
+import {railwayMarkings} from '../src/data/railway';
+import {laneLines} from '../src/data/lane-markings';
 
 const area=(surface:MultiPolygon)=>surface.reduce((sum,p)=>sum+p.reduce((total,r,i)=>total+(i?-1:1)*Math.abs(r.slice(1).reduce((a,b,j)=>a+r[j][0]*b[1]-b[0]*r[j][1],0)/2),0),0);
 const ring=(outline:Vec2[]):MultiPolygon=>[[[...outline,outline[0]].map(p=>[p.x,p.z])]];
 const span=(values:number[])=>Math.max(...values)-Math.min(...values);
 
 describe('plan arrow silhouettes and shared stop markings',()=>{
+  it('joins both video railway stopping bars to the lane divider without a gap',()=>{
+    const stop=roadStopLines.find(l=>l.name==='paint-railway-stop-line')!,bar=laneLines.find(l=>l.id==='railway-return-limit')!;
+    expect(stop.points[0]).toEqual({x:railwayMarkings.dividerX,z:railwayMarkings.approachStopZ});
+    expect(stop.points[1].x).toBeCloseTo(61.165,4);
+    expect(bar.points.at(-1)).toEqual({x:railwayMarkings.dividerX,z:railwayMarkings.returnStopZ});
+    expect(bar.width).toBe(.4);
+  });
   it('keeps plan arrow proportions and 20 cm stems in every direction',()=>{
     for(const normal of [{x:1,z:0},{x:0,z:1},{x:-1,z:0},{x:0,z:-1}])for(const turn of [undefined,'left','right','straight-right'] as const){
       const point={x:13,z:-8},outline=roadArrowOutline({point,normal,turn});

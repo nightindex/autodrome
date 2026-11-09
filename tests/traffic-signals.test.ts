@@ -1,5 +1,5 @@
 import { describe,expect,it } from 'vitest';
-import { signalAspects,signalAxis,signalState,type SignalAxis } from '../src/data/traffic-signals';
+import { pedestrianSignalAspects,signalCycleSeconds,signalAspects,signalAxis,signalState,type SignalAxis } from '../src/data/traffic-signals';
 import { course,itinerary } from '../src/data/course';
 import { CourseTracker } from '../src/simulation/tracker';
 import { ExamEngine } from '../src/simulation/exam';
@@ -21,6 +21,32 @@ describe('intersection signal controller',()=>{
   it('keeps blinking green permissive when its LEDs are briefly dark',()=>{
     expect(signalAspects(45.1).green).toBe(true);expect(signalAspects(45.6).green).toBe(false);
     expect(signalState(45.6)).toBe('green');expect(signalAspects(45.6).permitted).toBe(true);
+  });
+  it('reserves the pedestrian interval for pedestrians even when vehicles turn',()=>{
+    let walkingSamples=0;
+    for(let time=-signalCycleSeconds;time<signalCycleSeconds*2;time+=.1){
+      const pedestrian=pedestrianSignalAspects(time);
+      if(!pedestrian.permitted)continue;
+      walkingSamples++;
+      for(const axis of ['north-south','east-west'] as const){
+        const vehicle=signalAspects(time,axis);expect(vehicle.red).toBe(true);expect(vehicle.amber||vehicle.permitted||vehicle.green).toBe(false);
+      }
+    }
+    expect(walkingSamples).toBeGreaterThan(300);
+  });
+  it('leaves clearance on both sides of the pedestrian phase and prepares vehicles afterwards',()=>{
+    for(const time of [67.5,68.9,81,83.9]){
+      expect(pedestrianSignalAspects(time).red).toBe(true);
+      for(const axis of ['north-south','east-west'] as const)expect(signalAspects(time,axis).permitted).toBe(false);
+    }
+    expect(pedestrianSignalAspects(69).green).toBe(true);expect(signalAspects(84.5,'east-west').phase).toBe('red-amber');
+    expect(signalAspects(85,'east-west').permitted).toBe(true);expect(pedestrianSignalAspects(85).red).toBe(true);
+  });
+  it('blinks only the walking figure before returning to red and repeats across the cycle',()=>{
+    expect(pedestrianSignalAspects(78.1)).toMatchObject({red:false,green:true,permitted:true,phase:'green-blink'});
+    expect(pedestrianSignalAspects(78.6)).toMatchObject({red:false,green:false,permitted:true,phase:'green-blink'});
+    expect(pedestrianSignalAspects(81)).toMatchObject({red:true,green:false,permitted:false});
+    expect(pedestrianSignalAspects(70-signalCycleSeconds)).toEqual(pedestrianSignalAspects(70+signalCycleSeconds));
   });
   for(const exercise of itinerary.filter(e=>e.stop?.light))for(const permitted of [false,true]){
     const axis=signalAxis(exercise.stop!.normal),greenTime:Record<SignalAxis,number>={'north-south':20,'east-west':56};

@@ -3,6 +3,8 @@ import { planArc,type PlanPoint } from './after-hill';
 import type { Vec2 } from '../types';
 import { intersectionApproaches } from './intersection';
 import { markingDimensions } from './marking-standards';
+import {railwayPaintPaths,railwayDividerPaths} from './railway';
+import {parkingControlLines,parkingControlWidth} from './parking-control-lines';
 
 const path=(points:PlanPoint[]):Vec2[]=>points.map(([x,y])=>mapPoint(x,y));
 const cubic=(a:PlanPoint,b:PlanPoint,c:PlanPoint,d:PlanPoint):PlanPoint[]=>Array.from({length:32},(_,i)=>{
@@ -18,6 +20,8 @@ export const laneLines:LaneLine[]=[
   line('west-perimeter',[[600,116],[170,116],...planArc(170,221,105,-90,-180).slice(1),[65,400],...planArc(170,400,105,180,90).slice(1),stop('west')]),
   line('north-perimeter',[[600,116],[670,116]]),
   line('east-perimeter',[[670,116],[1100,116],...cubic([1100,116],[1170,116],[1215,160],[1215,240]),[1215,430],...cubic([1215,430],[1215,472],[1164,505],[1100,505]),stop('east')]),
+  // The return lane's transverse end joins the divider beyond the railway.
+  line('railway-return-limit',[[1177.35,240],[1215,240]],markingDimensions.stop),
   // 05:01-05:05: a straight separator enters the two smooth splitter arcs.
   line('north-junction',[[640,156],stop('north')]),
   line('south-junction',[stop('south'),[640,770]]),
@@ -26,15 +30,7 @@ export const laneLines:LaneLine[]=[
   line('finish-divider',[[145,775],[535,775]]),
   {...line('parking-channel',[[87,543],[475,543]]),dash:{length:1.6,gap:1.5}},
   line('finish-line',[[145,736],[145,814]],.23),
-  // Bay ends are 1.1 outlines, not the road stop-line marking 1.12.
-  line('garage-left-stop',[[138,252.1],[138,295.9]]),
-  line('garage-middle-stop',[[325,272.1],[325,332.9]]),
-  line('garage-middle-lower-stop',[[335,337.1],[335,387.9]]),
-  line('garage-right-stop',[[565,290.1],[565,331.9]]),
-  line('parking-left-stop',[[72.1,610],[162.9,610]]),
-  line('parking-middle-stop',[[217.1,610],[309.9,610]]),
-  line('parking-right-stop',[[352.1,610],[455.9,610]]),
-  line('parking-cd-stop',[[352.1,705],[507.9,705]]),
+  ...parkingControlLines.map(({id,points})=>line(id,points,parkingControlWidth)),
 ];
 
 export interface PaintedGore {id:string;outline:Vec2[];spacing:number;fringe?:boolean;paintPaths?:Vec2[][]}
@@ -79,7 +75,7 @@ export const laneGores:PaintedGore[]=[
 ];
 
 /** Shared painted segments keep intentional gaps identical in 3D and on the map. */
-export function lanePaintPaths(line:LaneLine):Vec2[][]{
+function continuousLanePaths(line:LaneLine):Vec2[][]{
   if(!line.dash)return [line.points];
   const {length:dash,gap}=line.dash,pitch=dash+gap,result:Vec2[][]=[];let travelled=0;
   for(let i=1;i<line.points.length;i++){
@@ -94,3 +90,4 @@ export function lanePaintPaths(line:LaneLine):Vec2[][]{
   }
   return result;
 }
+export function lanePaintPaths(line:LaneLine):Vec2[][]{return continuousLanePaths(line).flatMap(line.id==='east-perimeter'?railwayDividerPaths:railwayPaintPaths);}

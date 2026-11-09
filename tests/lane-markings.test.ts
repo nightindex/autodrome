@@ -8,11 +8,26 @@ import { asphaltGeometry,paintStripGeometry } from '../src/render/road-geometry'
 import { CourseTracker } from '../src/simulation/tracker';
 import { localPoint } from '../src/simulation/math';
 import type { VehicleTelemetry } from '../src/types';
+import {railwayCrossing,railwayMarkings} from '../src/data/railway';
 
 const material=new T.MeshBasicMaterial();
 // Float32 end caps can land a few micrometres either side of the data point.
 const hit=(mesh:T.Mesh,point:{x:number;z:number})=>[[0,0],[1e-5,0],[-1e-5,0],[0,1e-5],[0,-1e-5]].some(([dx,dz])=>new T.Raycaster(new T.Vector3(point.x+dx,6,point.z+dz),new T.Vector3(0,-1,0)).intersectObject(mesh).length>0);
 describe('continuous marking paths from the video and plan',()=>{
+  it('leaves the video area between the two railway stopping bars free of a longitudinal divider',()=>{
+    const line=laneLines.find(l=>l.id==='east-perimeter')!,c=railwayCrossing;
+    const meshes=lanePaintPaths(line).map(path=>{const mesh=new T.Mesh(paintStripGeometry(path,line.width,roadSurface,.052),material);mesh.updateMatrixWorld();return mesh;});
+    try{
+      for(const offset of [-2.5,-1.2,-.796,0,.796,1.2,2.5])expect(meshes.some(mesh=>hit(mesh,{x:c.center.x,z:c.center.z+offset}))).toBe(false);
+      for(const z of [railwayMarkings.returnStopZ-.5,railwayMarkings.approachStopZ+.5])expect(meshes.some(mesh=>hit(mesh,{x:c.center.x,z}))).toBe(true);
+    }finally{meshes.forEach(mesh=>mesh.geometry.dispose());}
+  });
+  it('directs the northbound railway exit left as in the reference close-up',()=>{
+    const point=mapPoint(1232.5,220),arrow=coursePaintedArrows.find(a=>Math.hypot(a.point.x-point.x,a.point.z-point.z)<.01);
+    expect(arrow?.normal).toEqual({x:0,z:-1});expect(arrow?.turn).toBe('left');
+    const returnPoint=mapPoint(1195.5,395),returnArrow=coursePaintedArrows.find(a=>Math.hypot(a.point.x-returnPoint.x,a.point.z-returnPoint.z)<.01);
+    expect(returnArrow?.normal).toEqual({x:0,z:1});expect(returnArrow?.turn).toBe('right');
+  });
   it('paints every station through the straight sections and curved joins',()=>{
     for(const line of laneLines){
       const geometry=paintStripGeometry(line.points,line.width,roadSurface,.052),mesh=new T.Mesh(geometry,material);mesh.updateMatrixWorld();
@@ -60,15 +75,29 @@ describe('continuous marking paths from the video and plan',()=>{
   });
   it('paints yellow boundaries on garage bays, parking pockets and both snake lanes',()=>{
     const g=asphaltGeometry(yellowEdgeSurface,.048),mesh=new T.Mesh(g,material);mesh.updateMatrixWorld();
-    for(const [x,y]of [[185.1,350],[127.1,275],[394.1,225],[477.1,260],[390,612.9],[420,697.1],[940,282.1],[920,342.9]]){
+    for(const [x,y]of [[185.1,320],[127.1,275],[394.1,225],[452.9,300],[247.1,420],[292.9,420],[330,327.9],[330,341.1],[477.1,260],[390,612.9],[420,697.1],[940,282.1],[930,335.6]]){
       expect(hit(mesh,mapPoint(x,y)),`yellow at plan ${x},${y}`).toBe(true);
     }g.dispose();
+  });
+  it('changes garage edge colours at each reference control stripe',()=>{
+    const geometries=[yellowEdgeSurface,whiteEdgeSurface].map(surface=>asphaltGeometry(surface,.048));
+    const [yellow,white]=geometries.map(g=>{const mesh=new T.Mesh(g,material);mesh.updateMatrixWorld();return mesh;});
+    try{
+      // B enters the left pocket northbound; the return and right B lanes
+      // are approached southbound. The source plan gives their three stripes.
+      for(const [x,y,expected]of [[185.1,340,true],[185.1,350,false],[247.1,290,false],[247.1,300,true],[477.1,235,false],[477.1,250,true]]as const){
+        const point=mapPoint(x,y);
+        expect(hit(yellow,point),`garage yellow ${x},${y}`).toBe(expected);
+        expect(hit(white,point),`garage white ${x},${y}`).toBe(!expected);
+      }
+    }finally{geometries.forEach(g=>g.dispose());}
   });
   it('keeps both B bends and the snake bend yellow across their complete curved edges',()=>{
     for(const [name,x0,z0,x1,z1]of [
       ['B upper bend',30,10.9,30.7,11.4],
       ['B lower bend',25.15,18.9,25.21,18.97],
       ['snake bend',20,-16.5,20.75,-15.8],
+      ['snake second bend',22,-15.5,30.5,-10.5],
     ]as const){
       const region:polygonClipping.MultiPolygon=[[[[x0,z0],[x1,z0],[x1,z1],[x0,z1],[x0,z0]]]];
       expect(polygonClipping.intersection(whiteEdgeSurface,region),name).toEqual([]);

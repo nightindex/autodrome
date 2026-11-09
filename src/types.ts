@@ -9,7 +9,10 @@ export interface Exercise {
   id: ExerciseId; name: Localized; instruction: Localized;
   point: Vec2; spawn: Vec2; yaw: number; radius: number;
   stop?: { point: Vec2; normal: Vec2; light?: boolean };
-  parking?: { center: Vec2; yaw: number; width: number; length: number };
+  parking?: {
+    center: Vec2; yaw: number; width: number; length: number;
+    controlLine?: { points: [Vec2,Vec2]; width: number; wheels: readonly number[] };
+  };
   timeLimit?: number; indicator?: 'left' | 'right';
 }
 export interface CourseDefinition {

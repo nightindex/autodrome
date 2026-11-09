@@ -32,7 +32,7 @@ try{
     const T=await import('/node_modules/three/build/three.module.js'),{roadDistance,intersectionCrossings}=await import('/src/render/course-world.ts'),{intersectionApproaches}=await import('/src/data/intersection.ts'),{crosswalkStripes}=await import('/src/render/crosswalk.ts'),{Minimap}=await import('/src/ui/minimap.ts');
     const world=window.__avtodrom.scene.world,curbs=world.group.getObjectByName('intersection-curbs');
     const heads=world.trafficLights.map(head=>{
-      const p=head.group.position,a=intersectionApproaches.find(a=>a.id===head.group.userData.approach),right={x:-a.normal.z,z:a.normal.x};
+      const p=head.group.getWorldPosition(new T.Vector3()),a=intersectionApproaches.find(a=>a.id===head.group.userData.approach),right={x:-a.normal.z,z:a.normal.x};
       const ray=new T.Raycaster(new T.Vector3(p.x,.12,p.z),new T.Vector3(-right.x,0,-right.z),0,6),hit=ray.intersectObject(curbs)[0];
       return {approach:a.id,axis:head.axis,position:p.toArray(),clearance:roadDistance({x:p.x,z:p.z}),curbVisible:!!hit,curbDistance:hit?.distance};
     });
@@ -69,8 +69,8 @@ try{
   for(const [name,time]of [['red',0],['red-amber',17.5],['green',20],['green-blink-off',45.6],['amber',49],['clearance',51.5],['cross-road-green',56]]){
     const states=await page.evaluate(async time=>{
       const {signalAspects}=await import('/src/data/traffic-signals.ts'),world=window.__avtodrom.scene.world;window.signalReviewTime=time;world.update(time);
-      const south=world.trafficLights.find(h=>h.group.userData.approach==='south').group,p=south.position;
-      window.signalPose={eye:[p.x+.8,3.1,p.z+2.1],target:[p.x,2.5,p.z],fov:42};
+      const south=world.trafficLights.find(h=>h.group.userData.approach==='south').group,p=south.getWorldPosition(south.position.clone());
+      window.signalPose={eye:[p.x+.8,3.42,p.z+2.1],target:[p.x,3,p.z],fov:42};
       return world.trafficLights.map(h=>({axis:h.axis,phase:h.group.userData.phase,actual:Object.fromEntries(['red','amber','green'].map(color=>[color,h.group.getObjectByName(`signal-${color}-lens`).material.emissiveIntensity>0])),expected:signalAspects(time,h.axis)}));
     },time);
     for(const s of states)for(const color of ['red','amber','green'])assert.equal(s.actual[color],s.expected[color],`${name}: ${s.axis} ${color}`);

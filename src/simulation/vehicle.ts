@@ -33,7 +33,7 @@ export class Vehicle {
     },
     filterIntersectionPair:()=>true,
   };
-  constructor(public world:RAPIER.World,public obstacles:Set<number>){
+  constructor(public world:RAPIER.World,public obstacles:Set<number>,public traversableSurfaces=new Set<number>()){
     this.body=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0,1,0).setLinearDamping(0).setAngularDamping(.8).setCcdEnabled(true));
     this.collider=world.createCollider(RAPIER.ColliderDesc.cuboid(.78,.24,2.04).setTranslation(0,.12,0)
       .setMassProperties(config.mass,{x:0,y:-.08,z:0},{x:1900,y:2200,z:480},{x:0,y:0,z:0,w:1})
@@ -145,7 +145,9 @@ export class Vehicle {
       // Previous-step spring load includes acceleration/braking load transfer.
       const load=this.controller.wheelIsInContact(i)?clamp(this.controller.wheelSuspensionForce(i)??0,0,dynamics.maxSuspensionForce):0;
       const lockedRear=i>=2&&drive.parkingBrake>0&&Math.abs(speed)>1;
-      const grip=(support?Math.min(dynamics.asphaltGrip,support.friction):grass?dynamics.grassGrip:dynamics.asphaltGrip)*(lockedRear?dynamics.handbrakeGrip:1);
+      const ground=this.controller.wheelGroundObject(i);
+      const surfaceGrip=ground&&this.traversableSurfaces.has(ground.handle)?Math.min(dynamics.asphaltGrip,ground.friction()):dynamics.asphaltGrip;
+      const grip=(support?Math.min(dynamics.asphaltGrip,support.friction):grass?dynamics.grassGrip:surfaceGrip)*(lockedRear?dynamics.handbrakeGrip:1);
       const limit=load*grip;gripLimits.push(limit);
       this.controller.setWheelFrictionSlip(i,grip);
       this.controller.setWheelSideFrictionStiffness(i,lockedRear ? .65 : 1.5);
@@ -239,7 +241,7 @@ export class Vehicle {
     this.collision=this.contactPairs.size>0||this.collisionHold>0||this.impactPatches.size>0;
   }
   private wheelSupport(index:number,position:RAPIER.Vector,rotation:T.Quaternion,steer:number){
-    // The centre ray misses a curb under the tyre's tread or shoulder. Sweep
+    // The centre ray misses a curb or narrow railhead under the tyre. Sweep
     // the finite tyre along its suspension to find the actual supported axle
     // height, so the ray cannot extend the wheel back down into the concrete.
     const root=new T.Vector3((index%2===0?-1:1)*config.track/2,.02,(index<2?1:-1)*config.wheelbase/2).applyQuaternion(rotation).add(position);
@@ -248,9 +250,13 @@ export class Vehicle {
     const road=this.world.castRay(new RAPIER.Ray(root,down),range+config.wheelRadius,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body);
     if(!road)return;
     const orientation=rotation.clone().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),steer)).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2));
-    const support=this.world.castShape(root,orientation,down,this.tyreShape,0,range,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body,c=>this.obstacles.has(c.handle));
+    const support=this.world.castShape(root,orientation,down,this.tyreShape,0,range,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body,c=>this.obstacles.has(c.handle)||this.traversableSurfaces.has(c.handle));
     if(!support||support.time_of_impact<=.001||up.dot(support.normal1)<.05)return;
-    const rise=road.timeOfImpact-config.wheelRadius-support.time_of_impact;
+    const traversable=this.traversableSurfaces.has(support.collider.handle);
+    // The massless solid tyre is smaller by tyreClearance. Restore that
+    // clearance when deciding whether a shallow rail already supports it;
+    // otherwise a rail introduces a spurious 17 mm suspension step.
+    const rise=road.timeOfImpact-config.wheelRadius-support.time_of_impact+(traversable?tyreClearance:0);
     if(rise<=.001||rise>=config.wheelRadius)return;
     const ground=root.clone().addScaledVector(down,road.timeOfImpact);
     if(new T.Vector3().copy(support.witness1).sub(ground).dot(up)>=config.wheelRadius-.02)return;
@@ -261,7 +267,7 @@ export class Vehicle {
     // Use that fresh ray's distance to retain the shape sweep's axle height
     // with the same clearance as the ordinary road ray, including when the
     // ray lands on the higher top of the bevel.
-    offset.addScaledVector(new T.Vector3(support.normal1.x,0,support.normal1.z),-.03);
+    offset.addScaledVector(new T.Vector3(support.normal1.x,0,support.normal1.z),traversable?-.003:-.03);
     const shiftedRoot=root.add(offset);
     const ray=this.world.castRayAndGetNormal(new RAPIER.Ray(shiftedRoot,down),range+config.wheelRadius,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body);
     if(!ray||up.dot(ray.normal)<.25)return;

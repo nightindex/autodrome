@@ -23,6 +23,7 @@ describe('reflected mirror directions',()=>{
     const left=sideMirrorDirection('left',{yaw:0,pitch:0}),right=sideMirrorDirection('right',{yaw:0,pitch:0});
     expect(left.x).toBeGreaterThan(0);expect(right.x).toBeLessThan(0);
     expect(left.x).toBeCloseTo(-right.x);expect(left.z).toBeCloseTo(right.z);
+    expect(azimuth(left)).toBeCloseTo(Math.atan(.7));
     expect(left.z).toBeLessThan(0);expect(left.y).toBe(0);expect(right.y).toBe(0);
   });
   for(const side of ['left','right'] as const){
