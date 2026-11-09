@@ -6,6 +6,7 @@ const server=await createServer({server:{middlewareMode:true},appType:'custom'})
 try{
   await RAPIER.init();
   const {Vehicle}=await server.ssrLoadModule('/src/simulation/vehicle.ts');
+  const {vehicleConfig}=await server.ssrLoadModule('/src/data/vehicle.ts');
   const {speedAtRpm,rpmAtSpeed}=await server.ssrLoadModule('/src/simulation/drivetrain.ts');
   const {hillColliderData}=await server.ssrLoadModule('/src/render/hill-structure.ts');
   const {curbGeometry}=await server.ssrLoadModule('/src/render/road-geometry.ts');
@@ -71,7 +72,7 @@ try{
         car.update(1/60,input,true);const t=car.telemetry();collision ||= t.collision;maxHeight=Math.max(maxHeight,car.body.translation().y);
         if(t.collision&&firstImpact===null)firstImpact={time:i/60,z:t.position.z,kmh:t.speed*3.6};
         const tyres=Array.from({length:car.body.numColliders()},(_,i)=>car.body.collider(i)).filter(c=>c.handle!==car.collider.handle);
-        crossedCurb ||= tyres.length===4&&tyres.every(c=>{const p=c.translation();return p.z>6.24+.317&&Math.abs(p.x)<4-.317;});
+        crossedCurb ||= tyres.length===4&&tyres.every(c=>{const p=c.translation();return p.z>6.24+vehicleConfig.wheelRadius&&Math.abs(p.x)<4-vehicleConfig.wheelRadius;});
       }
       const t=car.telemetry();curb.push({initialKmh:kmh,collision,firstImpact,maxHeight,crossedCurb,finalPosition:t.position,finalKmh:t.speed*3.6});
     }finally{run.dispose();}

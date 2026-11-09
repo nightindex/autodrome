@@ -2,7 +2,7 @@ import { describe,expect,it } from 'vitest';
 import * as T from 'three';
 import { rigCarWheel,carBodyLift,updateCarWheel } from '../src/render/car-wheels';
 import type { Vehicle } from '../src/simulation/vehicle';
-import { vehicleConfig } from '../src/data/vehicle';
+import { vehicleConfig,vehicleDynamics } from '../src/data/vehicle';
 
 function wheelFixture(){
   const car=new T.Group();car.position.set(17,.7,-9);car.rotation.set(.08,1.2,-.03);
@@ -15,6 +15,19 @@ function wheelFixture(){
 }
 
 describe('imported Cobalt wheel rig',()=>{
+  it('uses the reset suspension and clears stale roll and steering before the first physics step',()=>{
+    const {wheel}=wheelFixture();wheel.radius=vehicleConfig.wheelRadius;
+    const lift=carBodyLift([wheel]);
+    let roll=8;
+    const controller={wheelSteering:()=>.4,wheelRotation:()=>roll,wheelSuspensionLength:()=>.08}as unknown as Vehicle['controller'];
+    updateCarWheel(wheel,controller,true,false,lift);
+    expect(wheel.pivot.position.y+lift).toBeCloseTo(.02-vehicleDynamics.suspensionRestLength,6);
+    expect(wheel.pivot.rotation.y).toBe(0);expect(wheel.spin.rotation.x).toBe(0);
+    roll+=.2;updateCarWheel(wheel,controller,false,false,lift);
+    expect(wheel.spin.rotation.x).toBeCloseTo(.2,6);
+    updateCarWheel(wheel,controller,true,true,lift);
+    expect(wheel.pivot.position.y).toBe(wheel.base.y);
+  });
   it('raises the body to its loaded ride height while keeping tyres on the suspension',()=>{
     const {wheel}=wheelFixture(),lift=carBodyLift([wheel]);
     expect(lift).toBeGreaterThan(.07);expect(lift).toBeLessThan(.16);

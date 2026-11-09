@@ -13,6 +13,8 @@ import { stableShadowTarget,shadowSpan,sunOffset } from './shadow-stability';
 import { rigCarWheel,updateCarWheel,carBodyLift,type CarWheel } from './car-wheels';
 import { configureCarShadows } from './car-shadows';
 import { carAssetVersion } from './car-asset-version';
+import {fitCarDimensions} from './car-dimensions';
+import {fitCarTyreProfile} from './car-tyre-profile';
 import { moveMirrorAngle,readMirrorAdjustments,sideMirrorDirection,sideMirrorView,type MirrorAdjustments } from './mirror-adjustment';
 
 export class GameScene {
@@ -23,6 +25,7 @@ export class GameScene {
   car=new T.Group();cameraMode:'chase'|'cockpit'|'overview'='chase';world:CourseWorld;
   private sun=new T.DirectionalLight(0xfff1d4,2.4);
   private wheels:CarWheel[]=[];private bodyLift=0;
+  private cabinEye=new T.Vector3(.31,.48,.2);
   private steering:T.Object3D|undefined;private steeringBase=new T.Quaternion();
   private cobalt:CobaltVisuals|undefined;
   private guide=new T.Group();private goal=new T.Group();
@@ -57,8 +60,12 @@ export class GameScene {
       model.scale.setScalar(scale);model.rotation.y=Math.PI;model.updateMatrixWorld(true);
       const box=new T.Box3().setFromObject(model);model.position.y=-.62-box.min.y;this.car.add(model);this.car.updateMatrixWorld(true);
       const wheelNodes:T.Object3D[]=[];
-      model.traverse(n=>{
-        if(n.name.startsWith('wheel_rf_dummy'))wheelNodes.push(n);
+      model.traverse(n=>{if(n.name.startsWith('wheel_rf_dummy'))wheelNodes.push(n);});
+      for(const n of wheelNodes)this.wheels.push(rigCarWheel(this.car,n));
+      const dimensions=fitCarDimensions(this.car,model,this.wheels);dimensions.mapPoint(this.cabinEye);
+      for(const wheel of this.wheels)fitCarTyreProfile(wheel.pivot,vehicleConfig.rimDiameter,vehicleConfig.tyreWidth);
+      this.bodyLift=carBodyLift(this.wheels);
+      this.car.traverse(n=>{
         if(n.name==='steering_dummy')this.steering=n;
         if(n.name==='COBALT_STEERING_ASSEMBLY')this.steering=n;
         if(n instanceof T.Mesh){configureCarShadows(n);
@@ -91,8 +98,6 @@ export class GameScene {
         if(!pane)return;const pivot=new T.Group();pivot.name=`mirror-actuator-${i}`;
         pivot.position.copy(this.sideMirrorPositions[i]);this.car.add(pivot);pivot.attach(pane);this.sideMirrorPivots[i]=pivot;
       });
-      for(const n of wheelNodes)this.wheels.push(rigCarWheel(this.car,n));
-      this.bodyLift=carBodyLift(this.wheels);
       // Soft daylight bounced inside the cabin. Its short, shadow-free range
       // lifts the footwells and moulded controls without brightening the course.
       const cabinBounce=new T.PointLight(0xfff4de,.14,1.65,2);cabinBounce.position.set(0,.59,.52);cabinBounce.name='cabin-daylight-bounce';this.car.add(cabinBounce);
@@ -128,7 +133,7 @@ export class GameScene {
   setMirrorAdjustments(value:MirrorAdjustments){this.mirrorAdjustments=readMirrorAdjustments(value);}
   render(vehicle:Vehicle,dt:number,time:number,menu:boolean,look:number){
     const p=vehicle.body.translation(),r=vehicle.body.rotation();this.car.position.set(p.x,p.y,p.z);this.car.quaternion.set(r.x,r.y,r.z,r.w);
-    if(menu)this.car.position.y=hillHeight(p.x,p.z)+.63;else this.car.translateY(this.bodyLift);
+    if(menu)this.car.position.y=hillHeight(p.x,p.z)+(this.wheels.length?vehicleConfig.wheelRadius-this.wheels[0].base.y:.63);else this.car.translateY(this.bodyLift);
     const t=vehicle.telemetry();
     for(const w of this.wheels)updateCarWheel(w,vehicle.controller,vehicle.time===0,menu,this.bodyLift);
     // Telemetry is the actual rack position, including optional assistance.
@@ -143,7 +148,7 @@ export class GameScene {
     this.camera.clearViewOffset();
     if(menu){const a=.75+Math.sin(time*.025)*.25;const desired=new T.Vector3(p.x+Math.sin(a)*8,p.y+2.6,p.z+Math.cos(a)*8);this.camera.position.lerp(desired,1-Math.exp(-dt*2));this.camera.lookAt(p.x,p.y+.1,p.z);this.camera.fov=48;this.camera.setViewOffset(window.innerWidth,window.innerHeight,-window.innerWidth*.14,0,window.innerWidth,window.innerHeight);}
     else if(this.cameraMode==='cockpit'){
-      this.camera.position.copy(new T.Vector3(.31,.48,.2).applyQuaternion(this.car.quaternion).add(pos));
+      this.camera.position.copy(this.cabinEye.clone().applyQuaternion(this.car.quaternion).add(pos));
       const target=new T.Vector3(Math.sin(look*.85),-.025,Math.cos(look*.85)).applyQuaternion(this.car.quaternion).multiplyScalar(10).add(this.camera.position);this.camera.lookAt(target);this.camera.fov=70;
     }else if(this.cameraMode==='overview'){
       this.camera.position.lerp(new T.Vector3(p.x,p.y+32,p.z-8),1-Math.exp(-dt*5));this.camera.lookAt(p.x,p.y,p.z);this.camera.fov=52;

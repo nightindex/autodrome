@@ -2,7 +2,7 @@ import {describe,expect,it} from 'vitest';
 import * as T from 'three';
 import {course,mapPoint} from '../src/data/course';
 import {laneLines} from '../src/data/lane-markings';
-import {vehicleConfig as car} from '../src/data/vehicle';
+import {vehicleConfig as car,wheelCenter} from '../src/data/vehicle';
 import {paintStripGeometry} from '../src/render/road-geometry';
 import {roadDistance,roadSurface} from '../src/render/course-world';
 import {CourseTracker} from '../src/simulation/tracker';
@@ -15,7 +15,7 @@ const exercises=course.exercises.filter(e=>e.parking);
 function sample(e:Exercise,position:Vec2=e.point,yaw=e.parking!.yaw,speed=0):VehicleTelemetry {
   return {time:10,position,yaw,speed,signedSpeed:speed,rpm:1000,gear:-1,throttle:0,brake:1,clutch:1,steering:0,engine:true,stalled:false,belt:true,handbrake:false,indicator:'off',hazards:false,ignition:true,positionLights:false,headlights:false,fogLights:false,collision:false,
     bumper:localPoint(position,yaw,0,car.length/2),
-    wheels:[[-1,1],[1,1],[-1,-1],[1,-1]].map(([side,end])=>localPoint(position,yaw,side*car.track/2,end*car.wheelbase/2)),
+    wheels:[0,1,2,3].map(index=>{const {x,z}=wheelCenter(index);return localPoint(position,yaw,x,z);}),
   };
 }
 describe('parking wheel-contact stripes from the plan and video',()=>{

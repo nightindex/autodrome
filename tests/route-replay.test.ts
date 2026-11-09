@@ -3,10 +3,10 @@ import { course,itinerary } from '../src/data/course';
 import { CourseTracker } from '../src/simulation/tracker';
 import { ExamEngine } from '../src/simulation/exam';
 import { distance,lineDistance,localPoint } from '../src/simulation/math';
-import { vehicleConfig as car } from '../src/data/vehicle';
+import { vehicleConfig as car,wheelCenter } from '../src/data/vehicle';
 import type { Vec2,VehicleTelemetry } from '../src/types';
 function sample(p:Vec2,yaw:number,speed=2.5,reverse=false):VehicleTelemetry{
-  return {time:20,position:p,yaw,speed,signedSpeed:reverse?-speed:speed,rpm:1500,gear:reverse?-1:2,throttle:.2,brake:0,clutch:0,steering:0,engine:true,stalled:false,belt:true,handbrake:false,indicator:'off',hazards:false,ignition:false,positionLights:false,headlights:false,fogLights:false,bumper:localPoint(p,yaw,0,car.length/2),wheels:[localPoint(p,yaw,-car.track/2,car.wheelbase/2),localPoint(p,yaw,car.track/2,car.wheelbase/2),localPoint(p,yaw,-car.track/2,-car.wheelbase/2),localPoint(p,yaw,car.track/2,-car.wheelbase/2)],collision:false};
+  return {time:20,position:p,yaw,speed,signedSpeed:reverse?-speed:speed,rpm:1500,gear:reverse?-1:2,throttle:.2,brake:0,clutch:0,steering:0,engine:true,stalled:false,belt:true,handbrake:false,indicator:'off',hazards:false,ignition:false,positionLights:false,headlights:false,fogLights:false,bumper:localPoint(p,yaw,0,car.length/2),wheels:[0,1,2,3].map(index=>{const {x,z}=wheelCenter(index);return localPoint(p,yaw,x,z);}),collision:false};
 }
 describe('complete reference route sensor replay',()=>{
   it('completes every exercise, including a second intersection visit',()=>{

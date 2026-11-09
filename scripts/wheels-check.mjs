@@ -12,6 +12,7 @@ try{
   await page.click('#practice');await page.waitForTimeout(700);await page.keyboard.press('Escape');
   const geometry=await page.evaluate(async()=>{
     const T=await import('/node_modules/three/build/three.module.js'),s=window.__avtodrom.scene;
+    const {vehicleConfig}=await import('/src/data/vehicle.ts');
     const reports=[];
     for(const w of s.wheels){
       const node=w.spin.children[0].children[0],calliper=w.pivot.children.find(n=>n.isMesh);
@@ -38,20 +39,21 @@ try{
     }
     // Drive the real controller forward and backward on a flat course section.
     const v=window.__avtodrom.vehicle,input={down:()=>false},samples=[];
+    const {updateCarWheel}=await import('/src/render/car-wheels.ts'),w=s.wheels.find(w=>w.index===0);
     v.reset({x:-20,z:40.5},0);for(let i=0;i<60;i++)v.update(1/60,input,true);
     for(const speed of [2,-2]){
       v.drivetrain.handbrake=false;v.body.setLinvel({x:0,y:0,z:speed},true);
       const z=v.body.translation().z,before=v.controller.wheelRotation(0);
+      updateCarWheel(w,v.controller,false,false);const beforeVisual=w.spin.rotation.x;
       for(let i=0;i<12;i++)v.update(1/60,input,true);
-      const {updateCarWheel}=await import('/src/render/car-wheels.ts'),w=s.wheels.find(w=>w.index===0);
       updateCarWheel(w,v.controller,false,false);
-      samples.push({speed,travel:v.body.translation().z-z,rotation:v.controller.wheelRotation(0)-before,visualRoll:w.spin.rotation.x,expectedRoll:v.controller.wheelRotation(0)*.317/w.radius});
+      samples.push({speed,travel:v.body.translation().z-z,rotation:v.controller.wheelRotation(0)-before,visualRoll:w.spin.rotation.x,expectedRoll:beforeVisual+(v.controller.wheelRotation(0)-before)*vehicleConfig.wheelRadius/w.radius});
     }
-    return {wheels:reports,samples};
+    return {wheels:reports,samples,wheelRadius:vehicleConfig.wheelRadius};
   });
   assert.equal(geometry.wheels.length,4);assert.deepEqual(geometry.wheels.map(w=>w.index).sort(),[0,1,2,3]);
   for(const w of geometry.wheels){assert(w.maxAxisTilt<1e-6&&w.lateralRunout<1e-6&&w.maxHubDrift<1e-6&&w.maxCalliperDrift<1e-6,JSON.stringify(w));assert(w.steeringAlignment>.999999);}
-  for(const sample of geometry.samples){assert(sample.rotation*sample.travel>0,'Forward and reverse must roll in their direction of travel');assert(Math.abs(sample.visualRoll-sample.expectedRoll)<1e-8);assert(Math.abs(sample.rotation*.317-sample.travel)<.005);}
+  for(const sample of geometry.samples){assert(sample.rotation*sample.travel>0,'Forward and reverse must roll in their direction of travel');assert(Math.abs(sample.visualRoll-sample.expectedRoll)<1e-8);assert(Math.abs(sample.rotation*geometry.wheelRadius-sample.travel)<.005);}
   await page.addStyleTag({content:'#hud,#menu-shell,#modal,.vignette,#toast{display:none!important}dialog::backdrop{display:none}'});
   await page.evaluate(async()=>{
     const T=await import('/node_modules/three/build/three.module.js'),s=window.__avtodrom.scene,v=window.__avtodrom.vehicle;

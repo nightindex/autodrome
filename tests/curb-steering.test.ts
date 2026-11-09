@@ -1,6 +1,7 @@
 import {beforeAll,describe,expect,it} from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {Vehicle} from '../src/simulation/vehicle';
+import {vehicleConfig as config} from '../src/data/vehicle';
 import {curbGeometry} from '../src/render/road-geometry';
 import {addStaticObstacle} from '../src/simulation/static-collision';
 import type {Input} from '../src/simulation/input';
@@ -33,7 +34,7 @@ function vergeCurb({side=1,height=.2}={}){
         .filter(collider=>collider.handle!==car.collider.handle);
       cleared=tyres.every(tyre=>{
         const p=tyre.translation();
-        return(side===1?p.x-.317>far:p.x+.317<near)&&Math.abs(p.z)<span-1;
+        return(side===1?p.x-config.wheelRadius>far:p.x+config.wheelRadius<near)&&Math.abs(p.z)<span-1;
       });
       if(cleared)break;
     }

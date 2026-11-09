@@ -45,7 +45,7 @@ try{
       const wheels=v.tyres.map((tyre,index)=>{
         const center=tyre.translation(),rotation=tyre.rotation();
         const axle=new T.Vector3(0,1,0).applyQuaternion(rotation);
-        const extentZ=.105*Math.abs(axle.z)+(vehicleConfig.wheelRadius-.017)*Math.sqrt(Math.max(0,1-axle.z*axle.z));
+        const extentZ=vehicleConfig.tyreWidth/2*Math.abs(axle.z)+(vehicleConfig.wheelRadius-.017)*Math.sqrt(Math.max(0,1-axle.z*axle.z));
         return {index,center,extentZ,length:v.controller.wheelSuspensionLength(index),force:v.controller.wheelSuspensionForce(index),ground:v.controller.wheelIsInContact(index),onCurb:v.controller.wheelGroundObject(index)?.handle===curb.handle,solidContact:tyreContacts.includes(index)};
       });
       const fullClear=state.reverse?wheels.every(w=>w.center.z+w.extentZ<near):wheels.every(w=>w.center.z-w.extentZ>far);

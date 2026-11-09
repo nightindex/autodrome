@@ -1,6 +1,6 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as T from 'three';
-import { vehicleConfig as config,vehicleDynamics as dynamics } from '../data/vehicle';
+import { vehicleConfig as config,vehicleDynamics as dynamics,wheelCenter } from '../data/vehicle';
 import { hillHeight } from '../data/course';
 import type { Vec2, VehicleTelemetry } from '../types';
 import { Drivetrain } from './drivetrain';
@@ -8,7 +8,8 @@ import { Input } from './input';
 import { clamp,localPoint } from './math';
 import { tyreForces } from './tyre-forces';
 import { Steering } from './steering';
-const tyreHalfWidth=.105,tyreShoulder=.03,tyreClearance=.017;
+const tyreHalfWidth=config.tyreWidth/2,tyreShoulder=.03,tyreClearance=.017;
+const nominalBodyHeight=config.wheelRadius+dynamics.loadedSuspensionLength-.02;
 export class Vehicle {
   body:RAPIER.RigidBody;collider:RAPIER.Collider;controller:RAPIER.DynamicRayCastVehicleController;
   drivetrain=new Drivetrain();belt=false;indicator:'off'|'left'|'right'='off';hazards=false;
@@ -35,11 +36,23 @@ export class Vehicle {
   };
   constructor(public world:RAPIER.World,public obstacles:Set<number>,public traversableSurfaces=new Set<number>()){
     this.body=world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(0,1,0).setLinearDamping(0).setAngularDamping(.8).setCcdEnabled(true));
-    this.collider=world.createCollider(RAPIER.ColliderDesc.cuboid(.78,.24,2.04).setTranslation(0,.12,0)
+    const colliderOffset=.12;
+    const hull:number[]=[];
+    for(const x of [-config.width/2,config.width/2])for(const y of [-.24,.24])for(const z of [-config.length/2,config.length/2])hull.push(x,y,z);
+    // Keep the low floor between the axles. Sloped transitions to the raised
+    // ends let a tyre engage a kerb before the chassis reaches the concrete.
+    for(const x of [-.52,.52])for(const z of [-.82,.82])hull.push(x,config.groundClearance-nominalBodyHeight-colliderOffset,z);
+    // Include the tapered cabin so an overturned car rests on its visible
+    // roof instead of letting that roof pass through the road surface.
+    for(const x of [-.60,.60])for(const z of [-.75,.35])hull.push(x,config.height-nominalBodyHeight-colliderOffset,z);
+    const chassis=RAPIER.ColliderDesc.convexHull(new Float32Array(hull));
+    if(!chassis)throw new Error('Invalid vehicle chassis hull');
+    this.collider=world.createCollider(chassis.setTranslation(0,colliderOffset,0)
       .setMassProperties(config.mass,{x:0,y:-.08,z:0},{x:1900,y:2200,z:480},{x:0,y:0,z:0,w:1})
       .setFriction(.3).setRestitution(.02).setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS|RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS),this.body);
     this.controller=world.createVehicleController(this.body);this.controller.indexUpAxis=1;this.controller.setIndexForwardAxis=2;
-    for(const z of [config.wheelbase/2,-config.wheelbase/2])for(const x of [-config.track/2,config.track/2]){
+    for(let index=0;index<4;index++){
+      const {x,z}=wheelCenter(index);
       this.controller.addWheel({x,y:.02,z},{x:0,y:-1,z:0},{x:-1,y:0,z:0},dynamics.suspensionRestLength,config.wheelRadius);
       const i=this.controller.numWheels()-1;
       this.controller.setWheelSuspensionStiffness(i,dynamics.suspensionStiffness);this.controller.setWheelSuspensionCompression(i,4.4);this.controller.setWheelSuspensionRelaxation(i,5.2);
@@ -58,10 +71,11 @@ export class Vehicle {
     this.body.setLinvel({x:0,y:0,z:0},true);this.body.setAngvel({x:0,y:0,z:0},true);this.body.resetForces(true);this.body.resetTorques(true);
     this.drivetrain.reset();this.steering.reset();this.belt=false;this.indicator='off';this.hazards=false;this.ignitionOn=false;this.positionLights=false;this.headlights=false;this.fogLights=false;this.time=0;this.collision=false;this.collisionHold=0;this.contactPairs.clear();this.impactPatches.clear();this.tyreContactForces.clear();this.queue.clear();
     this.tyres.forEach((tyre,i)=>{
+      const {x,z}=wheelCenter(i);
       this.controller.setWheelSteering(i,0);
       this.controller.setWheelRadius(i,config.wheelRadius);
-      this.controller.setWheelChassisConnectionPointCs(i,{x:(i%2===0?-1:1)*config.track/2,y:.02,z:(i<2?1:-1)*config.wheelbase/2});
-      tyre.setTranslationWrtParent({x:(i%2===0?-1:1)*config.track/2,y:.02-dynamics.suspensionRestLength,z:(i<2?1:-1)*config.wheelbase/2});
+      this.controller.setWheelChassisConnectionPointCs(i,{x,y:.02,z});
+      tyre.setTranslationWrtParent({x,y:.02-dynamics.suspensionRestLength,z});
       tyre.setRotationWrtParent(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2));
     });
   }
@@ -74,18 +88,25 @@ export class Vehicle {
     if(!this.canRecover)return false;
     const rotation=new T.Quaternion().copy(this.body.rotation()),forward=new T.Vector3(0,0,1).applyQuaternion(rotation),right=new T.Vector3(1,0,0).applyQuaternion(rotation);
     const yaw=Math.hypot(forward.x,forward.z)>.1?Math.atan2(forward.x,forward.z):Math.atan2(-right.z,right.x),upright=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),yaw);
-    const origin=this.body.translation(),clearance=new RAPIER.Cuboid(.96,.5,2.3);
+    // Cover the whole upright chassis and the fully extended tyres at the
+    // recovery spawn height, including the roof before the suspension settles.
+    // Keep the previous conservative side, end and bottom clearance margins.
+    const bottom=Math.min(-.6,.02-dynamics.suspensionRestLength-config.wheelRadius-.02);
+    const top=Math.max(.4,config.height-nominalBodyHeight+.02),clearanceY=(bottom+top)/2;
+    const halfWidth=Math.max(.96,config.width/2+.09,Math.max(config.frontTrack,config.rearTrack)/2+tyreHalfWidth+.09);
+    const halfLength=Math.max(2.3,config.length/2+.06,config.wheelbase/2+config.wheelRadius+.06);
+    const origin=this.body.translation(),clearance=new RAPIER.Cuboid(halfWidth,(top-bottom)/2,halfLength);
     // Keep the current location where possible; step clear of a kerb or post.
     let placement:{x:number;y:number;z:number}|undefined;
     for(const radius of [0,1.25,2.5,4]){
       for(let i=0;i<(radius===0?1:8);i++){
         const angle=yaw+Math.PI+i*Math.PI/4,x=origin.x+Math.sin(angle)*radius,z=origin.z+Math.cos(angle)*radius;
         const heights=[hillHeight(x,z)];
-        for(const side of [-.96,.96])for(const end of [-2.3,2.3]){
+        for(const side of [-halfWidth,halfWidth])for(const end of [-halfLength,halfLength]){
           const corner=localPoint({x,z},yaw,side,end);heights.push(hillHeight(corner.x,corner.z));
         }
         const y=Math.max(...heights)+.78;
-        if(!this.world.intersectionWithShape({x,y:y-.1,z},upright,clearance,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body,c=>this.obstacles.has(c.handle))){placement={x,y,z};break;}
+        if(!this.world.intersectionWithShape({x,y:y+clearanceY,z},upright,clearance,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body,c=>this.obstacles.has(c.handle))){placement={x,y,z};break;}
       }
       if(placement)break;
     }
@@ -118,7 +139,7 @@ export class Vehicle {
     const horizontalSpeed=Math.hypot(vel.x,vel.z);
     const steeringGrip=steeringAssist?Math.min(...[0,1].map(i=>{
       const contact=this.controller.wheelIsInContact(i)?this.controller.wheelContactPoint(i):null;
-      const point=contact??new T.Vector3((i===0?-1:1)*config.track/2,0,config.wheelbase/2).applyQuaternion(rotation).add(position);
+      const {x,z}=wheelCenter(i),point=contact??new T.Vector3(x,0,z).applyQuaternion(rotation).add(position);
       return this.surfaceAt(point)==='grass'?dynamics.grassGrip:dynamics.asphaltGrip;
     })):undefined;
     const steer=this.steering.update(dt,+input.down('left')-+input.down('right'),horizontalSpeed,steeringGrip);
@@ -132,14 +153,14 @@ export class Vehicle {
     const brakes:number[]=[],gripLimits:number[]=[];
     for(let i=0;i<4;i++){
       // Ackermann geometry: the inside wheel follows the tighter radius.
-      const x=(i%2===0?-1:1)*config.track/2;
+      const {x,z}=wheelCenter(i);
       const wheelSteer=i<2&&Math.abs(steer)>.0001?Math.sign(steer)*Math.atan(config.wheelbase/(config.wheelbase/Math.tan(Math.abs(steer))-x*Math.sign(steer))):0;
       this.controller.setWheelSteering(i,wheelSteer);
       const support=this.wheelSupport(i,position,rotation,wheelSteer);
       this.controller.setWheelRadius(i,support?.radius??config.wheelRadius);
-      this.controller.setWheelChassisConnectionPointCs(i,support?.connection??{x,y:.02,z:(i<2?1:-1)*config.wheelbase/2});
+      this.controller.setWheelChassisConnectionPointCs(i,support?.connection??{x,y:.02,z});
       const length=clamp(this.controller.wheelSuspensionLength(i)??dynamics.suspensionRestLength,.08,dynamics.suspensionRestLength+dynamics.suspensionTravel);
-      const wheelPoint=new T.Vector3(x,.02-length-config.wheelRadius,(i<2?1:-1)*config.wheelbase/2).applyQuaternion(rotation).add(position);
+      const wheelPoint=new T.Vector3(x,.02-length-config.wheelRadius,z).applyQuaternion(rotation).add(position);
       const grass=!support&&this.surfaceAt(wheelPoint)==='grass';
       // Each tyre responds to the surface underneath it, including split verges.
       // Previous-step spring load includes acceleration/braking load transfer.
@@ -172,7 +193,8 @@ export class Vehicle {
     // resolution. A curb impact must not use last frame's wheel height.
     for(let i=0;i<4;i++){
       const length=clamp(this.controller.wheelSuspensionLength(i)??dynamics.suspensionRestLength,.08,dynamics.suspensionRestLength+dynamics.suspensionTravel);
-      this.tyres[i].setTranslationWrtParent({x:(i%2===0?-1:1)*config.track/2,y:.02-length,z:(i<2?1:-1)*config.wheelbase/2});
+      const {x,z}=wheelCenter(i);
+      this.tyres[i].setTranslationWrtParent({x,y:.02-length,z});
       this.tyres[i].setRotationWrtParent(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),this.controller.wheelSteering(i)??0).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2)));
     }
     // At rest, static tyre friction balances the component of gravity along
@@ -244,7 +266,7 @@ export class Vehicle {
     // The centre ray misses a curb or narrow railhead under the tyre. Sweep
     // the finite tyre along its suspension to find the actual supported axle
     // height, so the ray cannot extend the wheel back down into the concrete.
-    const root=new T.Vector3((index%2===0?-1:1)*config.track/2,.02,(index<2?1:-1)*config.wheelbase/2).applyQuaternion(rotation).add(position);
+    const {x,z}=wheelCenter(index),root=new T.Vector3(x,.02,z).applyQuaternion(rotation).add(position);
     const up=new T.Vector3(0,1,0).applyQuaternion(rotation),down=up.clone().negate();
     const range=dynamics.suspensionRestLength+dynamics.suspensionTravel;
     const road=this.world.castRay(new RAPIER.Ray(root,down),range+config.wheelRadius,true,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body);
@@ -305,7 +327,7 @@ export class Vehicle {
     const p=this.body.translation(),q=this.body.rotation(),v=this.body.linvel();
     const dir=new T.Vector3(0,0,1).applyQuaternion(new T.Quaternion(q.x,q.y,q.z,q.w));const yaw=Math.atan2(dir.x,dir.z);
     const d=this.drivetrain;
-    return {time:this.time,position:{x:p.x,z:p.z},yaw,speed:Math.hypot(v.x,v.z),signedSpeed:v.x*dir.x+v.y*dir.y+v.z*dir.z,rpm:d.rpm,gear:d.gear,throttle:d.throttle,brake:d.brake,clutch:d.clutch,steering:this.steering.normalized,engine:d.engine,stalled:d.stalled,belt:this.belt,handbrake:d.handbrake,indicator:this.indicator,hazards:this.hazards,ignition:this.ignitionOn||d.engine,positionLights:this.positionLights||this.headlights,headlights:this.headlights,fogLights:this.fogLights&&this.canUseFogLights,bumper:localPoint(p,yaw,0,config.length/2),wheels:[localPoint(p,yaw,-config.track/2,config.wheelbase/2),localPoint(p,yaw,config.track/2,config.wheelbase/2),localPoint(p,yaw,-config.track/2,-config.wheelbase/2),localPoint(p,yaw,config.track/2,-config.wheelbase/2)],collision:this.collision};
+    return {time:this.time,position:{x:p.x,z:p.z},yaw,speed:Math.hypot(v.x,v.z),signedSpeed:v.x*dir.x+v.y*dir.y+v.z*dir.z,rpm:d.rpm,gear:d.gear,throttle:d.throttle,brake:d.brake,clutch:d.clutch,steering:this.steering.normalized,engine:d.engine,stalled:d.stalled,belt:this.belt,handbrake:d.handbrake,indicator:this.indicator,hazards:this.hazards,ignition:this.ignitionOn||d.engine,positionLights:this.positionLights||this.headlights,headlights:this.headlights,fogLights:this.fogLights&&this.canUseFogLights,bumper:localPoint(p,yaw,0,config.length/2),wheels:[0,1,2,3].map(i=>{const {x,z}=wheelCenter(i);return localPoint(p,yaw,x,z);}),collision:this.collision};
   }
   dispose(){this.queue.free();this.world.removeVehicleController(this.controller);this.world.removeRigidBody(this.body);}
 }

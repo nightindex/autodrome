@@ -3,7 +3,7 @@ import type { Vehicle } from '../simulation/vehicle';
 import { vehicleConfig,vehicleDynamics } from '../data/vehicle';
 
 export interface CarWheel {
-  pivot:T.Group;spin:T.Group;front:boolean;base:T.Vector3;index:number;radius:number;
+  pivot:T.Group;spin:T.Group;front:boolean;base:T.Vector3;index:number;radius:number;rotationOffset:number;
 }
 
 /** Keep the imported spindle, the spin axis and the steering pivot concentric. */
@@ -34,21 +34,26 @@ export function rigCarWheel(car:T.Object3D,node:T.Object3D):CarWheel {
   for(const calliper of callipers)pivot.attach(calliper);
   const size=bounds.getSize(new T.Vector3()),scale=new T.Vector3().setFromMatrixScale(toCar);
   const radius=(size.y*scale.y+size.z*scale.z)/4,front=center.z>0;
-  return {pivot,spin,front,base:center.clone(),index:(front?0:2)+(center.x<0?0:1),radius};
+  return {pivot,spin,front,base:center.clone(),index:(front?0:2)+(center.x<0?0:1),radius,rotationOffset:0};
 }
 
 /** Match the authored wheel arches to the suspension's loaded ride height. */
 export function carBodyLift(wheels:CarWheel[]){
   if(!wheels.length)return 0;
   const authoredHub=wheels.reduce((sum,w)=>sum+w.base.y,0)/wheels.length;
-  const loadedLength=vehicleDynamics.suspensionRestLength-9.81/(4*vehicleDynamics.suspensionStiffness);
+  const loadedLength=vehicleDynamics.loadedSuspensionLength;
   return .02-loadedLength-authoredHub;
 }
 
 export function updateCarWheel(w:CarWheel,controller:Vehicle['controller'],initial:boolean,menu:boolean,bodyLift=0){
-  w.pivot.rotation.y=!menu&&w.front?controller.wheelSteering(w.index)??0:0;
-  // Rapier's positive wheel angle rolls towards local +Z. The imported tyres
-  // are slightly larger, so preserve their travelled distance rather than rpm.
-  w.spin.rotation.x=menu?0:(controller.wheelRotation(w.index)??0)*vehicleConfig.wheelRadius/w.radius;
-  w.pivot.position.y=initial||menu?w.base.y:.02-(controller.wheelSuspensionLength(w.index)??.28)+w.radius-vehicleConfig.wheelRadius-bodyLift;
+  w.pivot.rotation.y=!menu&&!initial&&w.front?controller.wheelSteering(w.index)??0:0;
+  // Rapier's positive wheel angle rolls towards local +Z. Convert by radius
+  // and retain a reset phase independently of its cached accumulated angle.
+  const rotation=controller.wheelRotation(w.index)??0;
+  if(initial)w.rotationOffset=rotation;
+  w.spin.rotation.x=menu?0:(rotation-w.rotationOffset)*vehicleConfig.wheelRadius/w.radius;
+  // A reset restores the physical tyres to rest length before Rapier updates
+  // its cached suspension values. Only the menu uses the authored loaded pose.
+  const length=initial?vehicleDynamics.suspensionRestLength:controller.wheelSuspensionLength(w.index)??vehicleDynamics.suspensionRestLength;
+  w.pivot.position.y=menu?w.base.y:.02-length+w.radius-vehicleConfig.wheelRadius-bodyLift;
 }

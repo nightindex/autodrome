@@ -1,5 +1,15 @@
 # Validation
 
+## Cobalt dimensions and recovery review - 9 November 2026
+
+All **431 tests in 44 files** and the production build pass. Runtime geometry now matches the supplied diagram: 4479 x 1735 x 1514 mm body dimensions, 2620 mm wheelbase, 1504/1509 mm axle tracks and 160 mm loaded central clearance. Width excludes mirrors and roof height excludes the antenna. The selected 195/65 R15 tyres have a 634.5 mm outer diameter and 195 mm rubber width; the donor rims are reduced to matching proportions. The tapered physical chassis reaches both the floor and roof without changing its explicit mass or inertia. Those dynamics and the simplified underbody remain simulation estimates.
+
+The second review fixed two follow-up problems. Recovery now checks the full roof and tyre envelope before righting the vehicle; regressions cover a local overhead beam and an area-wide ceiling that must reject placement. Immediately after reset, visual wheels were 68.21 mm above their physical hubs because they used loaded suspension height rather than the restored rest length. They now match the physical tyres before the first step and retain a rotation offset so stale controller state cannot cause a phase jump on the next frame.
+
+`npm run test:vehicle-dimensions` measures actual rendered vertices and physical tyre centres before and after settling, checks steering/spin/calliper alignment and the production cockpit eye, and saves exterior/cockpit captures in `test-results/vehicle-dimensions/`. All **26 browser checks** pass without page errors. The existing production bundle-size warning remains.
+
+`npm run test:wheels` also passes the actual-controller forward/reverse travel and concentric rotation checks. `npm run test:recovery` confirms practice recovery, retained progress, subsequent driving and blocked exam recovery, without browser errors.
+
 ## White fragments inside yellow edge paint - 5 November 2026
 
 The light wedge on the B bend was a real white-paint fragment. The colour-selection envelope followed a square polyline corner and missed part of the actual rounded pavement boundary, leaving approximately 0.0152 square metres of white inside the yellow edge. A similar thin white fragment existed on the snake bend. The B colour envelope is now 5.3 m wide instead of 5.1 m; the snake envelope is 5.5 m instead of 5.4 m. These masks select the colour of the existing 10 cm edge strip; pavement, curb geometry and physics are unchanged.

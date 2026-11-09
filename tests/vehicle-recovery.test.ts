@@ -54,4 +54,20 @@ describe('overturned vehicle recovery',()=>{
    const before=car.body.translation(),rotation=car.body.rotation();expect(car.recover()).toBe(false);expect(car.body.translation()).toEqual(before);expect(car.body.rotation()).toEqual(rotation);
   }finally{dispose();}
  });
+ it('keeps the full cabin clear of overhead obstacles when righting the car',()=>{
+  const {world,car,dispose}=fixture();try{
+   // This beam is above the old recovery probe but intersects the corrected
+   // full-height cabin at the initial upright spawn, before it settles.
+   const beam=world.createCollider(RAPIER.ColliderDesc.cuboid(.2,.1,.2).setTranslation(0,1.5,0));
+   car.obstacles.add(beam.handle);world.step();overturn(car);
+   expect(car.recover()).toBe(true);
+   expect(Math.hypot(car.body.translation().x,car.body.translation().z)).toBeGreaterThan(1);
+   world.propagateModifiedBodyPositionsToColliders();
+   expect(beam.intersectsShape(car.collider.shape,car.collider.translation(),car.collider.rotation())).toBe(false);
+   const ceiling=world.createCollider(RAPIER.ColliderDesc.cuboid(20,.1,20).setTranslation(0,1.5,0));
+   car.obstacles.add(ceiling.handle);world.step();overturn(car);
+   const before=car.body.translation(),rotation=car.body.rotation();
+   expect(car.recover()).toBe(false);expect(car.body.translation()).toEqual(before);expect(car.body.rotation()).toEqual(rotation);
+  }finally{dispose();}
+ });
 });

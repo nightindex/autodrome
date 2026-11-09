@@ -2,6 +2,7 @@ import {beforeAll,describe,expect,it} from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as T from 'three';
 import {Vehicle} from '../src/simulation/vehicle';
+import {vehicleConfig as config} from '../src/data/vehicle';
 import {curbGeometry} from '../src/render/road-geometry';
 import {addStaticObstacle} from '../src/simulation/static-collision';
 import type {Input} from '../src/simulation/input';
@@ -12,7 +13,7 @@ function touchingCurb({height=.1,yaw=0,friction=.65,wall=false}={}){
   const world=new RAPIER.World({x:0,y:-9.81,z:0});
   world.createCollider(RAPIER.ColliderDesc.cuboid(100,.2,100).setTranslation(0,-.2,0));
   const car=new Vehicle(world,new Set()),held=new Set<string>(),input={down:(action:string)=>held.has(action)}as Input;
-  car.reset({x:0,z:3-1.31*Math.cos(yaw)-.745*Math.sin(yaw)-.32},yaw);
+  car.reset({x:0,z:3-config.wheelbase/2*Math.cos(yaw)-config.frontTrack/2*Math.sin(yaw)-config.wheelRadius-.003},yaw);
   let curb:RAPIER.Collider;
   if(wall)curb=world.createCollider(RAPIER.ColliderDesc.cuboid(20,.5,.12).setTranslation(0,.5,3.12));
   else{
@@ -38,7 +39,7 @@ function touchingCurb({height=.1,yaw=0,friction=.65,wall=false}={}){
       expect([p.x,p.y,p.z,q.x,q.y,q.z,q.w].every(Number.isFinite)).toBe(true);
       expect(1-2*(q.x*q.x+q.z*q.z)).toBeGreaterThan(.85);
       const tyres=Array.from({length:car.body.numColliders()},(_,j)=>car.body.collider(j)).filter(c=>c.handle!==car.collider.handle);
-      if(tyres.every(t=>t.translation().z-.317>3.24&&Math.abs(t.translation().x)<19)){
+      if(tyres.every(t=>t.translation().z-config.wheelRadius>3.24&&Math.abs(t.translation().x)<19)){
         cleared=true;clearSpeed=car.telemetry().speed;break;
       }
     }

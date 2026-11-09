@@ -1,6 +1,7 @@
 import { beforeAll,describe,expect,it } from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Vehicle } from '../src/simulation/vehicle';
+import { vehicleConfig } from '../src/data/vehicle';
 import { ExamEngine } from '../src/simulation/exam';
 import type { Input } from '../src/simulation/input';
 import { curbGeometry } from '../src/render/road-geometry';
@@ -67,7 +68,7 @@ describe('obstacle collision state across vehicle resets',()=>{
   });
 
   it('ignores a nearby speculative wall manifold without touching the wall',()=>{
-    const run=wallTrack(2.255);
+    const run=wallTrack(vehicleConfig.length/2+.015+.2);
     try{
       run.car.body.lockRotations(true,true);run.step();
       let candidates=0,contacts=0;

@@ -22,7 +22,8 @@ export interface CourseDefinition {
 }
 export interface VehicleConfig {
   length: number; width: number; height: number; wheelbase: number; mass: number;
-  track: number; wheelRadius: number; idleRpm: number; redlineRpm: number;
+  frontTrack: number; rearTrack: number; wheelRadius: number; tyreWidth: number; rimDiameter: number; groundClearance: number;
+  idleRpm: number; redlineRpm: number;
   gearRatios: number[]; reverseRatio: number; finalDrive: number; maxTorque: number;
   verification: Verification;
 }

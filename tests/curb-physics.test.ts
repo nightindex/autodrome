@@ -36,7 +36,7 @@ function impact({kmh,height=.2,reverse=false,yaw=0,oneWheel=false,wall=false}:Im
     const signedSpeed=kmh/3.6*(reverse?-1:1);
     car.body.setLinvel({x:Math.sin(heading)*signedSpeed,y:0,z:Math.cos(heading)*signedSpeed},true);
     const initialEnergy=.5*car.body.mass()*signedSpeed*signedSpeed;
-    let collided=false,crossedBothAxles=false,finite=true,firstImpactKmh:number|null=null;
+    let collided=false,chassisContact=false,crossedBothAxles=false,finite=true,firstImpactKmh:number|null=null;
     let peakHeight=initialHeight,furthest=0,peakMechanicalEnergy=initialEnergy;
     let minSuspension=initialSuspension,maxSuspension=initialSuspension;
     for(let step=0;step<600;step++){
@@ -49,6 +49,9 @@ function impact({kmh,height=.2,reverse=false,yaw=0,oneWheel=false,wall=false}:Im
         minSuspension=Math.min(minSuspension,length);maxSuspension=Math.max(maxSuspension,length);
       }
       if(car.collision){collided=true;firstImpactKmh??=Math.hypot(v.x,v.z)*3.6;}
+      for(const handle of car.obstacles)world.contactPair(car.collider,world.getCollider(handle),manifold=>{
+        for(let i=0;i<manifold.numContacts();i++)if(manifold.contactDist(i)<=0||manifold.contactImpulse(i)>0)chassisContact=true;
+      });
       const rotation=new T.Quaternion(q.x,q.y,q.z,q.w);
       const wheels=Array.from({length:car.body.numColliders()},(_,i)=>car.body.collider(i))
         .filter(collider=>collider.handle!==car.collider.handle).map(collider=>collider.translation());
@@ -61,7 +64,8 @@ function impact({kmh,height=.2,reverse=false,yaw=0,oneWheel=false,wall=false}:Im
       const energy=.5*car.body.mass()*(v.x*v.x+v.y*v.y+v.z*v.z)+angularEnergy+car.body.mass()*9.81*(car.body.worldCom().y-initialComHeight);
       peakMechanicalEnergy=Math.max(peakMechanicalEnergy,energy);
     }
-    return {collided,crossedBothAxles,finite,firstImpactKmh,initialHeight,peakHeight,furthest,initialEnergy,peakMechanicalEnergy,initialSuspension,minSuspension,maxSuspension,finalSpeed:car.telemetry().speed};
+    const finalTyres=Array.from({length:4},(_,i)=>car.body.collider(i+1).translation());
+    return {collided,chassisContact,crossedBothAxles,finite,firstImpactKmh,initialHeight,peakHeight,furthest,initialEnergy,peakMechanicalEnergy,initialSuspension,minSuspension,maxSuspension,finalTyres,finalSpeed:car.telemetry().speed};
   }finally{car.dispose();world.free();}
 }
 
@@ -88,11 +92,17 @@ describe('physical curb crossing',()=>{
     expect(result.finalSpeed).toBeLessThan(.5);
   });
 
-  it('can carry both axles over the curb at 25 km/h without adding mechanical energy',()=>{
+  it('can ground its 160 mm belly on a 200 mm curb after a passive 25 km/h impact',()=>{
     const result=impact({kmh:25});
     expect(result.collided).toBe(true);expect(result.finite).toBe(true);
     expect(result.peakHeight).toBeGreaterThan(result.initialHeight+.1);
-    expect(result.crossedBothAxles).toBe(true);
+    expect(result.peakHeight).toBeLessThan(result.initialHeight+1);
+    // The corrected floor is lower than the curb. Momentum can carry the
+    // front axle across while the real chassis contact arrests the rear axle.
+    expect(result.finalTyres.slice(0,2).every(w=>w.z>farFace+config.wheelRadius)).toBe(true);
+    expect(result.finalTyres.slice(2).some(w=>w.z<farFace)).toBe(true);
+    expect(result.chassisContact).toBe(true);expect(result.crossedBothAxles).toBe(false);
+    expect(result.finalSpeed).toBeLessThan(.5);
     expect(result.peakMechanicalEnergy).toBeLessThan(result.initialEnergy*1.02+600);
   });
 

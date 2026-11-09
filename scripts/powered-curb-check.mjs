@@ -20,6 +20,7 @@ try{
     const T=await import('/node_modules/three/build/three.module.js');
     const {curbGeometry}=await import('/src/render/road-geometry.ts');
     const {addStaticObstacle}=await import('/src/simulation/static-collision.ts');
+    const {vehicleConfig}=await import('/src/data/vehicle.ts');
     const v=a.vehicle,s=a.scene,edge=v.wheelEdge.bind(v),support=v.wheelSupport.bind(v),surfaceAt=v.surfaceAt;
     // Approach the inner grass island: the outer verge has a fence directly
     // behind a reversing car, which would test that fence instead of recovery.
@@ -38,12 +39,12 @@ try{
     const sample=()=>{
       const p=v.body.translation(),q=v.body.rotation(),t=v.telemetry();
       const wheels=v.tyres.map((tyre,i)=>({position:tyre.translation(),ground:v.controller.wheelIsInContact(i),load:v.controller.wheelSuspensionForce(i)}));
-      const clear=state.course?wheels.every(w=>w.position.z+.317<courseNear):wheels.every(w=>w.position.z-.317>-119.76);
+      const clear=state.course?wheels.every(w=>w.position.z+vehicleConfig.wheelRadius<courseNear):wheels.every(w=>w.position.z-vehicleConfig.wheelRadius>-119.76);
       return {position:p,speed:t.speed,gear:t.gear,rpm:t.rpm,clutch:t.clutch,collision:t.collision,up:1-2*(q.x*q.x+q.z*q.z),wheels,clear};
     };
     const setup=({course=false,baseline=false}={})=>{
       const yaw=course?Math.PI+Math.PI/6:0;
-      const z=course?courseFar+1.31*Math.cos(Math.PI/6)+.745*Math.sin(Math.PI/6)+.32:-120-1.31-.32;
+      const z=course?courseFar+vehicleConfig.wheelbase/2*Math.cos(Math.PI/6)+vehicleConfig.frontTrack/2*Math.sin(Math.PI/6)+vehicleConfig.wheelRadius+.003:-120-vehicleConfig.wheelbase/2-vehicleConfig.wheelRadius-.003;
       v.wheelEdge=baseline?()=>undefined:edge;v.wheelSupport=baseline?()=>undefined:support;v.surfaceAt=course?surfaceAt:()=> 'asphalt';
       v.reset({x:course?-25:0,z},yaw);
       state={course,baseline,courseNear,courseFar,frames:0,peak:0,minimumUp:1,samples:[],cleared:false};

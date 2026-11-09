@@ -20,5 +20,5 @@ export const parkingControlLines:{id:string;points:[PlanPoint,PlanPoint]}[]=[
 // Coordinates use the existing estimated plan scale, not surveyed dimensions.
 export const parkingTargetPlan:{garage:PlanPoint;parallel:PlanPoint}={
   garage:[parkingControlLines[0].points[0][0]+vehicleConfig.wheelbase/2/.1,275],
-  parallel:[390,parkingControlLines[6].points[0][1]-vehicleConfig.track/2/.1],
+  parallel:[390,parkingControlLines[6].points[0][1]-(vehicleConfig.frontTrack+vehicleConfig.rearTrack)/4/.1],
 };
