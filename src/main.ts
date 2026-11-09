@@ -97,6 +97,11 @@ function frame(now:number){
   if(scene&&vehicle){
     scene.cabinInteractionEnabled=state==='driving';
     scene.cabinControlLabel=settings.language==='ru'?'Регулировка зеркал':'Ko‘zgularni sozlash';
+    scene.setExamDisplay({language:settings.language,mode,
+      status:state==='menu'?'idle':state==='paused'?'paused':engine.status,
+      elapsed:state==='menu'?0:engine.time,score:state==='menu'?0:engine.score,
+      exerciseName:state==='menu'?'':tracker.current.name[settings.language],
+      events:state==='menu'?[]:engine.events.slice(-6).map(event=>({points:event.points,text:ruleById(event.ruleId).text[settings.language]}))});
     scene.render(vehicle,dt,now/1000,state==='menu',mirrorPreviewLook??(+input.down('lookRight')-+input.down('lookLeft')));
     const t=vehicle.telemetry();audio.update(t.rpm,t.throttle,t.engine,state!=='driving');
     ui.recovery(state==='driving'&&mode==='practice'&&vehicle.canRecover);

@@ -61,7 +61,7 @@ export class CobaltVisuals{
           this.lcd??=new T.CanvasTexture(this.canvas);this.lcd.colorSpace=T.SRGBColorSpace;this.lcd.flipY=false;
           material.map=this.lcd;material.emissiveMap=this.lcd;material.emissive.set(0xffffff);material.needsUpdate=true;
         }
-        if(['COBALT_TachometerFace','COBALT_FactoryRadio','COBALT_ClimateLabels'].includes(material.name)){
+        if(['COBALT_TachometerFace','COBALT_ClimateLabels'].includes(material.name)){
           material.emissiveMap=material.map;material.emissive.set(0xffffff);material.emissiveIntensity=0;material.needsUpdate=true;
         }
       }
@@ -108,8 +108,8 @@ export class CobaltVisuals{
     this.lamp('COBALT_INDICATOR_RIGHT',0xff3b00,right?7:0);
     for(const {sprite,signal}of this.rearGlows)sprite.visible=signal==='brake'||signal==='high-stop'?braking:signal==='reverse'?t.engine&&t.gear<0:signal==='left'?left:right;
     this.materials.get('COBALT_DIGITAL_SPEED')?.forEach(m=>m.emissiveIntensity=t.engine?.6:.035);
-    this.materials.get('COBALT_ControlBacklight')?.forEach(m=>{m.emissive.set(0x66bfff);m.emissiveIntensity=t.engine?.55:0;});
-    for(const [name,intensity]of [['COBALT_TachometerFace',.3],['COBALT_FactoryRadio',.25],['COBALT_ClimateLabels',.12]]as const){
+    this.materials.get('COBALT_ControlBacklight')?.forEach(m=>{m.emissive.set(0xdce7e5);m.emissiveIntensity=t.engine?.35:0;});
+    for(const [name,intensity]of [['COBALT_TachometerFace',.3],['COBALT_ClimateLabels',.12]]as const){
       this.materials.get(name)?.forEach(m=>m.emissiveIntensity=t.engine?intensity:0);
     }
     if(this.needle)this.needle.rotation.z=-2.269+Math.min(8000,t.rpm)/8000*4.538;

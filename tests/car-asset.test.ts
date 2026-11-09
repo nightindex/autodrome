@@ -216,7 +216,8 @@ describe('refined Cobalt asset',()=>{
       }
     }
     const materials=new Set(doc.getRoot().listMaterials().map(m=>m.getName()));
-    for(const name of ['COBALT_FactoryRadio','COBALT_ClimateLabels','COBALT_ManualShiftPattern','COBALT_SeatFabric','COBALT_SeatBolster','COBALT_RearViewMirror'])expect(materials.has(name),name).toBe(true);
+    for(const name of ['COBALT_ExamDisplay','COBALT_ClimateLabels','COBALT_ManualShiftPattern','COBALT_SeatFabric','COBALT_SeatBolster','COBALT_RearViewMirror'])expect(materials.has(name),name).toBe(true);
+    expect(materials.has('COBALT_FactoryRadio')).toBe(false);
     expect(doc.getRoot().listMaterials().find(m=>m.getName()==='COBALT_SeatFabric')?.getBaseColorTexture()).toBeTruthy();
   });
   it('provides a rear indicator surface on each correct side of the car',()=>{
@@ -263,8 +264,8 @@ describe('refined Cobalt asset',()=>{
     }
     expect(checked).toBeGreaterThanOrEqual(5);expect(names).toEqual(new Set(['COBALT_BRAKE','COBALT_TAIL','COBALT_REVERSE','COBALT_INDICATOR_LEFT','COBALT_INDICATOR_RIGHT']));
   });
-  it('keeps the digital instrument texture upright in glTF coordinates',()=>{
-    const node=doc.getRoot().listNodes().find(n=>n.getName()==='COBALT_DIGITAL_SPEED')!,p=node.getMesh()!.listPrimitives()[0];
+  it.each(['COBALT_DIGITAL_SPEED','COBALT_ExamDisplay'])('keeps %s upright in glTF coordinates',name=>{
+    const node=doc.getRoot().listNodes().find(n=>n.getName()===name)!,p=node.getMesh()!.listPrimitives()[0];
     const position=p.getAttribute('POSITION')!,uv=p.getAttribute('TEXCOORD_0')!,refinement=doc.getRoot().getExtras().cobaltRefinement as {sourceOffset:number;sourceScale:number};
     const normalized=new T.Matrix4().compose(new T.Vector3(0,refinement.sourceOffset,0),new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),Math.PI),new T.Vector3().setScalar(refinement.sourceScale)).multiply(new T.Matrix4().fromArray(node.getWorldMatrix()));
     const vertices=Array.from({length:position.getCount()},(_,i)=>({y:new T.Vector3().fromArray(position.getArray(),i*3).applyMatrix4(normalized).y,v:uv.getArray()[i*2+1]}));

@@ -1,5 +1,13 @@
 # Validation
 
+## 2026 manual examination-car cabin - 9 November 2026
+
+All **436 tests in 45 files** and the production build pass. Asset tests require the new examination display, removal of the old CD material, upright UVs on both digital screens, intact manual controls and a derivative below 220,000 unique triangles. The regenerated model has **217,207 triangles** and a matching content hash. Cabin-fit, painted-panel normals, wheel alignment and physics regressions remain passing.
+
+`npm run test:cabin-2026` passes **10 browser checks without page errors**. It checks the 2026 manual label, actual screen visibility and upright unlit canvas, engine-off operation, paused time/texture caching, the actual engine's rule text and penalty total, running state, successful/failed results and Uzbek localization. The seeded event/result fixtures belong only to this browser test. Centre-stack, portrait photo-angle, complete manual-cabin, driver, result and Uzbek captures are saved in `test-results/cabin-2026/` alongside the baseline. The screen uses actual game state in normal play, without a copied candidate identity or predetermined result.
+
+`npm run test:cabin-reference` also passes **19 checks without browser errors**, including the monitor through ignition off/on/off, independent indicator-lever movement, cancellation, steering and hazards. Its rotation comparison now removes the complete car transform before extracting a normalized quaternion, so the calibrated non-uniform body scale cannot create a false lever-motion failure.
+
 ## Cobalt dimensions and recovery review - 9 November 2026
 
 All **431 tests in 44 files** and the production build pass. Runtime geometry now matches the supplied diagram: 4479 x 1735 x 1514 mm body dimensions, 2620 mm wheelbase, 1504/1509 mm axle tracks and 160 mm loaded central clearance. Width excludes mirrors and roof height excludes the antenna. The selected 195/65 R15 tyres have a 634.5 mm outer diameter and 195 mm rubber width; the donor rims are reduced to matching proportions. The tapered physical chassis reaches both the floor and roof without changing its explicit mass or inertia. Those dynamics and the simplified underbody remain simulation estimates.

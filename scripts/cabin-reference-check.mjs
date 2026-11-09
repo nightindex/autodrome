@@ -50,7 +50,16 @@ try {
     };
     window.cabinReferenceState = () => {
       const app = window.__avtodrom, car = app.scene.car, left = car.getObjectByName('COBALT_INDICATOR_STALK'), right = car.getObjectByName('COBALT_WIPER_STALK');
-      const relativeQuaternion = object => object && car.getWorldQuaternion(new T.Quaternion()).invert().multiply(object.getWorldQuaternion(new T.Quaternion())).toArray();
+      // Calibrated body dimensions use non-uniform scale. Remove the car's
+      // full matrix before extracting rotation; separately decomposed world
+      // quaternions can be non-unit under those scaled, rotated parents.
+      const relativeQuaternion = object => {
+        if (!object) return;
+        const rotation = new T.Quaternion();
+        car.updateWorldMatrix(true, true);
+        car.matrixWorld.clone().invert().multiply(object.matrixWorld).decompose(new T.Vector3(), rotation, new T.Vector3());
+        return rotation.normalize().toArray();
+      };
       const ancestors = []; for (let node = left?.parent; node; node = node.parent) ancestors.push(node.name);
       return { indicator: app.vehicle.indicator, hazards: app.vehicle.hazards, steering: app.vehicle.telemetry().steering, left: left?.rotation.z, leftAncestors: ancestors,
         leftInCar: relativeQuaternion(left), right: right?.quaternion.toArray(), rightInCar: relativeQuaternion(right), wheelInCar: relativeQuaternion(car.getObjectByName('COBALT_STEERING_ASSEMBLY')) };
@@ -59,10 +68,26 @@ try {
       const values = new Map();
       scene.car.traverse(object => {
         for (const material of object.material ? (Array.isArray(object.material) ? object.material : [object.material]) : []) {
-          if (['COBALT_ControlBacklight', 'COBALT_TachometerFace', 'COBALT_FactoryRadio', 'COBALT_ClimateLabels'].includes(material.name)) values.set(material.name, material.emissiveIntensity);
+          if (['COBALT_ControlBacklight', 'COBALT_TachometerFace', 'COBALT_ClimateLabels'].includes(material.name)) values.set(material.name, material.emissiveIntensity);
         }
       });
       return Object.fromEntries(values);
+    };
+    window.cabinReferenceMonitor = () => {
+      const screens = [];
+      scene.car.traverse(object => {
+        for (const material of object.material ? (Array.isArray(object.material) ? object.material : [object.material]) : []) {
+          if (material.name !== 'COBALT_ExamDisplay') continue;
+          const image = material.map?.image, colors = new Set();
+          if (image instanceof HTMLCanvasElement) {
+            const pixels = image.getContext('2d')?.getImageData(0, 0, image.width, image.height).data;
+            if (pixels) for (let i = 0; i < pixels.length; i += 64) colors.add(`${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`);
+          }
+          screens.push({ mesh: object.name, unlit: material.isMeshBasicMaterial === true, canvasTexture: material.map?.isCanvasTexture === true,
+            width: image?.width, height: image?.height, painted: colors.size > 4, texture: material.map?.uuid, toneMapped: material.toneMapped });
+        }
+      });
+      return screens;
     };
   });
   const capture = async (name, pose, portrait = false) => {
@@ -98,16 +123,23 @@ try {
     check('Standard reference capture uses ignition off', !(await page.evaluate(() => window.__avtodrom.snapshot().telemetry.engine)));
     const lightsOff = await page.evaluate(() => window.cabinReferenceLighting());
     check('Cabin control backlights are off before ignition', 'COBALT_ControlBacklight' in lightsOff && Object.values(lightsOff).every(value => value === 0), lightsOff);
+    const monitorOff = await page.evaluate(() => window.cabinReferenceMonitor());
+    const monitorPowered = screens => screens.length > 0 && screens.every(screen => screen.unlit && screen.canvasTexture && screen.width === 1280 && screen.height === 720 && screen.painted && screen.toneMapped === false);
+    check('Exam monitor has a live unlit canvas while the engine is off', monitorPowered(monitorOff), monitorOff);
     await page.keyboard.press('KeyI'); await page.waitForTimeout(650);
     check('I starts the engine for the blue instrument reference', (await page.evaluate(() => window.__avtodrom.snapshot().telemetry.engine)));
     const lightsOn = await page.evaluate(() => window.cabinReferenceLighting());
-    check('Ignition illuminates the cluster, radio and climate controls', ['COBALT_ControlBacklight', 'COBALT_TachometerFace', 'COBALT_FactoryRadio', 'COBALT_ClimateLabels'].every(name => lightsOn[name] > 0), lightsOn);
+    check('Ignition illuminates the cluster and climate controls', ['COBALT_ControlBacklight', 'COBALT_TachometerFace', 'COBALT_ClimateLabels'].every(name => lightsOn[name] > 0), lightsOn);
+    const monitorOn = await page.evaluate(() => window.cabinReferenceMonitor());
+    check('Exam monitor stays powered with the engine on', monitorPowered(monitorOn) && monitorOn.every((screen, index) => screen.texture === monitorOff[index]?.texture), monitorOn);
     await capture('reference-angle-engine-on', { eye: [.61, .33, .15], target: [.25, .10, .70], fov: 65 }, true);
     await capture('manual-reference-engine-on', { eye: [.50, .38, .12], target: [.13, .10, .88], fov: 70 }, { width: 1170, height: 600 });
     await page.keyboard.press('KeyI'); await page.waitForTimeout(650);
     check('I switches the ignition off again', !(await page.evaluate(() => window.__avtodrom.snapshot().telemetry.engine)));
     const lightsReturned = await page.evaluate(() => window.cabinReferenceLighting());
     check('Cabin control backlights turn off with ignition', Object.values(lightsReturned).every(value => value === 0), lightsReturned);
+    const monitorReturned = await page.evaluate(() => window.cabinReferenceMonitor());
+    check('Switching ignition off preserves the exam monitor display', monitorPowered(monitorReturned) && monitorReturned.every((screen, index) => screen.texture === monitorOff[index]?.texture), monitorReturned);
     const initial = await page.evaluate(() => window.cabinReferenceState());
     check('Both independent column switches load', initial.left !== undefined && initial.right !== undefined, initial);
     check('Indicator switch is outside the rotating wheel assembly', !initial.leftAncestors.includes('COBALT_STEERING_ASSEMBLY'), initial);

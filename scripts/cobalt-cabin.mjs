@@ -5,14 +5,14 @@ import { buildCobaltUpholstery } from './cobalt-upholstery.mjs';
 import { conformSurface } from './cobalt-surfaces.mjs';
 import { buildColumnControls } from './cobalt-column-controls.mjs';
 
-/** Modelled from the period Cobalt dashboard photo and GM's 2014 control diagrams.
+/** Manual Cobalt cabin with the examination-centre monitor from the supplied 2026 photo.
  * Coordinates are metres in the normalized car frame, +Z forward, +X driver's side.
  */
 export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:add,emit}){
   let centreStack=false;
   const put=(geometry,mat,position=[0,0,0],rotation=[0,0,0],name)=>{
     if(!centreStack){add(geometry,mat,position,rotation,name);return;}
-    // Factory radio/console proportions, measured relative to the 398 mm rim
+    // Console proportions, measured relative to the 398 mm rim
     // and the full dashboard in the reference photograph.
     geometry.applyMatrix4(new T.Matrix4().compose(new T.Vector3(...position),new T.Quaternion().setFromEuler(new T.Euler(...rotation)),new T.Vector3(1,1,1)));
     geometry.scale(.78,.80,1);add(geometry,mat,[0,0,0],[0,0,0],name);
@@ -104,7 +104,7 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   put(traySurface(.95),lower,[0,0,0],[0,0,0],'COBALT_DashboardTray');
   box(1.34,.14,.20,lower,[0,-.155,1.025],[0,0,0],.034);
 
-  // Factory centre stack: paired vents, hazard row, framed radio, triangular HVAC layout.
+  // Exam car: paired vents, lock/hazard row, fitted monitor and manual HVAC.
   centreStack=true;
   const stack=new T.Shape();stack.moveTo(-.181,.258);stack.quadraticCurveTo(0,.279,.181,.258);stack.lineTo(.178,-.06);
   stack.bezierCurveTo(.175,-.20,.143,-.258,.075,-.267);stack.quadraticCurveTo(0,-.277,-.075,-.267);stack.bezierCurveTo(-.143,-.258,-.175,-.20,-.178,-.06);stack.closePath();
@@ -119,8 +119,9 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
     const hole=new T.Path();hole.moveTo(x-.063,.162);hole.lineTo(x+.063,.162);hole.lineTo(x+.063,.232);hole.lineTo(x-.063,.232);hole.closePath();ventPod.holes.push(hole);
   }
   put(shaped(ventPod,.012,.008),mats.steering,[0,0,.763]);
-  const radioSurround=new T.Shape();radioSurround.moveTo(-.166,.122);radioSurround.quadraticCurveTo(0,.13,.166,.122);radioSurround.lineTo(.165,-.065);radioSurround.quadraticCurveTo(0,-.09,-.165,-.065);radioSurround.closePath();
-  put(shaped(radioSurround,.014,.006),satin,[0,0,.765]);
+  // A shallow black adapter fills the former audio aperture. The live LCD is
+  // flush with its lip, below the hazard row and above the rotary controls.
+  box(.338,.188,.026,mats.steering,[0,.005,.760],[0,0,0],.007);
   const vent=(x,y,z,w,h)=>{
     box(w+.012,h+.012,.025,mats.plastic,[x,y,z],[0,0,0],.009);
     box(w,h,.014,dark,[x,y,z-.014],[0,0,0],.008);
@@ -131,22 +132,21 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   };
   vent(-.079,.197,.775,.126,.070);vent(.079,.197,.775,.126,.070);
   centreStack=false;for(const x of [-.6,.6])vent(x,.157,.803,.113,.089);centreStack=true;
-  const hazard=await textureMaterial('COBALT_HazardButton',`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="128"><rect width="512" height="128" rx="12" fill="#8b8f89"/><rect x="34" y="32" width="110" height="60" rx="17" fill="#242725"/><rect x="369" y="32" width="110" height="60" rx="17" fill="#242725"/><path d="M256 25l42 72h-84z" fill="#30322e" stroke="#242725" stroke-width="8"/><path d="M256 39l27 47h-54z" fill="none" stroke="#c75b49" stroke-width="6"/><path d="M79 49h22v25H79zM83 49v-8q7-13 14 0v8" fill="none" stroke="#c2c4bc" stroke-width="4"/></svg>`);
+  const hazard=await textureMaterial('COBALT_HazardButton',`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="160"><rect width="1024" height="160" rx="12" fill="#636768"/><rect x="18" y="27" width="242" height="106" rx="20" fill="#292d2f"/><g fill="none" stroke="#c5cdcc" stroke-width="5"><path d="M72 75h34v37H72zM78 74V61q0-24 23-21m1 0v17M169 75h34v37h-34zM176 74V59q0-29 20 0v15"/></g><path d="M512 17q7 0 12 10l58 103q4 11-8 12H450q-12-1-8-12l58-103q5-10 12-10z" fill="#292c2e" stroke="#242729" stroke-width="5"/><path d="M512 45l43 75h-86zM512 63l27 47h-54z" fill="none" stroke="#ad4a45" stroke-width="4"/><rect x="734" y="27" width="272" height="106" rx="20" fill="#454a4c"/><text x="870" y="86" text-anchor="middle" font-family="Arial" font-size="23" fill="#b5bdbb">PASSENGER AIRBAG</text></svg>`);
   plane(.302,.049,hazard,[0,.127,.750]);
-  const radioButtons=[['RADIO / BAND',260,268],['CD / AUX',474,268],['CONFIG',674,268],['TONE',260,336],['FAV 1–2–3',474,336],['INFO',674,336],['BACK',260,404],['MENU / SELECT',474,404],['SEEK  ››',674,404]].map(([text,x,y])=>`<rect x="${x-65}" y="${y-25}" width="172" height="46" rx="8" fill="#2e3236" stroke="#555c63" stroke-width="2"/><text x="${x+20}" y="${y+6}" text-anchor="middle">${text}</text>`).join('');
-  const presets=Array.from({length:6},(_,i)=>`<rect x="${145+i*104}" y="177" width="96" height="43" rx="5" fill="#292e32" stroke="#5c646c" stroke-width="2"/><text x="${193+i*104}" y="205" text-anchor="middle">${i+1}</text>`).join('');
-  const radio=await textureMaterial('COBALT_FactoryRadio',`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="480"><defs><linearGradient id="p" x2="0" y2="1"><stop stop-color="#36393d"/><stop offset="1" stop-color="#25282c"/></linearGradient></defs><rect width="900" height="480" rx="25" fill="url(#p)"/><rect x="148" y="27" width="603" height="107" rx="8" fill="#123b86" stroke="#171c22" stroke-width="9"/><g fill="#a9dcff" font-family="Arial"><text x="174" y="76" font-size="34">FM 100.7</text><text x="607" y="69" font-size="23">12:35</text><text x="178" y="113" font-size="17">STEREO       FM / AM</text></g><rect x="143" y="148" width="615" height="8" rx="4" fill="#14191f"/><g fill="#c9ced3" font-family="Arial" font-size="20">${presets}${radioButtons}<text x="72" y="142" text-anchor="middle" font-size="15">VOL / ⏻</text><text x="126" y="447" text-anchor="middle" font-size="15">PUSH / MENU</text><text x="807" y="157" text-anchor="middle">⏏</text></g><circle cx="72" cy="82" r="46" fill="#20252a"/><circle cx="127" cy="362" r="57" fill="#20252a"/></svg>`);
-  plane(.294,.158,radio,[0,.017,.749]);
-  for(const [x,y,r]of [[.122,.068,.014],[.105,-.023,.018]]){
-    put(new T.CylinderGeometry(r,r,.012,32),mats.steering,[x,y,.739],[Math.PI/2,0,0]);torus(r,.0012,satin,[x,y,.732]);
-  }
-  const controlBacklight=material('COBALT_ControlBacklight',0x369ccf,.05,.65);
-  const climate=await textureMaterial('COBALT_ClimateLabels',`<svg xmlns="http://www.w3.org/2000/svg" width="768" height="290"><rect width="768" height="290" rx="70" fill="#36383b"/><g stroke="#79c8e9" fill="none" stroke-width="3"><path d="M117 68a57 57 0 0 1 93 0M337 164a57 57 0 0 1 94 0M558 68a57 57 0 0 1 93 0"/><path d="M592 23q24 20 0 40m17-40q24 20 0 40m17-40q24 20 0 40"/></g><g fill="#a9dcff" font-size="21" font-family="Arial"><text x="333" y="139">0 1 2 3 4</text><text x="292" y="68">A/C</text></g><circle cx="310" cy="88" r="9" fill="#23272c"/><rect x="430" y="40" width="60" height="42" rx="17" fill="#272b30"/><path d="M440 59h30m-8-8 9 8-9 8" fill="none" stroke="#a9dcff" stroke-width="3"/><path d="M117 68a57 57 0 0 1 45-22" stroke="#39a7df" stroke-width="9" fill="none"/><path d="M164 46a57 57 0 0 1 46 22" stroke="#b44e3d" stroke-width="9" fill="none"/></svg>`);
+  const display=await textureMaterial('COBALT_ExamDisplay',`<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="#242b30"/><g fill="#f0f3f5" font-family="Arial"><text x="30" y="64" font-size="32">ЭКЗАМЕНАЦИОННАЯ СИСТЕМА</text><text x="1114" y="64" font-size="40">00:00</text></g><rect x="24" y="102" width="1232" height="62" fill="#414d54" stroke="#a1afb6"/><text x="640" y="146" text-anchor="middle" fill="#f2fff4" font-family="Arial" font-size="37">Готов к поездке</text></svg>`);
+  // Account for the console's separate X/Y scale so the fitted screen is 16:9.
+  plane(.304,.166725,display,[0,.005,.7445],'COBALT_ExamDisplay');
+  const controlBacklight=material('COBALT_ControlBacklight',0xc6d2d3,.05,.65);
+  const fanSpeeds=Array.from({length:5},(_,i)=>{const a=(-160+i*37)*Math.PI/180;return `<text x="${384+Math.cos(a)*72}" y="${203+Math.sin(a)*72}" text-anchor="middle">${i}</text>`;}).join('');
+  const airModes=[[-70,-32],[-43,-63],[0,-77],[43,-63],[70,-32]].map(([dx,dy],i)=>`<g transform="translate(${604+dx} ${98+dy}) scale(.7)">${i<3?`<circle cx="-4" cy="-7" r="4" fill="#d4dcdb"/><path d="M-6 0l6 11h10m-16-9-3 12H2m-14-11h-8m5-5-5 5 5 5"/>${i>0?'<path d="M15 3L8 16m-5-2 5 2 1-5"/>':''}`:'<path d="M-18 5Q0-16 18 5l-3 13h-30zM-8 12V0m-3 3 3-3 3 3M0 11V-4m-3 3 3-3 3 3M8 12V0m-3 3 3-3 3 3"/>'}</g>`).join('');
+  const climate=await textureMaterial('COBALT_ClimateLabels',`<svg xmlns="http://www.w3.org/2000/svg" width="768" height="290"><rect width="768" height="290" rx="50" fill="#25292c"/><g fill="#d4dcdb" font-size="23" font-family="Arial">${fanSpeeds}<text x="292" y="65" font-size="21">A/C</text></g><g stroke="#d4dcdb" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${airModes}<path d="M131 48a62 62 0 0 1 25-8" stroke="#4f92bc" stroke-width="9"/><path d="M165 40a62 62 0 0 1 28 8" stroke="#b84e42" stroke-width="9"/><rect x="283" y="77" width="56" height="34" rx="8" stroke="#60696c"/><rect x="428" y="71" width="63" height="39" rx="8" stroke="#60696c"/><path d="M441 97h36l-6-12h-22zM447 82q11-12 26 0m-5-3 6 3-6 3"/><path d="M380 259c-22-1-27-17-12-19 12-2 15 10 16 15 1-18 17-25 22-12 4 11-9 17-17 17 18 2 24 17 11 22-12 5-19-10-17-17-3 18-19 22-23 9-3-10 9-15 17-14" stroke-width="2"/><circle cx="384" cy="260" r="5" fill="#d4dcdb"/></g></svg>`);
   plane(.302,.111,climate,[0,-.168,.756]);
+  const knobEdge=material('COBALT_ClimateKnobEdge',0x43484b,.05,.77);
   // The label surface is in front of the moulded stack, rather than buried in
   // it. Knob recesses, grip ridges and pointers remain distinct in cockpit view.
   for(const [x,y]of [[.088,-.15],[0,-.19],[-.088,-.15]]){
-    put(new T.CylinderGeometry(.024,.027,.017,32),mats.steering,[x,y,.738],[Math.PI/2,0,0]);torus(.027,.0015,controlBacklight,[x,y,.728]);
+    put(new T.CylinderGeometry(.024,.027,.017,32),mats.steering,[x,y,.738],[Math.PI/2,0,0]);torus(.027,.0008,knobEdge,[x,y,.728]);
     for(let i=0;i<16;i++){const a=i/16*Math.PI*2;box(.0013,.004,.006,dark,[x+Math.sin(a)*.0248,y+Math.cos(a)*.0248,.731],[0,0,-a],.0004);}
     box(.0026,.011,.002,controlBacklight,[x,y+.012,.725],[0,0,0],.0008);
   }

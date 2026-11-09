@@ -15,6 +15,7 @@ import { configureCarShadows } from './car-shadows';
 import { carAssetVersion } from './car-asset-version';
 import {fitCarDimensions} from './car-dimensions';
 import {fitCarTyreProfile} from './car-tyre-profile';
+import {CabinExamDisplay,type CabinExamDisplayState} from './cabin-exam-display';
 import { moveMirrorAngle,readMirrorAdjustments,sideMirrorDirection,sideMirrorView,type MirrorAdjustments } from './mirror-adjustment';
 
 export class GameScene {
@@ -28,6 +29,7 @@ export class GameScene {
   private cabinEye=new T.Vector3(.31,.48,.2);
   private steering:T.Object3D|undefined;private steeringBase=new T.Quaternion();
   private cobalt:CobaltVisuals|undefined;
+  private examDisplay:CabinExamDisplay|undefined;
   private guide=new T.Group();private goal=new T.Group();
   private mirrorCamera=new T.PerspectiveCamera(20,3.2,.025,120);private mirrorTarget=new T.WebGLRenderTarget(512,160);
   private cabinMirror:T.Mesh|undefined;private mirrorFrustum=new T.Frustum();private mirrorProjection=new T.Matrix4();
@@ -103,6 +105,7 @@ export class GameScene {
       const cabinBounce=new T.PointLight(0xfff4de,.14,1.65,2);cabinBounce.position.set(0,.59,.52);cabinBounce.name='cabin-daylight-bounce';this.car.add(cabinBounce);
       if(this.steering){const badge=model.getObjectByName('COBALT_STEERING_BADGE');if(badge)this.steering.attach(badge);this.steeringBase.copy(this.steering.quaternion);}
       this.cobalt=new CobaltVisuals(model);
+      this.examDisplay=new CabinExamDisplay(model);
       this.cabinControls=new CabinControls(this.car,this.camera,this.renderer.domElement,()=>this.onCabinMirrorSwitch());
       this.loaded=true;onProgress(1);
     }catch(error){this.carError=String(error);throw error;}
@@ -131,6 +134,7 @@ export class GameScene {
   resize(){const w=window.innerWidth,h=window.innerHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
   cycleCamera(){this.cameraMode=this.cameraMode==='chase'?'cockpit':this.cameraMode==='cockpit'?'overview':'chase';}
   setMirrorAdjustments(value:MirrorAdjustments){this.mirrorAdjustments=readMirrorAdjustments(value);}
+  setExamDisplay(value:CabinExamDisplayState){this.examDisplay?.update(value);}
   render(vehicle:Vehicle,dt:number,time:number,menu:boolean,look:number){
     const p=vehicle.body.translation(),r=vehicle.body.rotation();this.car.position.set(p.x,p.y,p.z);this.car.quaternion.set(r.x,r.y,r.z,r.w);
     if(menu)this.car.position.y=hillHeight(p.x,p.z)+(this.wheels.length?vehicleConfig.wheelRadius-this.wheels[0].base.y:.63);else this.car.translateY(this.bodyLift);

@@ -45,6 +45,7 @@
     "test:front-lights": "node scripts/front-lights-check.mjs",
     "test:wheels": "node scripts/wheels-check.mjs",
     "test:vehicle-dimensions": "node scripts/vehicle-dimensions-check.mjs",
+    "test:cabin-2026": "node scripts/cabin-2026-check.mjs",
     "test:course": "node scripts/course-detail-check.mjs",
     "test:signs": "node scripts/sign-hill-review.mjs",
     "test:vehicle-signs": "node scripts/vehicle-sign-check.mjs",
