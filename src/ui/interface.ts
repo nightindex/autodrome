@@ -10,31 +10,34 @@ import type { ExamEngine } from '../simulation/exam';
 import { defaultBindings } from '../simulation/input';
 import { exerciseFeedback } from './exercise-feedback';
 import type {PracticeHint} from '../simulation/practice-guide';
+import {LoadingScreen,type LoadingStage} from './loading-screen';
 const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 export const keyName=(s:string)=>s.replace('Key','').replace('Digit','').replace('Left','').replace('Arrow','');
 export interface UIActions {
   mirrorCamera:()=>void;
   lights:(action:'positionLights'|'headlights'|'fogLights')=>void;
   mirrorsChanged:(persist:boolean)=>void;mirrorSelect:(side:MirrorSide|null)=>void;
-  recover:()=>void;start:(mode:Mode,index?:number)=>void;pause:()=>void;resume:()=>void;menu:()=>void;reset:()=>void;retryStage:()=>void;chooseExercise:()=>void;camera:()=>void;settingsChanged:()=>void;
+  recover:()=>void;start:(mode:Mode,index?:number,guided?:boolean)=>void;pause:()=>void;resume:()=>void;menu:()=>void;reset:()=>void;retryStage:()=>void;chooseExercise:()=>void;camera:()=>void;settingsChanged:()=>void;
 }
 export class Interface {
   root:HTMLElement;menuPanel:HTMLElement;hud:HTMLElement;modal:HTMLDialogElement;toastPanel:HTMLElement;
   private status='';private lastScore=-1;private lastExercise='';private toastTimer=0;
   private lastEventCount=-1;
+  private loading:LoadingScreen;
   private mini:HTMLCanvasElement;private speed:HTMLElement;private rpm:HTMLElement;private gear:HTMLElement;private telemetry:HTMLElement;
-  private map!:Minimap;private mapOpen=false;private controlsOpen=false;
+  private map!:Minimap;private mapOpen=false;private controlsOpen=false;private controlsTrigger='#controls-button';
   ready=false;onBind:((code:string)=>void)|null=null;
   private returnToPause=false;private returnFromExercises=false;private mirrorControls:MirrorControls|undefined;
   constructor(public settings:Settings,public actions:UIActions){
     this.root=document.querySelector('#app')!;
+    this.loading=new LoadingScreen(settings.language);
     this.root.innerHTML=`<div id="viewport" aria-label="3D avtodrom"></div><div class="vignette"></div><div id="menu-shell"></div><div id="hud" hidden></div><div id="toast" role="status" aria-live="polite"></div><dialog id="modal"></dialog>`;
     this.menuPanel=document.querySelector('#menu-shell')!;this.hud=document.querySelector('#hud')!;this.modal=document.querySelector('#modal')!;this.toastPanel=document.querySelector('#toast')!;
     this.renderMenu();this.renderHud();this.mini=this.hud.querySelector('canvas')!;this.speed=this.hud.querySelector('#speed')!;this.rpm=this.hud.querySelector('#rpm')!;this.gear=this.hud.querySelector('#gear')!;this.telemetry=this.hud.querySelector('#telemetry')!;
     // Pointer controls return keys to driving; keyboard activation retains focus.
     this.hud.addEventListener('click',event=>{const button=event.target instanceof Element?event.target.closest('button'):null;if(event.detail>0&&button===document.activeElement)(button as HTMLButtonElement).blur();});
     document.addEventListener('pointerdown',event=>{
-      if(event.target instanceof Element&&!event.target.closest('#route-map,#driving-controls,.header-controls,#modal'))this.closeHudPanels();
+      if(event.target instanceof Element&&!event.target.closest('#route-map,#driving-controls,.header-controls,#start-help,#modal'))this.closeHudPanels();
     });
     window.addEventListener('keydown',event=>{
       if(event.code==='Escape'&&!this.modal.open&&this.closeHudPanels(true)){event.preventDefault();event.stopImmediatePropagation();}
@@ -50,29 +53,31 @@ export class Interface {
   renderMenu(){
     const c={...this.c,practice:practiceCopy[this.settings.language].free};
     this.menuPanel.innerHTML=`<header class="menu-header"><a class="brand" href="#" aria-label="Avtodrom"><span class="brand-mark">A<span></span></span>AVTODROM<span class="brand-edition">/ 01</span></a><div class="header-right"><span class="live-dot"></span><span>${c.local}</span><button class="language-button" id="lang">${this.settings.language==='uz'?'UZ':'RU'} <span>⌄</span></button></div></header>
-      <main class="hero"><div class="eyebrow"><span class="tiny-line"></span>${c.eyebrow}</div><h1>${c.title.replace('\n','<br>')}</h1><p class="hero-description">${c.subtitle}</p><div class="hero-actions">${this.button('practice',`${c.practice}<span>↗</span>`,true)}${this.button('exam',`${c.exam}<span>→</span>`)}</div><button class="text-button" id="exercises"><span>▦</span> ${c.exercises}</button><div class="hero-meta"><div><strong>12</strong><span>${this.settings.language==='uz'?'mashq':'упражнений'}</span></div><div><strong>32</strong><span>${this.settings.language==='uz'?'baholash qoidasi':'правила оценки'}</span></div><div><strong>B</strong><span>${this.settings.language==='uz'?'toifa':'категория'}</span></div></div></main>
+      <main class="hero"><div class="eyebrow"><span class="tiny-line"></span>${c.eyebrow}</div><h1>${c.title.replace('\n','<br>')}</h1><p class="hero-description">${c.subtitle}</p><div class="hero-actions">${this.button('practice',`${c.practice}<span>↗</span>`,true)}${this.button('guided',`${this.guidedLabel}<span>→</span>`)}${this.button('exam',`${c.exam}<span>→</span>`)}</div><button class="text-button" id="exercises"><span>▦</span> ${c.exercises}</button><div class="hero-meta"><div><strong>12</strong><span>${this.settings.language==='uz'?'mashq':'упражнений'}</span></div><div><strong>32</strong><span>${this.settings.language==='uz'?'baholash qoidasi':'правила оценки'}</span></div><div><strong>B</strong><span>${this.settings.language==='uz'?'toifa':'категория'}</span></div></div></main>
       <div class="scene-label"><span class="small-cross">+</span><span>${c.daylight}</span></div>
       <div class="car-caption"><span class="caption-line"></span><div><span class="overline">CHEVROLET</span><h2>Cobalt <em>MT</em></h2><p>1.5 L <span>·</span> ${c.manual}</p></div><span class="model-tag">2026</span></div>
       <footer class="menu-footer"><div class="load-state"><span class="live-dot"></span><span id="loading-label">${this.ready?c.ready:c.loadingPhysics}</span></div><div><button id="settings">${c.settings}</button><button id="credits">${c.credits}</button><span class="build-number">v1.0</span></div></footer>`;
     this.menuPanel.querySelector('#practice')!.addEventListener('click',()=>this.actions.start('practice'));
+    this.menuPanel.querySelector('#guided')!.addEventListener('click',()=>this.actions.start('practice',undefined,true));
     this.menuPanel.querySelector('#exam')!.addEventListener('click',()=>this.actions.start('exam'));
     this.menuPanel.querySelector('#exercises')!.addEventListener('click',()=>this.showExercises());
     this.menuPanel.querySelector('#settings')!.addEventListener('click',()=>this.showSettings());
     this.menuPanel.querySelector('#credits')!.addEventListener('click',()=>this.showCredits());
     this.menuPanel.querySelector('#lang')!.addEventListener('click',()=>{this.settings.language=this.settings.language==='uz'?'ru':'uz';document.documentElement.lang=this.settings.language;this.actions.settingsChanged();this.renderMenu();this.renderHud();});
-    this.menuPanel.querySelectorAll<HTMLButtonElement>('#practice,#exam,#exercises').forEach(b=>b.disabled=!this.ready);
+    this.menuPanel.querySelectorAll<HTMLButtonElement>('#practice,#guided,#exam,#exercises').forEach(b=>b.disabled=!this.ready);
   }
-  progress(value:number){this.menuPanel.querySelector('#loading-label')!.textContent=`${this.c.loading} · ${Math.round(value*100)}%`;}
-  setReady(){this.ready=true;this.renderMenu();}
-  showError(message:string){this.ready=false;this.menuPanel.querySelector('#loading-label')!.textContent=this.c.error;this.open('error',`<p class="eyebrow">AVTODROM</p><h2>${this.c.error}</h2><p>${esc(message)}</p>${this.button('retry',this.c.retry,true)}`);this.modal.querySelector('#retry')!.addEventListener('click',()=>location.reload());}
+  loadingStage(stage:LoadingStage){this.loading.stage(stage);}
+  progress(value?:number){this.loading.progress(value);this.menuPanel.querySelector('#loading-label')!.textContent=this.c.loading;}
+  setReady(){this.ready=true;this.renderMenu();this.root.inert=false;this.root.setAttribute('aria-busy','false');this.loading.ready();}
+  showError(message?:string){this.ready=false;this.root.inert=true;this.root.setAttribute('aria-busy','false');this.menuPanel.querySelector('#loading-label')!.textContent=this.c.error;this.loading.fail(message);}
   renderHud(){this.mirrorControls?.dispose();const c=this.c,h=hudCopy[this.settings.language];
     this.hud.innerHTML=`<header class="drive-header"><div class="drive-brand"><span class="brand-mark">A<span></span></span><div>AVTODROM<small id="mode-label"></small></div></div><div class="exam-stats"><div><span>${c.points}</span><strong id="penalty-score">00 <small>/ 100</small></strong></div><div><span id="time-label">${c.remaining}</span><strong id="clock">15:00</strong></div></div><nav class="header-controls" aria-label="${h.controls}"><button id="map-button" title="${h.map} (${esc(keyName(this.settings.bindings.map))})" aria-label="${h.map}" aria-controls="route-map" aria-expanded="${this.mapOpen}">${icon('map')}<span>${h.map}</span><kbd>${esc(keyName(this.settings.bindings.map))}</kbd></button><button id="controls-button" title="${h.controls}" aria-label="${h.controls}" aria-controls="driving-controls" aria-expanded="${this.controlsOpen}">${icon('controls')}<span>${h.controls}</span></button><button id="camera-button" title="${c.camera}" aria-label="${c.camera}">${icon('camera')}<span>${c.camera}</span><kbd>${esc(keyName(this.settings.bindings.camera))}</kbd></button><button id="pause-button" title="${c.pause}" aria-label="${c.pause}">${icon('pause')}<span>${c.pause}</span></button></nav></header>
     <section class="exercise-card"><div class="exercise-eyebrow"><span>${c.next}</span><span id="exercise-count">01 / 12</span></div><h2 id="exercise-name"></h2><div id="practice-coach" hidden><strong id="coach-action" role="status" aria-live="polite"></strong><p id="coach-detail"></p><div id="coach-keys" aria-label="${h.controls}"></div></div><details id="exercise-method" open><summary>${this.settings.language==='ru'?'Порядок выполнения':'Bajarish tartibi'}</summary><p id="exercise-instruction"></p></details><div id="exercise-feedback" hidden></div><button id="retry-stage" hidden>${icon('reset')} ${this.settings.language==='ru'?'Повторить этот этап':'Shu bosqichni takrorlash'}</button><div class="exercise-progress"><span id="exercise-progress"></span></div></section>
     <div id="emergency" class="emergency" hidden>${c.emergency}</div><div id="stall" class="stall-warning" hidden>${this.hotkeys(c.stalled)}</div>
     <section id="recovery-prompt" hidden aria-label="${c.overturned}"><p>${c.overturned}</p><button id="recover-button">${icon('reset')} ${c.recoverCar}</button></section>
-    <div class="startup-hint" id="start-help">${this.hotkeys(c.startHelp)}</div>
-    <section class="bottom-help hud-popover" id="driving-controls" aria-label="${h.controls}" ${this.controlsOpen?'':'hidden'}><header class="popover-heading"><h2>${h.controls}</h2><button id="controls-close" aria-label="${h.controlsClose}">${icon('close')}</button></header><div class="drive-shortcuts">${[['throttle','brake'],['left','right'],['clutch'],['indicatorLeft','indicatorRight']].map(actions=>`<div><span>${actions.map(a=>label(a,this.settings.language)).join(' / ')}</span><span>${actions.map(a=>`<kbd>${esc(keyName(this.settings.bindings[a]))}</kbd>`).join(' / ')}</span></div>`).join('')}</div><div class="assist-status"><span id="assist-badge">${c.assistOn}</span><span id="steering-assist-badge">${c.steeringAssistOn}</span></div><h3>${h.lights}</h3><div class="light-controls"><button id="positionlights-button" aria-pressed="false">${label('positionLights',this.settings.language)} <kbd>${esc(keyName(this.settings.bindings.positionLights))}</kbd></button><button id="headlights-button" aria-pressed="false">${label('headlights',this.settings.language)} <kbd>${esc(keyName(this.settings.bindings.headlights))}</kbd></button><button id="foglights-button" aria-pressed="false">${label('fogLights',this.settings.language)} <kbd>${esc(keyName(this.settings.bindings.fogLights))}</kbd></button></div><button id="reset-button">${icon('reset')} ${c.reset}</button></section>
-    <section class="instrument-panel"><div class="instrument-top"><span id="left-signal">◀</span><span>CHEVROLET</span><span id="right-signal">▶</span></div><div class="speed-row"><div><strong id="speed">0</strong><span>km/h</span></div><div class="gear-box"><strong id="gear">N</strong><span id="gear-caption">${c.neutral}</span></div></div><div class="rpm-track"><span id="rpm"></span></div><div class="rpm-labels"><span>0</span><span>2</span><span>4</span><span>6 <small>×1000 rpm</small></span></div><div id="telemetry" class="vehicle-status"></div><div class="pedals"><div><span>${c.throttle}</span><i><b id="throttle-bar"></b></i></div><div><span>${c.pedalBrake}</span><i><b id="brake-bar"></b></i></div><div><span>${c.clutch}</span><i><b id="clutch-bar"></b></i></div></div></section>
+    <div class="startup-hint" id="start-help"><span>${this.hotkeys(c.startHelp)}</span><button id="quick-controls-button" title="${h.controls}" aria-label="${h.controls}" aria-controls="driving-controls" aria-expanded="${this.controlsOpen}">${icon('controls')}</button></div>
+    <section class="bottom-help hud-popover" id="driving-controls" aria-label="${h.controls}" ${this.controlsOpen?'':'hidden'}><header class="popover-heading"><h2>${h.controls}</h2><button id="controls-close" aria-label="${h.controlsClose}">${icon('close')}</button></header><div class="assist-status"><span id="assist-badge">${c.assistOn}</span><span id="steering-assist-badge">${c.steeringAssistOn}</span></div><h3>${h.lights}</h3><div class="light-controls"><button id="positionlights-button" aria-pressed="false">${label('positionLights',this.settings.language)} <kbd>${esc(keyName(this.settings.bindings.positionLights))}</kbd></button><button id="headlights-button" aria-pressed="false">${label('headlights',this.settings.language)} <kbd>${esc(keyName(this.settings.bindings.headlights))}</kbd></button><button id="foglights-button" aria-pressed="false">${label('fogLights',this.settings.language)} <kbd>${esc(keyName(this.settings.bindings.fogLights))}</kbd></button></div><h3>${h.shortcuts}</h3><div class="drive-shortcuts">${Object.keys(this.settings.bindings).filter(a=>!['positionLights','headlights','fogLights'].includes(a)).map(a=>`<div><span>${label(a,this.settings.language)}</span><kbd>${esc(keyName(this.settings.bindings[a]))}</kbd></div>`).join('')}</div><button id="reset-button">${icon('reset')} ${c.reset}</button></section>
+    <section class="instrument-panel"><div class="instrument-top"><span id="left-signal">◀</span><span>CHEVROLET</span><span id="right-signal">▶</span></div><div class="speed-row"><div><strong id="speed">0</strong><span>${this.settings.language==='ru'?'км/ч':'km/soat'}</span></div><div class="gear-box"><strong id="gear">N</strong><span id="gear-caption">${c.neutral}</span></div></div><div class="rpm-track"><span id="rpm"></span></div><div class="rpm-labels"><span>0</span><span>2</span><span>4</span><span>6 <small>×1000 rpm</small></span></div><div id="telemetry" class="vehicle-status"></div><div class="pedals"><div><span>${c.throttle}</span><i><b id="throttle-bar"></b></i></div><div><span>${c.pedalBrake}</span><i><b id="brake-bar"></b></i></div><div><span>${c.clutch}</span><i><b id="clutch-bar"></b></i></div></div></section>
     <aside class="minimap hud-popover" id="route-map" aria-label="${h.map}" ${this.mapOpen?'':'hidden'}><header class="popover-heading"><h2>${h.mapTitle}</h2><button id="map-close" aria-label="${h.mapClose}">${icon('close')}</button></header><canvas width="720" height="552" role="img" aria-label="${h.mapDescription}"></canvas><footer><span class="minimap-key"><span><i class="map-driver"></i>${this.settings.language==='ru'?'Вы':'Siz'}</span><span><i class="map-goal"></i>${this.settings.language==='ru'?'Цель':'Maqsad'}</span></span><span id="distance"></span></footer></aside><span id="fps" hidden></span><div class="provisional-note" id="provisional"></div>`;
     this.hud.querySelector('#recover-button')!.addEventListener('click',()=>this.actions.recover());
     this.hud.querySelector('#retry-stage')!.addEventListener('click',()=>this.actions.retryStage());
@@ -89,9 +94,10 @@ export class Interface {
     const leave=document.createElement('button');leave.id='leave-exercise';leave.textContent=training.free;leave.hidden=true;
     this.hud.querySelector('.exercise-progress')!.before(leave);leave.addEventListener('click',()=>this.actions.start('practice'));
     this.hud.querySelector('#map-button')!.addEventListener('click',()=>this.toggleMap());
-    this.hud.querySelector('#controls-button')!.addEventListener('click',()=>this.setHudPanel('controls',!this.controlsOpen));
+    this.hud.querySelector('#controls-button')!.addEventListener('click',()=>{this.controlsTrigger='#controls-button';this.setHudPanel('controls',!this.controlsOpen);});
+    this.hud.querySelector('#quick-controls-button')!.addEventListener('click',()=>{this.controlsTrigger='#quick-controls-button';this.setHudPanel('controls',!this.controlsOpen);});
     this.hud.querySelector<HTMLButtonElement>('#map-close')!.addEventListener('click',event=>{this.setHudPanel('map',false);if(event.detail===0)this.hud.querySelector<HTMLButtonElement>('#map-button')!.focus();});
-    this.hud.querySelector<HTMLButtonElement>('#controls-close')!.addEventListener('click',event=>{this.setHudPanel('controls',false);if(event.detail===0)this.hud.querySelector<HTMLButtonElement>('#controls-button')!.focus();});
+    this.hud.querySelector<HTMLButtonElement>('#controls-close')!.addEventListener('click',event=>{this.setHudPanel('controls',false);if(event.detail===0)this.hud.querySelector<HTMLButtonElement>(this.controlsTrigger)!.focus();});
     this.hud.querySelector('#camera-button')!.addEventListener('click',()=>this.actions.camera());this.hud.querySelector('#pause-button')!.addEventListener('click',()=>this.actions.pause());this.hud.querySelector('#reset-button')!.addEventListener('click',()=>this.actions.reset());
     this.hud.querySelector('#headlights-button')!.addEventListener('click',()=>this.actions.lights('headlights'));
     this.hud.querySelector('#positionlights-button')!.addEventListener('click',()=>this.actions.lights('positionLights'));
@@ -99,7 +105,7 @@ export class Interface {
     this.mirrorControls=new MirrorControls(this.hud,this.settings,this.actions.mirrorsChanged,this.actions.mirrorSelect,this.actions.mirrorCamera);
     this.hud.querySelector('#mirrors-button')!.addEventListener('click',()=>this.closeHudPanels());
     this.hud.dataset.controlsOpen=String(this.controlsOpen);
-    this.mini=this.hud.querySelector('canvas')!;this.map=new Minimap(this.mini);this.speed=this.hud.querySelector('#speed')!;this.rpm=this.hud.querySelector('#rpm')!;this.gear=this.hud.querySelector('#gear')!;this.telemetry=this.hud.querySelector('#telemetry')!;this.lastExercise='';this.lastScore=-1;this.status='';
+    this.mini=this.hud.querySelector('canvas')!;this.map=new Minimap(this.mini,this.settings.language);this.speed=this.hud.querySelector('#speed')!;this.rpm=this.hud.querySelector('#rpm')!;this.gear=this.hud.querySelector('#gear')!;this.telemetry=this.hud.querySelector('#telemetry')!;this.lastExercise='';this.lastScore=-1;this.status='';
   }
   toggleMap(){this.setHudPanel('map',!this.mapOpen);}
   private setHudPanel(panel:'map'|'controls',open:boolean){
@@ -107,6 +113,7 @@ export class Interface {
     if(panel==='map')this.mapOpen=open;else this.controlsOpen=open;
     this.hud.querySelector<HTMLElement>(panel==='map'?'#route-map':'#driving-controls')!.hidden=!open;
     this.hud.querySelector(panel==='map'?'#map-button':'#controls-button')!.setAttribute('aria-expanded',String(open));
+    if(panel==='controls')this.hud.querySelector('#quick-controls-button')!.setAttribute('aria-expanded',String(open));
     this.hud.dataset.controlsOpen=String(this.controlsOpen);
   }
   private closeHudPanels(focus=false){
@@ -116,17 +123,20 @@ export class Interface {
     for(const [panel,button]of [['#route-map','#map-button'],['#driving-controls','#controls-button']]){
       this.hud.querySelector<HTMLElement>(panel)!.hidden=true;this.hud.querySelector(button)!.setAttribute('aria-expanded','false');
     }
+    this.hud.querySelector('#quick-controls-button')!.setAttribute('aria-expanded','false');
     this.hud.dataset.controlsOpen='false';
-    if(focus)this.hud.querySelector<HTMLButtonElement>(`#${active}-button`)!.focus();
+    if(focus)this.hud.querySelector<HTMLButtonElement>(active==='controls'?this.controlsTrigger:'#map-button')!.focus();
     return true;
   }
-  enter(mode:Mode,single:boolean){this.renderHud();this.menuPanel.hidden=true;this.hud.hidden=false;document.body.classList.add('driving');this.modal.close();this.hud.querySelector('#mode-label')!.textContent=mode==='exam'?this.c.examMode:this.c.practiceMode;this.hud.querySelector('#time-label')!.textContent=mode==='exam'?this.c.remaining:this.c.time;
+  private get guidedLabel(){return this.settings.language==='ru'?'Практика по маршруту':'Yo‘nalish bo‘yicha mashq';}
+  enter(mode:Mode,single:boolean,guided=false){this.renderHud();this.menuPanel.hidden=true;this.hud.hidden=false;document.body.classList.add('driving');this.modal.close();this.hud.querySelector('#mode-label')!.textContent=mode==='exam'?this.c.examMode:guided?this.guidedLabel:this.c.practiceMode;this.hud.querySelector('#time-label')!.textContent=mode==='exam'?this.c.remaining:this.c.time;
     this.hud.querySelector('#penalty-score')!.innerHTML=mode==='exam'?'00 <small>/ 100</small>':'00';
-    const free=mode==='practice'&&!single;this.hud.dataset.free=String(free);this.hud.querySelector<HTMLElement>('#free-practice')!.hidden=!free;
+    const free=mode==='practice'&&!single&&!guided;this.hud.dataset.free=String(free);this.hud.dataset.single=String(single);this.hud.dataset.guided=String(guided);this.hud.querySelector<HTMLElement>('#free-practice')!.hidden=!free;
     if(free){this.hud.querySelector('#mode-label')!.textContent=practiceCopy[this.settings.language].free;this.hud.querySelector('#route-map h2')!.textContent=practiceCopy[this.settings.language].map;this.mini.setAttribute('aria-label',this.settings.language==='ru'?'Схема автодрома и ваш автомобиль':'Avtodrom sxemasi va avtomobilingiz');}
     clearTimeout(this.toastTimer);this.toastPanel.className='';
-    this.hud.dataset.practice=String(mode==='practice');this.hud.querySelector<HTMLDetailsElement>('#exercise-method')!.open=mode==='exam';
-    this.hud.querySelector<HTMLElement>('#retry-stage')!.hidden=mode!=='practice'||free;
+    this.hud.dataset.practice=String(mode==='practice');
+    const method=this.hud.querySelector<HTMLDetailsElement>('#exercise-method')!;method.open=false;method.hidden=mode==='exam';
+    this.hud.querySelector<HTMLElement>('#retry-stage')!.hidden=mode!=='practice'||!single;
     this.hud.querySelector<HTMLElement>('#leave-exercise')!.hidden=mode!=='practice'||!single;
     this.hud.querySelector<HTMLElement>('#reset-button')!.hidden=mode==='exam';this.hud.querySelector<HTMLElement>('#assist-badge')!.hidden=mode==='exam'||!this.settings.assist;this.hud.querySelector<HTMLElement>('#steering-assist-badge')!.hidden=mode==='exam'||!this.settings.steeringAssist;
     this.hud.querySelector('#provisional')!.textContent=mode==='exam'?`${this.settings.examMinutes} ${this.settings.language==='uz'?'daqiqa — taxminiy limit':'минут — предварительный лимит'}`:this.c.qualityNote;
@@ -134,7 +144,7 @@ export class Interface {
   }
   showMenu(){this.closeHudPanels();this.mirrorControls?.close();this.menuPanel.hidden=false;this.hud.hidden=true;document.body.classList.remove('driving');this.modal.close();clearTimeout(this.toastTimer);this.toastPanel.className='';this.renderMenu();}
   update(t:VehicleTelemetry,engine:ExamEngine,e:Exercise,index:number,count:number,camera:string,fps:number,single:boolean,hint?:PracticeHint){this.mirrorControls?.setCamera(camera);
-    const free=engine.mode==='practice'&&!single;
+    const free=engine.mode==='practice'&&engine.freeDriving;
     for(const [id,on]of [['positionlights-button',t.positionLights],['headlights-button',t.headlights],['foglights-button',t.fogLights]]as const)this.hud.querySelector(`#${id}`)!.setAttribute('aria-pressed',String(on));
     const fogButton=this.hud.querySelector<HTMLButtonElement>('#foglights-button')!,fogAvailable=t.ignition&&t.positionLights;
     fogButton.setAttribute('aria-disabled',String(!fogAvailable));fogButton.title=fogAvailable?label('fogLights',this.settings.language):label('fogLightsRequirement',this.settings.language);
@@ -162,14 +172,15 @@ export class Interface {
 
     const target=hint?.target??e.point;
     this.hud.querySelector('#fps')!.textContent=`${fps} FPS`;this.hud.querySelector('#distance')!.textContent=`${Math.round(Math.hypot(t.position.x-target.x,t.position.z-target.z))} m`;
-    this.hud.querySelector<HTMLElement>('#start-help')!.hidden=t.engine&&t.belt&&!t.handbrake;
+    this.hud.querySelector<HTMLElement>('#start-help>span')!.hidden=t.engine&&t.belt&&!t.handbrake;
     const feedback=exerciseFeedback(t,e,engine,lang),panel=this.hud.querySelector<HTMLElement>('#exercise-feedback')!;
-    panel.hidden=!feedback||!!hint;if(feedback){panel.textContent=feedback.text;panel.dataset.state=feedback.state;}
-    const coach=this.hud.querySelector<HTMLElement>('#practice-coach')!;coach.hidden=!hint;
-    if(hint){
+    const training=engine.mode==='practice'&&!free;
+    panel.hidden=!training||!feedback;if(feedback){panel.textContent=feedback.text;panel.dataset.state=feedback.state;}
+    const coach=this.hud.querySelector<HTMLElement>('#practice-coach')!;coach.hidden=!training||!hint;
+    if(training&&hint){
       coach.dataset.phase=hint.phase;coach.dataset.state=hint.tone;
       const action=this.hud.querySelector('#coach-action')!;if(action.textContent!==hint.action)action.textContent=hint.action;
-      const detail=this.hud.querySelector<HTMLElement>('#coach-detail')!;detail.hidden=!hint.detail;detail.textContent=hint.detail;
+      const detail=this.hud.querySelector<HTMLElement>('#coach-detail')!;detail.hidden=!hint.detail||hint.detail===feedback?.text;detail.textContent=hint.detail;
       const keys=this.hud.querySelector<HTMLElement>('#coach-keys')!;keys.hidden=!hint.keys.length;
       const html=hint.keys.map(action=>`<kbd>${esc(keyName(this.settings.bindings[action]))}</kbd>`).join('<span> + </span>');if(keys.innerHTML!==html)keys.innerHTML=html;
     }
@@ -181,7 +192,7 @@ export class Interface {
   toast(message:string,bad=false){clearTimeout(this.toastTimer);this.toastPanel.textContent=message;this.toastPanel.className=`show ${bad?'bad':''}`;this.toastTimer=window.setTimeout(()=>this.toastPanel.className='',4500);}
   private open(type:string,html:string){this.onBind=null;this.modal.dataset.type=type;this.modal.innerHTML=html;const heading=this.modal.querySelector('h2');if(heading){heading.id='modal-title';this.modal.setAttribute('aria-labelledby',heading.id);}if(!this.modal.open)this.modal.showModal();}
   private closeButton(){this.modal.querySelector('#close')?.addEventListener('click',()=>this.modal.close());}
-  showPause(mode:Mode){this.mirrorControls?.close();const c=this.c;this.open('pause',`<span class="eyebrow">AVTODROM / ${mode==='exam'?c.examMode:c.practiceMode}</span><h2>${c.paused}</h2><p>${c.pausedText}</p><div class="dialog-actions">${this.button('resume',c.resume,true)}${this.button('settings',c.settings)}${this.button('menu',mode==='exam'?c.leave:c.menu)}</div>${mode==='exam'?`<p class="muted">${c.exitText}</p>`:''}`);this.modal.querySelector('#resume')!.addEventListener('click',()=>this.actions.resume());this.modal.querySelector('#menu')!.addEventListener('click',()=>this.actions.menu());this.modal.querySelector('#settings')!.addEventListener('click',()=>this.showSettings(true));}
+  showPause(mode:Mode){this.mirrorControls?.close();const c=this.c;this.open('pause',`<span class="eyebrow">AVTODROM / ${mode==='exam'?c.examMode:this.hud.dataset.guided==='true'?this.guidedLabel:c.practiceMode}</span><h2>${c.paused}</h2><p>${c.pausedText}</p><div class="dialog-actions">${this.button('resume',c.resume,true)}${this.button('settings',c.settings)}${this.button('menu',mode==='exam'?c.leave:c.menu)}</div>${mode==='exam'?`<p class="muted">${c.exitText}</p>`:''}`);this.modal.querySelector('#resume')!.addEventListener('click',()=>this.actions.resume());this.modal.querySelector('#menu')!.addEventListener('click',()=>this.actions.menu());this.modal.querySelector('#settings')!.addEventListener('click',()=>this.showSettings(true));}
   showExercises(fromDrive=false){
     const c=this.c,lang=this.settings.language;this.returnFromExercises=fromDrive;
     this.open('exercises',`<div class="dialog-heading"><div><h2>${c.exercises}</h2></div><button id="close" class="icon-button" aria-label="${c.close}">×</button></div><p>${practiceCopy[lang].selection}</p><div class="exercise-grid">${course.exercises.map((e,i)=>`<button data-exercise="${i}"><span>${String(i+1).padStart(2,'0')}</span><strong>${e.name[lang]}</strong><span>↗</span></button>`).join('')}</div>`);
@@ -200,6 +211,6 @@ export class Interface {
     this.modal.querySelector('#restore')!.addEventListener('click',()=>{this.settings.bindings={...defaultBindings};this.actions.settingsChanged();this.showSettings(fromPause);});
     this.modal.querySelectorAll<HTMLButtonElement>('[data-bind]').forEach(b=>b.addEventListener('click',()=>{b.querySelector('kbd')!.textContent=c.bind;this.onBind=code=>{const action=b.dataset.bind!,old=this.settings.bindings[action];const other=Object.keys(this.settings.bindings).find(a=>this.settings.bindings[a]===code);if(other)this.settings.bindings[other]=old;this.settings.bindings[action]=code;this.actions.settingsChanged();this.showSettings(fromPause);};}));
   }
-  showCredits(){const c=this.c;this.open('credits',`<div class="dialog-heading"><div><span class="eyebrow">REFERENCE / 2026</span><h2>${c.sourceTitle}</h2></div><button id="close" class="icon-button" aria-label="${c.close}">×</button></div><p>${c.sourceText}</p><div class="credit-box"><strong>${c.originalModel}: Chevrolet Cobalt LTZ 2014</strong><p>${c.carCredit}</p><a href="https://sketchfab.com/3d-models/chevrolet-cobalt-ltz-2014-f91cbef731444f939e263041400216ca" target="_blank" rel="noreferrer">Sketchfab ↗</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0 ↗</a></div><h3>${c.rules}</h3><div class="rules-list">${rules.map(r=>`<div><span>${r.id}</span><p>${r.text[this.settings.language]}</p><strong>+${r.points}</strong></div>`).join('')}</div><h3>${c.recent}</h3>${this.settings.results.length?this.settings.results.slice(-5).reverse().map(r=>`<p class="recent-result">${new Date(r.date).toLocaleDateString()} · ${r.mode==='exam'?c.examMode:c.practiceMode}<strong>${r.score} / 100 · ${formatTime(r.elapsed)}</strong></p>`).join(''):`<p>${c.noResults}</p>`}`);this.closeButton();}
-  showResult(result:ExamResult,single:boolean){this.mirrorControls?.close();const c=this.c;this.open('result',`<span class="eyebrow">${result.mode==='exam'?c.examMode:c.practiceMode} / ${result.passed?'FINISH':'REVIEW'}</span><h2>${single?c.complete:result.passed?c.passed:c.failed}</h2><p>${c.resultText}</p><div class="result-stats"><div><span>${c.score}</span><strong>${result.score}<small> / 100</small></strong></div><div><span>${c.time}</span><strong>${formatTime(result.elapsed)}</strong></div></div><h3>${c.mistakes}</h3><div class="mistake-list">${result.events.length?result.events.map(e=>`<div><time>${formatTime(e.time)}</time><p>${ruleById(e.ruleId).text[this.settings.language]}</p><strong>+${e.points}</strong></div>`).join(''):`<p class="clean-result">✓ ${c.noMistakes}</p>`}</div><div class="dialog-actions">${this.button('again',c.again,true)}${this.button('menu',c.menu)}</div>`);this.modal.querySelector('#again')!.addEventListener('click',()=>this.actions.reset());this.modal.querySelector('#menu')!.addEventListener('click',()=>this.actions.menu());}
+  showCredits(){const c=this.c;this.open('credits',`<div class="dialog-heading"><div><span class="eyebrow">${this.settings.language==='ru'?'ИСТОЧНИКИ':'MANBALAR'} / 2026</span><h2>${c.sourceTitle}</h2></div><button id="close" class="icon-button" aria-label="${c.close}">×</button></div><p>${c.sourceText}</p><div class="credit-box"><strong>${c.originalModel}: Chevrolet Cobalt LTZ 2014</strong><p>${c.carCredit}</p><a href="https://sketchfab.com/3d-models/chevrolet-cobalt-ltz-2014-f91cbef731444f939e263041400216ca" target="_blank" rel="noreferrer">Sketchfab ↗</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0 ↗</a></div><h3>${c.rules}</h3><div class="rules-list">${rules.map(r=>`<div><span>${r.id}</span><p>${r.text[this.settings.language]}</p><strong>+${r.points}</strong></div>`).join('')}</div><h3>${c.recent}</h3>${this.settings.results.length?this.settings.results.slice(-5).reverse().map(r=>`<p class="recent-result">${new Date(r.date).toLocaleDateString(this.settings.language==='ru'?'ru-RU':'uz-UZ')} · ${r.mode==='exam'?c.examMode:r.guided?this.guidedLabel:c.practiceMode}<strong>${r.score}${r.mode==='exam'?' / 100':''} · ${formatTime(r.elapsed)}</strong></p>`).join(''):`<p>${c.noResults}</p>`}`);this.closeButton();}
+  showResult(result:ExamResult,single:boolean){this.mirrorControls?.close();const c=this.c;this.open('result',`<span class="eyebrow">${result.mode==='exam'?c.examMode:result.guided?this.guidedLabel:c.practiceMode} / ${result.passed?(this.settings.language==='ru'?'ЗАВЕРШЕНО':'YAKUNLANDI'):(this.settings.language==='ru'?'РЕЗУЛЬТАТ':'NATIJA')}</span><h2>${single?c.complete:result.passed?c.passed:c.failed}</h2><p>${c.resultText}</p><div class="result-stats"><div><span>${c.score}</span><strong>${result.score}${result.mode==='exam'?'<small> / 100</small>':''}</strong></div><div><span>${c.time}</span><strong>${formatTime(result.elapsed)}</strong></div></div><h3>${c.mistakes}</h3><div class="mistake-list">${result.events.length?result.events.map(e=>`<div><time>${formatTime(e.time)}</time><p>${ruleById(e.ruleId).text[this.settings.language]}</p><strong>+${e.points}</strong></div>`).join(''):`<p class="clean-result">✓ ${c.noMistakes}</p>`}</div><div class="dialog-actions">${this.button('again',c.again,true)}${this.button('menu',c.menu)}</div>`);this.modal.querySelector('#again')!.addEventListener('click',()=>this.actions.reset());this.modal.querySelector('#menu')!.addEventListener('click',()=>this.actions.menu());}
 }

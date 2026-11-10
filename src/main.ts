@@ -21,9 +21,9 @@ let vehicle:Vehicle,scene:GameScene,physics:RAPIER.World;
 let engine=new ExamEngine('practice'),tracker=new CourseTracker(false),mode:Mode='practice';
 let practiceGuide=new PracticeGuide(tracker.current);
 let mirrorPreviewLook:number|undefined;
-let state:'menu'|'driving'|'paused'|'result'='menu';let selectedIndex:number|undefined;
+let state:'menu'|'driving'|'paused'|'result'='menu';let selectedIndex:number|undefined;let guidedRoute=false;
 let accumulator=0,lastTime=performance.now(),uiAccumulator=0,eventCount=0,emergencyUntil=0;
-const freePractice=()=>mode==='practice'&&selectedIndex===undefined;
+const freePractice=()=>mode==='practice'&&selectedIndex===undefined&&!guidedRoute;
 const audio=new EngineAudio();audio.volume=settings.volume;
 const input=new Input(settings.bindings);
 const ui=new Interface(settings,{
@@ -31,7 +31,7 @@ const ui=new Interface(settings,{
   lights:action=>{if(state==='driving')switchLights(action);},
   mirrorsChanged:persist=>{scene?.setMirrorAdjustments(settings.mirrors);if(persist)saveSettings(settings);},
   mirrorSelect:side=>{mirrorPreviewLook=side==='left'?1:side==='right'?-1:undefined;},
-  start,pause,resume,menu:goMenu,reset:()=>start(mode,selectedIndex),retryStage,chooseExercise:()=>{if(state==='driving'&&mode==='practice'){pause();ui.showExercises(true);}},recover,camera:()=>scene?.cycleCamera(),
+  start,pause,resume,menu:goMenu,reset:()=>start(mode,selectedIndex,guidedRoute),retryStage,chooseExercise:()=>{if(state==='driving'&&mode==='practice'){pause();ui.showExercises(true);}},recover,camera:()=>scene?.cycleCamera(),
   settingsChanged:()=>{saveSettings(settings);input.bindings=settings.bindings;audio.volume=settings.volume;scene?.setQuality(settings.quality);scene?.setCurbStyle(settings.curbStyle);scene?.setMirrorAdjustments(settings.mirrors);},
 });
 input.onAction=action=>{
@@ -56,14 +56,14 @@ function recover(){
   tracker.previous=null;tracker.goalTime=0;
   ui.recovery(false);ui.toast(ui.c.recovered);
 }
-function start(nextMode:Mode,index?:number){
+function start(nextMode:Mode,index?:number,guided=false){
   if(!ui.ready)return;
-  mode=nextMode;selectedIndex=index;engine=new ExamEngine(mode,settings.examMinutes*60,freePractice());
+  mode=nextMode;selectedIndex=index;guidedRoute=mode==='practice'&&index===undefined&&guided;engine=new ExamEngine(mode,settings.examMinutes*60,freePractice());
   tracker=new CourseTracker(index!==undefined,index!==undefined?[course.exercises[index]]:itinerary);
   const exercise=tracker.current;engine.setExercise(exercise.id);vehicle.reset(exercise.spawn,exercise.yaw);
   input.clear();input.enabled=true;state='driving';accumulator=0;eventCount=0;emergencyUntil=0;
   practiceGuide=new PracticeGuide(exercise,tracker.index,index!==undefined);
-  scene.cameraMode='chase';scene.setGoal(exercise.point,false);ui.enter(mode,index!==undefined);ui.emergency(false);
+  scene.cameraMode='chase';scene.setGoal(exercise.point,false);ui.enter(mode,index!==undefined,guidedRoute);ui.emergency(false);
   if(mode==='practice'&&!freePractice())scene.setPracticeGuide(practiceGuide.view(vehicle.telemetry(),engine,settings.language),exercise.parking);
   void audio.start().catch(()=>{});
 }
@@ -73,7 +73,7 @@ function retryStage(){
   ui.toast(settings.language==='ru'?'Текущий этап начат заново':'Joriy bosqich qayta boshlandi');
 }
 function pause(){if(state!=='driving'&&state!=='paused')return;state='paused';input.clear();input.enabled=false;accumulator=0;ui.showPause(mode);}
-function resume(){if(state!=='paused')return;state='driving';input.clear();input.enabled=true;ui.enter(mode,selectedIndex!==undefined);accumulator=0;lastTime=performance.now();void audio.start().catch(()=>{});}
+function resume(){if(state!=='paused')return;state='driving';input.clear();input.enabled=true;ui.enter(mode,selectedIndex!==undefined,guidedRoute);accumulator=0;lastTime=performance.now();void audio.start().catch(()=>{});}
 function goMenu(){
   if(state==='paused'&&mode==='exam'){engine.update(vehicle.telemetry(),{abandoned:true},0);finish();return;}
   state='menu';input.clear();input.enabled=false;ui.showMenu();scene.setGoal(tracker.current.point,false);
@@ -81,7 +81,7 @@ function goMenu(){
 }
 function finish(){
   if(state==='result')return;state='result';input.enabled=false;input.clear();
-  const result:ExamResult={date:new Date().toISOString(),mode,elapsed:engine.time,score:engine.score,passed:engine.status==='passed'||(mode==='practice'&&engine.score<100),completed:engine.status==='passed',events:[...engine.events]};
+  const result:ExamResult={date:new Date().toISOString(),mode,guided:guidedRoute,elapsed:engine.time,score:engine.score,passed:engine.status==='passed'||(mode==='practice'&&engine.score<100),completed:engine.status==='passed',events:[...engine.events]};
   if(selectedIndex===undefined){settings.results.push(result);settings.results=settings.results.slice(-10);saveSettings(settings);}
   scene.setGoal(tracker.current.point,false);ui.showResult(result,selectedIndex!==undefined);
 }
@@ -101,7 +101,7 @@ function step(dt:number){
   if(done){
     if(selectedIndex!==undefined){engine.status='passed';finish();return;}
     if(tracker.next()){engine.setExercise(tracker.current.id);practiceGuide=new PracticeGuide(tracker.current,tracker.index);scene.setGoal(tracker.current.point,false);ui.toast(`${ui.c.newExercise}: ${tracker.current.name[settings.language]}`);}
-    else {engine.status=engine.score<100?'passed':'failed';finish();}
+    else {engine.status=mode==='practice'||engine.score<100?'passed':'failed';finish();}
   }
 }
 function announceErrors(){
@@ -139,16 +139,21 @@ window.addEventListener('blur',()=>{if(state==='driving')pause();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='driving')pause();});
 async function boot(){
   try{
-    await Promise.all([RAPIER.init(),loadDirectionSignArtwork()]);physics=new RAPIER.World({x:0,y:-9.81,z:0});vehicle=new Vehicle(physics,new Set());
+    await Promise.all([RAPIER.init(),loadDirectionSignArtwork()]);
+    ui.loadingStage('course');await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+    physics=new RAPIER.World({x:0,y:-9.81,z:0});vehicle=new Vehicle(physics,new Set());
     vehicle.reset(course.exercises[0].spawn,course.exercises[0].yaw);
     scene=new GameScene(ui.viewport,vehicle);scene.setQuality(settings.quality);scene.setCurbStyle(settings.curbStyle);scene.setMirrorAdjustments(settings.mirrors);
     scene.onCabinMirrorSwitch=()=>{if(state==='driving')ui.openMirrorControls();};
-    requestAnimationFrame(frame);await scene.loadCar(v=>ui.progress(v));ui.setReady();
+    ui.loadingStage('car');requestAnimationFrame(frame);await scene.loadCar(v=>ui.progress(v));
+    ui.loadingStage('finishing');
+    await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+    ui.setReady();
     // Diagnostics are read-only in production. Test controls are gated by Vite's dev mode.
     Object.defineProperty(window,'__avtodrom',{value:{
       snapshot:()=>({state,mode,freePractice:freePractice(),exercise:tracker.current.id,index:tracker.index,telemetry:vehicle.telemetry(),score:engine.score,events:engine.events,fps:scene.fps,drawCalls:scene.renderStats.calls,triangles:scene.renderStats.triangles,camera:scene.cameraMode,loaded:scene.loaded,wheels:vehicle.controller.numWheels()}),
       ...(import.meta.env.DEV?{start,vehicle,engine:()=>engine,tracker:()=>tracker,practiceGuide:()=>practiceGuide,scene,step,pause,resume}:{}),
     }});
-  }catch(error){console.error(error);ui.showError(error instanceof Error&&/WebGL/i.test(error.message)?ui.c.webgl:`${ui.c.loadError}. ${String(error)}`);}
+  }catch(error){console.error(error);ui.showError(error instanceof Error&&/WebGL/i.test(error.message)?ui.c.webgl:undefined);}
 }
 void boot();

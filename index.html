@@ -7,6 +7,38 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23214c3d'/%3E%3Ctext x='7' y='31' font-size='33' font-family='Arial' fill='%23f7f6ec'%3EA%3C/text%3E%3C/svg%3E" />
     <meta name="description" content="Chevrolet Cobalt 2026, 5 pog‘onali mexanika: B toifali avtodrom mashqlari va amaliy imtihon simulyatori." />
     <title>AVTODROM — Chevrolet Cobalt 2026 · 5MT</title>
+    <style>
+      #boot-loader{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;box-sizing:border-box;padding:24px;overflow:auto;background:#f7f6ec;color:#214c3d;font-family:'Segoe UI',Arial,sans-serif}
+      #boot-loader[hidden]{display:none}
+      .boot-content{width:100%;max-width:360px}
+      .boot-brand{display:flex;align-items:center;gap:12px;font-size:15px;font-weight:800;letter-spacing:2px}
+      .boot-mark{display:grid;place-items:center;width:38px;height:38px;background:#214c3d;color:#f7f6ec;font-size:30px;font-style:italic;letter-spacing:0}
+      #boot-title{font-size:26px;line-height:1.25;font-weight:500;letter-spacing:-.5px;margin:36px 0 12px}
+      .boot-status{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:12px;font-size:13px;line-height:1.5;color:#536950}
+      #boot-percent{font-variant-numeric:tabular-nums;white-space:nowrap}
+      #boot-progress{display:block;appearance:none;border:0;border-radius:0;width:100%;height:4px;overflow:hidden;background:#d6ddce;accent-color:#214c3d}
+      #boot-progress::-webkit-progress-bar{background:#d6ddce}#boot-progress::-webkit-progress-value{background:#214c3d}#boot-progress::-moz-progress-bar{background:#214c3d}
+      #boot-progress:indeterminate{background:linear-gradient(90deg,#d6ddce 35%,#748f78 50%,#d6ddce 65%);background-size:200% 100%;animation:boot-loading 1.6s linear infinite}
+      #boot-progress:indeterminate::-webkit-progress-bar{background:transparent}
+      #boot-error{font-size:14px;line-height:1.6;color:#91452e}
+      #boot-retry{min-height:44px;margin-top:12px;padding:12px 18px;border:0;border-radius:5px;background:#214c3d;color:#fffdf2;font:600 13px 'Segoe UI',Arial,sans-serif;cursor:pointer}
+      #boot-retry:focus-visible{outline:3px solid #c59945;outline-offset:4px}
+      #boot-loader [hidden]{display:none!important}
+      @keyframes boot-loading{to{background-position:-200% 0}}
+      @media(prefers-reduced-motion:reduce){#boot-progress:indeterminate{animation:none}}
+    </style>
   </head>
-  <body><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
+  <body>
+    <div id="boot-loader" role="region" aria-labelledby="boot-title">
+      <div class="boot-content">
+        <div class="boot-brand"><span class="boot-mark" aria-hidden="true">A</span>AVTODROM</div>
+        <h1 id="boot-title">Simulyator tayyorlanmoqda</h1>
+        <div class="boot-status"><span id="boot-stage" role="status">Yuklanmoqda…</span><span id="boot-percent" aria-hidden="true"></span></div>
+        <progress id="boot-progress" max="1" aria-labelledby="boot-stage"></progress>
+        <p id="boot-error" role="alert" hidden></p>
+        <button id="boot-retry" hidden>Qayta yuklash</button>
+      </div>
+    </div>
+    <div id="app" aria-busy="true" inert></div><script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

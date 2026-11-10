@@ -3,8 +3,8 @@ import {icon} from './icons';
 import { mirrorLimits,readMirrorAdjustments,type MirrorSide } from '../render/mirror-adjustment';
 
 const labels={
-  ru:{title:'Зеркала',left:'Левое зеркало',right:'Правое зеркало',lock:'Регулировка выключена',close:'Закрыть регулировку',hint:'Выбери зеркало. Удерживай стрелку для регулировки.',up:'Наклонить вверх',down:'Наклонить вниз',leftward:'Повернуть влево',rightward:'Повернуть вправо',reset:'Сбросить это зеркало',defaults:'Стандартное положение обоих зеркал'},
-  uz:{title:'Ko‘zgular',left:'Chap ko‘zgu',right:'O‘ng ko‘zgu',lock:'Sozlash o‘chirilgan',close:'Sozlashni yopish',hint:'Ko‘zguni tanlang. Sozlash uchun o‘qni bosib turing.',up:'Yuqoriga',down:'Pastga',leftward:'Chapga',rightward:'O‘ngga',reset:'Bu ko‘zguni tiklash',defaults:'Ikkala ko‘zguning standart holati'},
+  ru:{title:'Зеркала',left:'Левое зеркало',right:'Правое зеркало',lock:'Регулировка выключена',close:'Закрыть регулировку',hint:'Выберите зеркало. Удерживайте стрелку для регулировки.',up:'Наклонить вверх',down:'Наклонить вниз',leftward:'Повернуть влево',rightward:'Повернуть вправо',reset:'Сбросить это зеркало',defaults:'Стандартное положение обоих зеркал',defaultButton:'По умолчанию'},
+  uz:{title:'Ko‘zgular',left:'Chap ko‘zgu',right:'O‘ng ko‘zgu',lock:'Sozlash o‘chirilgan',close:'Sozlashni yopish',hint:'Ko‘zguni tanlang. Sozlash uchun o‘qni bosib turing.',up:'Yuqoriga',down:'Pastga',leftward:'Chapga',rightward:'O‘ngga',reset:'Bu ko‘zguni tiklash',defaults:'Ikkala ko‘zguning standart holati',defaultButton:'Standart'},
 };
 
 /** A held pad behaves like a momentary electric mirror switch. */
@@ -26,7 +26,7 @@ export class MirrorControls {
       <button data-mirror-axis="yaw" data-step="1" class="mirror-right" aria-label="${c.rightward}">→</button>
       <button data-mirror-axis="pitch" data-step="-1" class="mirror-down" aria-label="${c.down}">↓</button></div>
       <output id="mirror-angles"></output><button id="mirror-reset">${c.reset}</button>
-      <button id="mirror-default" title="${c.defaults}" aria-label="Default — ${c.defaults}">Default</button>`;
+      <button id="mirror-default" title="${c.defaults}" aria-label="${c.defaults}">${c.defaultButton}</button>`;
     hud.append(this.panel);
     this.toggle.addEventListener('click',()=>{if(!this.open)activate();this.setOpen(!this.open);},{signal});
     this.panel.querySelector('#mirror-close')!.addEventListener('click',()=>this.setOpen(false,true),{signal});

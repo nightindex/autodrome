@@ -1,4 +1,4 @@
-import type { Exercise,VehicleTelemetry } from '../types';
+import type { Exercise,Language,VehicleTelemetry } from '../types';
 import { course,hillBounds,hillProfile,startLinePoint } from '../data/course';
 import { coursePaintedArrows,roadSurface,pedestrianCrossingLayout,whiteEdgeSurface,yellowEdgeSurface,intersectionCrossings,roadStopLines } from '../render/course-world';
 import { carMapMarker,mapProjection } from './map-projection';
@@ -9,8 +9,8 @@ import { laneLines,laneGores,lanePaintPaths } from '../data/lane-markings';
 import {railwayCrossing,railwayRailCenters,railwaySleeperCenters} from '../data/railway';
 
 const colors={paper:'#f4f5ec',grass:'#b7c6a5',road:'#5d6868',edge:'#f5f4e7',route:'#f4ca70',car:'#075a47',goal:'#e4b346'};
-let cachedBase:HTMLCanvasElement|undefined;
-let cachedFreeBase:HTMLCanvasElement|undefined;
+const cachedBase:Partial<Record<Language,HTMLCanvasElement>>={};
+const cachedFreeBase:Partial<Record<Language,HTMLCanvasElement>>={};
 
 /** The cached background uses the same compound road polygon as the 3D asphalt. */
 export class Minimap {
@@ -19,14 +19,14 @@ export class Minimap {
   private base:HTMLCanvasElement;
   private freeBase:HTMLCanvasElement;
   private asphalt=new Path2D();
-  constructor(private canvas:HTMLCanvasElement){
+  constructor(private canvas:HTMLCanvasElement,private language:Language='uz'){
     canvas.width=720;canvas.height=552;this.ctx=canvas.getContext('2d')!;
     this.projection=mapProjection(roadSurface,canvas.width,canvas.height);
     for(const polygon of roadSurface)for(const ring of polygon){ring.forEach(([x,z],i)=>{const point=this.projection.project({x,z});i?this.asphalt.lineTo(point.x,point.y):this.asphalt.moveTo(point.x,point.y);});this.asphalt.closePath();}
-    if(!cachedBase){cachedBase=document.createElement('canvas');cachedBase.width=canvas.width;cachedBase.height=canvas.height;this.drawBase(cachedBase.getContext('2d')!);}
-    this.base=cachedBase;
-    if(!cachedFreeBase){cachedFreeBase=document.createElement('canvas');cachedFreeBase.width=canvas.width;cachedFreeBase.height=canvas.height;this.drawBase(cachedFreeBase.getContext('2d')!,false);}
-    this.freeBase=cachedFreeBase;
+    if(!cachedBase[language]){const base=document.createElement('canvas');base.width=canvas.width;base.height=canvas.height;this.drawBase(base.getContext('2d')!);cachedBase[language]=base;}
+    this.base=cachedBase[language]!;
+    if(!cachedFreeBase[language]){const base=document.createElement('canvas');base.width=canvas.width;base.height=canvas.height;this.drawBase(base.getContext('2d')!,false);cachedFreeBase[language]=base;}
+    this.freeBase=cachedFreeBase[language]!;
   }
   private drawBase(ctx:CanvasRenderingContext2D,showRoute=true){
     const {width,height}=this.canvas,p=this.projection,project=p.project;
@@ -77,7 +77,8 @@ export class Minimap {
     // A fine route stays subordinate to the driver and current destination.
     if(showRoute){ctx.beginPath();course.route.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});
       ctx.strokeStyle=colors.route;ctx.globalAlpha=.25;ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.setLineDash([6,7]);ctx.stroke();}ctx.restore();
-    for(const [id,text]of [['start','START →'],['finish','← FINISH']] as const){
+    const labels=this.language==='ru'?['СТАРТ →','← ФИНИШ']:['START →','← MARRA'];
+    for(const [id,text]of [['start',labels[0]],['finish',labels[1]]] as const){
       const point=project(id==='start'?startLinePoint:course.exercises.find(e=>e.id===id)!.point);ctx.fillStyle=colors.car;ctx.font='bold 19px "Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText(text,point.x,point.y+(id==='start'?27:-18));
       ctx.strokeStyle=colors.edge;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(point.x,point.y-10);ctx.lineTo(point.x,point.y+10);ctx.stroke();
     }

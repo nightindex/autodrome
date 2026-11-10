@@ -15,6 +15,6 @@ describe('exercise feedback',()=>{
     engine.setExercise('pedestrian');expect(exerciseFeedback(telemetry,e,engine,'ru')?.text).toContain('3.0 с');
   });
   it('warns when the line has been crossed without completing the stop',()=>{expect(exerciseFeedback({...telemetry,bumper:{x:stop.point.x+stop.normal.x*.5,z:stop.point.z+stop.normal.z*.5}},course.exercises[1],new ExamEngine('practice'),'ru')?.state).toBe('warning');});
-  it('uses the exercise timer separately from the overall exam timer',()=>{const engine=new ExamEngine('exam');engine.time=400;engine.exerciseTime=15;expect(exerciseFeedback(telemetry,course.exercises[3],engine,'ru')?.text).toContain('01:45');});
+  it('labels the remaining exercise time in both languages, independently of the exam timer',()=>{const engine=new ExamEngine('exam');engine.time=400;engine.exerciseTime=15;expect(exerciseFeedback(telemetry,course.exercises[3],engine,'ru')?.text).toBe('Осталось времени: 01:45');expect(exerciseFeedback(telemetry,course.exercises[3],engine,'uz')?.text).toBe('Qolgan vaqt: 01:45');});
   it('shows the current traffic light rather than a stop countdown at intersections',()=>{const e=course.exercises[4],engine=new ExamEngine('practice');expect(exerciseFeedback(telemetry,e,engine,'ru')?.state).toBe('hold');expect(exerciseFeedback({...telemetry,time:20},e,engine,'ru')?.text).toContain('Зелёный');});
 });

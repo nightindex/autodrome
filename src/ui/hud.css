@@ -16,6 +16,14 @@
 .exercise-card h2{font-size:20px;margin:9px 0}
 .exercise-card p{font-size:12px;color:#4c624b;line-height:1.6;margin:0 0 14px}
 .exercise-progress{margin:0 -18px}
+/* A selected practice exercise is independent, so reserve space for its live guidance. */
+#hud[data-practice=true][data-free=false] .exercise-card{width:248px;padding:12px 14px 0}
+#hud[data-practice=true][data-free=false] .exercise-card h2{font-size:18px;margin:6px 0}
+#hud[data-practice=true][data-single=true] #exercise-count,
+#hud[data-practice=true][data-single=true] .exercise-progress{display:none}
+#hud[data-practice=true][data-free=false] .exercise-progress{margin:0 -14px}
+#hud[data-practice=true][data-free=false] #practice-coach{padding-bottom:6px}
+#hud[data-practice=true][data-free=false] #exercise-method{margin-bottom:0}
 #practice-coach{padding:1px 0 12px;color:var(--hud-ink)}
 #coach-action{display:block;font-size:14px;line-height:1.45;font-weight:600}
 #practice-coach #coach-detail{font-size:12px;line-height:1.5;margin:7px 0 0;color:#4c624b}
@@ -30,9 +38,12 @@
 #exercise-method summary:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 #retry-stage,#leave-exercise{pointer-events:auto;display:flex;align-items:center;gap:8px;min-height:44px;width:100%;padding:8px 0;border-top:1px solid #d6ddce;background:transparent;color:var(--hud-ink);font-size:12px;text-align:left}
 #retry-stage:hover,#leave-exercise:hover{color:#163c2d;background:#e9edde}
-#hud[data-practice=true][data-free=false] .startup-hint{display:none}
+#hud[data-practice=true][data-free=false] .startup-hint>span{display:none}
 #hud[data-free=true] .exercise-card>:not(#free-practice){display:none}
-#practice-errors{pointer-events:auto;margin-bottom:12px;border-top:1px solid #d6ddce}
+#hud[data-free=true] .exercise-card{width:232px;padding:12px 14px 0}
+#hud[data-free=true] .exercise-card h2{font-size:17px;margin:2px 0 6px}
+#hud[data-free=true] .exercise-card #free-practice>p{font-size:12px;line-height:1.4;margin:0 0 8px}
+#practice-errors{pointer-events:auto;margin-bottom:4px;border-top:1px solid #d6ddce}
 #practice-errors summary{cursor:pointer;min-height:44px;align-content:center;font-size:12px;color:var(--hud-ink)}
 #practice-errors summary:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 #practice-error-count{font-variant-numeric:tabular-nums;margin-left:6px}
@@ -41,7 +52,7 @@
 #practice-error-list time{grid-column:1/-1;font-size:11px;color:var(--hud-secondary);font-variant-numeric:tabular-nums}
 #practice-error-list strong{color:#9a402b;white-space:nowrap}
 .driving #toast{white-space:pre-line}
-#choose-practice-exercise{pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;width:100%;padding:10px 8px;margin-bottom:16px;background:var(--green);color:#fffdf2;font-size:12px;border-radius:5px}
+#choose-practice-exercise{pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;width:100%;padding:10px 8px;margin-bottom:8px;background:var(--green);color:#fffdf2;font-size:12px;border-radius:5px}
 #choose-practice-exercise:hover{background:#163c2d}
 .instrument-panel{left:auto;right:var(--hud-gap);bottom:24px;transform:none;width:236px;padding:13px 18px;background:#f7f6ecf5;backdrop-filter:none;box-shadow:none;border-color:#d6ddce}
 .instrument-top{color:var(--hud-secondary);font-size:9px;letter-spacing:1.5px}
@@ -50,7 +61,10 @@
 .vehicle-status{font-size:10px;letter-spacing:.3px;padding:10px 0}
 .vehicle-status .warn{color:#8c5b1d}.vehicle-status .ok{color:#326644}.vehicle-status .off{color:#697960}
 .pedals span{font-size:8px;letter-spacing:0}
-.startup-hint{position:absolute;left:var(--hud-gap);bottom:24px;max-width:300px;padding:12px 16px;background:#214c3df5;color:#fffdf2;font-size:12px;line-height:1.7;border-radius:6px}
+.startup-hint{position:absolute;left:var(--hud-gap);bottom:24px;max-width:340px;padding:8px 8px 8px 16px;display:flex;align-items:center;gap:8px;background:#214c3df5;color:#fffdf2;font-size:12px;line-height:1.7;border-radius:6px}
+.startup-hint>span{min-width:0}
+#quick-controls-button{pointer-events:auto;flex:none;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid #ffffff66;border-radius:5px;background:#ffffff14;color:inherit}
+#quick-controls-button:hover{background:#ffffff30}
 #hud[data-controls-open=true] .startup-hint{display:none}
 #hud[data-controls-open=true] .exercise-card{display:none}
 #recovery-prompt{position:absolute;left:50%;bottom:32px;transform:translateX(-50%);width:280px;max-width:calc(100vw - 24px);padding:14px 16px;background:var(--hud-paper);border:1px solid #cbd5c1;border-radius:8px;z-index:11;pointer-events:auto}
@@ -92,8 +106,10 @@
  .header-controls{grid-column:1/-1;justify-content:flex-end;gap:6px}.header-controls button{min-width:44px;padding:8px}
  .header-controls #map-button span,.header-controls #controls-button span{display:inline;font-size:11px}
  .exercise-card{top:124px;width:224px;padding:12px 14px 0;max-height:calc(100dvh - 388px)}.exercise-card h2{font-size:17px;margin:6px 0}.exercise-card p{font-size:11px;line-height:1.5;margin-bottom:10px}.exercise-eyebrow{font-size:9px}.exercise-progress{margin:0 -14px}
+ #hud[data-practice=true][data-free=false] .exercise-card{width:210px}
+ #hud[data-free=true] .exercise-card{width:210px}
  .instrument-panel{left:auto;right:12px;bottom:20px;width:188px;padding:10px 14px}.instrument-top{font-size:8px}.speed-row strong{font-size:44px}.gear-box{padding-left:14px}.gear-box strong{font-size:30px}.vehicle-status{font-size:9px}.pedals span{font-size:7px}
- .startup-hint{bottom:20px;max-width:calc(100vw - 224px);padding:10px;font-size:10px;line-height:1.6}
+ .startup-hint{bottom:20px;max-width:calc(100vw - 224px);padding:10px;flex-direction:column;align-items:flex-start;font-size:10px;line-height:1.6}
  #route-map{bottom:244px;width:min(300px,calc(100vw - 24px));max-height:calc(100dvh - 368px)}
  #route-map canvas{max-height:calc(100dvh - 465px)}
  #driving-controls{left:12px;top:124px;bottom:auto;max-width:calc(100vw - 24px);max-height:calc(100dvh - 368px)}
@@ -109,7 +125,7 @@
  #route-map canvas{max-height:calc(100dvh - 202px)}
  #driving-controls{top:80px;bottom:auto;max-height:calc(100dvh - 100px)}
  #mirror-controls{top:80px;max-height:calc(100dvh - 100px)}
- .startup-hint{max-width:280px;font-size:11px}
+ .startup-hint{max-width:min(400px,calc(100vw - 272px));font-size:11px}
 }
 @media(max-height:500px) and (min-width:651px){
  .instrument-panel{width:200px;padding:10px 14px}.instrument-top{font-size:8px}.speed-row{margin:6px 0}.speed-row strong{font-size:42px}.gear-box strong{font-size:28px}

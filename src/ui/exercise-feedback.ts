@@ -6,8 +6,8 @@ import { formatTime } from './i18n';
 import { stopLineApproachEdge } from '../data/marking-standards';
 
 const text={
-  uz:{distance:'Stop chizig‘igacha',metres:'m',hold:'To‘xtab turing',seconds:'s',done:'To‘xtash qabul qilindi',past:'Stop chizig‘i ortda',time:'Mashq vaqti',red:'Qizil — kuting',amber:'Sariq — kuting',green:'Yashil — davom eting',reverse:'Orqaga kirib joylashing'},
-  ru:{distance:'До стоп-линии',metres:'м',hold:'Стойте ещё',seconds:'с',done:'Остановка засчитана',past:'Стоп-линия позади',time:'Время на упражнение',red:'Красный — ждите',amber:'Жёлтый — ждите',green:'Зелёный — можно ехать',reverse:'Въезжайте задним ходом'},
+  uz:{distance:'Stop chizig‘igacha',metres:'m',hold:'To‘xtab turing',seconds:'s',done:'To‘xtash qabul qilindi',past:'Stop chizig‘i ortda',time:'Qolgan vaqt',red:'Qizil — kuting',amber:'Sariq — kuting',green:'Yashil — davom eting',reverse:'Orqaga kirib joylashing'},
+  ru:{distance:'До стоп-линии',metres:'м',hold:'Стойте ещё',seconds:'с',done:'Остановка засчитана',past:'Стоп-линия позади',time:'Осталось времени',red:'Красный — ждите',amber:'Жёлтый — ждите',green:'Зелёный — можно ехать',reverse:'Въезжайте задним ходом'},
 };
 export function exerciseFeedback(t:VehicleTelemetry,e:Exercise,engine:ExamEngine,language:Language){
   const c=text[language];

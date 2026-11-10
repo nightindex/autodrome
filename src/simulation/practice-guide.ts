@@ -89,7 +89,7 @@ export class PracticeGuide {
       if(e.id==='pedestrian'&&t.indicator==='left'&&t.position.x-startLinePoint.x>=8)return hint('cancel-start-signal',say('Выключите левый поворотник после старта','Startdan keyin chap burilish chirog‘ini o‘chiring'),'', ['indicatorLeft']);
       const feedback=exerciseFeedback(t,e,engine,language)?.text??'';
       if(d<0&&e.stop.light)return hint('junction-exit',say('Освободите перекрёсток','Chorrahaning chiqishigacha yuring'),say('Продолжайте по своей полосе.','O‘z tasmangizda davom eting.'),['throttle']);
-      if(d<0&&!engine.stoppedCorrectly)return hint('missed-stop',say('Стоп-линия уже позади','Stop chizig‘i ortda qoldi'),say('Повторите этот этап, чтобы отработать остановку перед линией.','Chiziq oldida to‘xtashni mashq qilish uchun bosqichni takrorlang.'),[],'warning');
+      if(d<0&&!engine.stoppedCorrectly)return hint('missed-stop',say('Стоп-линия уже позади','Stop chizig‘i ortda qoldi'),this.single?say('Повторите этот этап, чтобы отработать остановку перед линией.','Chiziq oldida to‘xtashni mashq qilish uchun bosqichni takrorlang.'):say('Вернитесь к линии или начните маршрут заново через «Управление».','Chiziqqa qayting yoki «Boshqaruv» orqali yo‘nalishni qayta boshlang.'),[],'warning');
       if(stop){
         if(e.stop.light)return hint(d<=1&&t.speed<.12?'signal-wait':'signal-approach',say('Остановитесь перед линией и ждите зелёного','Chiziq oldida to‘xtab, yashilni kuting'),feedback,['brake'],'hold');
         if(d<=1&&t.speed<.12)return hint('stop-hold',say('Удерживайте автомобиль на месте','Avtomobilni joyida ushlab turing'),feedback,['brake'],'hold');

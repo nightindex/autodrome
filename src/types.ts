@@ -42,7 +42,7 @@ export interface RuleDefinition {
   repeat?: 'event' | '5seconds';
 }
 export interface ExamEvent { ruleId: number; time: number; points: number; exercise: ExerciseId; key: string }
-export interface ExamResult { date: string; mode: Mode; elapsed: number; score: number; passed: boolean; completed: boolean; events: ExamEvent[] }
+export interface ExamResult { date: string; mode: Mode; guided?: boolean; elapsed: number; score: number; passed: boolean; completed: boolean; events: ExamEvent[] }
 export interface Settings {
   curbStyle:'yellow-black'|'white';
   mirrors:import('./render/mirror-adjustment').MirrorAdjustments;

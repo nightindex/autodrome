@@ -13,16 +13,16 @@ const parkingControl=(id:string,wheels:readonly number[])=>({
 });
 const names: Record<ExerciseId, [string, string, string, string]> = {
   start: ['Start', 'Старт', 'Kamarni taqing. Dvigatelni yoqing, 1-uzatma va chap burilish chirog‘ini tanlang.', 'Пристегнитесь. Запустите двигатель, включите первую передачу и левый поворотник.'],
-  pedestrian: ['Piyodalar o‘tish joyi', 'Пешеходный переход', 'Stop chizig‘iga 1 metrdan yaqin to‘xtang. 3 soniya kuting.', 'Остановитесь не далее 1 метра от стоп-линии. Подождите 3 секунды.'],
-  hill: ['Estakada', 'Эстакада', 'Qiyalikdagi chiziqda to‘xtang. Qo‘l tormozidan foydalanib, orqaga ketmasdan yuring.', 'Остановитесь на подъёме. Троньтесь с ручника без отката.'],
-  rightAngle: ['90° burilishlar', 'Повороты на 90°', 'Yo‘nalish bo‘ylab sekin yuring. G‘ildiraklar sariq chiziqdan chiqmasin.', 'Следуйте по поворотам медленно. Не пересекайте жёлтые линии колёсами.'],
+  pedestrian: ['Piyodalar o‘tish joyi', 'Пешеходный переход', 'Stop chizig‘i oldida, undan 1 metrdan uzoqlashmay to‘xtang. 3 soniya kuting.', 'Остановитесь не далее 1 метра перед стоп-линией. Подождите 3 секунды.'],
+  hill: ['Estakada', 'Эстакада', 'Qiyalikdagi stop chizig‘i oldida to‘xtab, 3 soniya kuting. Qo‘l tormozidan foydalanib, orqaga ketmasdan yuring.', 'Остановитесь перед стоп-линией на подъёме и подождите 3 секунды. Троньтесь с ручника без отката.'],
+  rightAngle: ['90° burilishlar', 'Повороты на 90°', 'Yo‘nalish bo‘ylab sekin yuring, sariq chiziqlarni bosmang. Vaqt: 2 daqiqa.', 'Двигайтесь по поворотам медленно, не пересекая жёлтые линии. Время: 2 минуты.'],
   intersection: ['Chorraha', 'Перекрёсток', 'Svetoforga qarang. Qizilda stop chizig‘ini kesmang; yashilda yo‘lni davom ettiring.', 'Следите за светофором. На красный стойте перед линией; на зелёный продолжайте.'],
   snake: ['Ilon izi', 'Змейка', 'Egri yo‘ldan chiziqlarga tegmasdan o‘ting. Vaqt: 2 daqiqa.', 'Пройдите извилистый участок, не касаясь линий. Время: 2 минуты.'],
-  garage: ['Boksga kirish', 'Въезд в бокс', 'Boks yonidan o‘ting, R ni tanlang va orqaga kiring. Ikkala orqa g‘ildirakni oq chiziqqa qo‘yib to‘xtang.', 'Проедьте мимо бокса, включите R и сдайте назад. Остановитесь обоими задними колёсами на белой линии.'],
+  garage: ['Boksga kirish', 'Въезд в бокс', 'Boks yonidan o‘ting, R ni tanlang va orqaga kiring. Ikkala orqa g‘ildirakni oq chiziqqa qo‘yib, 2 soniya to‘xtab turing.', 'Проедьте мимо бокса, включите R и сдайте назад. Остановитесь обоими задними колёсами на белой линии и стойте 2 секунды.'],
   railway: ['Temiryo‘l kesishmasi', 'Железнодорожный переезд', 'Stop chizig‘ida to‘xtang va 3 soniya kuting. Keyin relslardan o‘ting.', 'Остановитесь перед стоп-линией на 3 секунды, затем пересеките пути.'],
   acceleration: ['Tezlanish', 'Разгон', 'Ikkinchi uzatmaga o‘ting. Tezlikni 20–40 km/soat orasida saqlang.', 'Включите вторую передачу. Держите скорость в пределах 20–40 км/ч.'],
   emergency: ['Favqulodda to‘xtash', 'Аварийная остановка', 'Signalni kuting. 2 soniyada to‘xtang, 3 soniyada avariya chirog‘ini yoqing.', 'Дождитесь сигнала. Остановитесь за 2 секунды, включите аварийку за 3 секунды.'],
-  parallel: ['Parallel parkovka', 'Параллельная парковка', 'Cho‘ntakka orqaga parallel kiring. Ikkala o‘ng g‘ildirakni oq chiziqqa qo‘yib to‘xtang.', 'Сдайте назад в карман параллельно дороге. Остановитесь обоими правыми колёсами на белой линии.'],
+  parallel: ['Parallel parkovka', 'Параллельная парковка', 'Cho‘ntakka orqaga parallel kiring. Ikkala o‘ng g‘ildirakni oq chiziqqa qo‘yib, 2 soniya to‘xtab turing.', 'Сдайте назад в карман параллельно дороге. Остановитесь обоими правыми колёсами на белой линии и стойте 2 секунды.'],
   finish: ['Finish', 'Финиш', 'O‘ng burilish chirog‘ini yoqing. Finishdan o‘ting va to‘xtang.', 'Включите правый поворотник. Пересеките финиш и остановитесь.'],
 };
 function exercise(id: ExerciseId, x: number, y: number, sx: number, sy: number, yaw: number, extra: Partial<Exercise> = {}): Exercise {

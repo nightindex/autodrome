@@ -15,6 +15,12 @@ try{
  await page.addInitScript(()=>localStorage.setItem('avtodrom.settings.v1',JSON.stringify({language:'ru'})));
  await page.goto('http://127.0.0.1:5173/');await ready();await page.click('#practice');await page.waitForTimeout(200);
  assert.equal(await visible('#route-map'),false);assert.equal(await visible('#driving-controls'),false);await shot('desktop-default');
+ await page.locator('#quick-controls-button').focus();await page.keyboard.press('Enter');
+ assert(await visible('#driving-controls'));assert.equal(await page.locator('#quick-controls-button').getAttribute('aria-expanded'),'true');
+ const shortcutRows=page.locator('#driving-controls .drive-shortcuts>div');
+ const expectedShortcuts=await page.evaluate(async()=>Object.keys((await import('/src/simulation/input.ts')).defaultBindings).length-3);
+ assert.equal(await shortcutRows.count(),expectedShortcuts);assert((await shortcutRows.allTextContents()).some(row=>row.includes('Аварийка')));
+ await page.keyboard.press('Escape');assert.equal(await visible('#driving-controls'),false);assert.equal(await page.locator(':focus').getAttribute('id'),'quick-controls-button');
  await page.click('#map-button');assert(await visible('#route-map'));assert.equal(await page.locator('#map-button').getAttribute('aria-expanded'),'true');await page.waitForTimeout(150);await shot('desktop-map');
  await page.keyboard.press('Space');assert.equal(await page.evaluate(()=>window.__avtodrom.snapshot().telemetry.handbrake),false);assert(await visible('#route-map'));await page.keyboard.press('Space');
  await page.keyboard.press('Escape');assert.equal(await visible('#route-map'),false);assert.equal(await page.evaluate(()=>window.__avtodrom.snapshot().state),'driving');assert.equal(await page.locator(':focus').getAttribute('id'),'map-button');

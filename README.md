@@ -15,6 +15,8 @@ npm run dev
 
 Open the Local URL printed by Vite (normally http://127.0.0.1:5173). Use Chrome or Edge with hardware acceleration enabled. Everything runs locally; no account, server database, API key, or remote asset requests are required.
 
+The main menu offers free practice, guided route practice, and the exam. Guided route practice follows the 13 route visits in order, with a current-exercise card, expandable instructions, live coaching, and practice aids. Penalty points do not end the route; the result is saved as practice. Free practice and individual exercises remain available separately.
+
 On Windows, after dependencies are installed, you can also double-click **Start Simulator.cmd**.
 
 ```powershell

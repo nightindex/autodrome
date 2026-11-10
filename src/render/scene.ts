@@ -59,9 +59,9 @@ export class GameScene {
     this.createGuide();
     window.addEventListener('resize',()=>this.resize());this.resize();
   }
-  async loadCar(onProgress:(value:number)=>void){
+  async loadCar(onProgress:(value:number|undefined)=>void){
     try{
-      const gltf=await new GLTFLoader().loadAsync(`/assets/cobalt.glb?v=${carAssetVersion}`,e=>onProgress(e.total?e.loaded/e.total:.5));
+      const gltf=await new GLTFLoader().loadAsync(`/assets/cobalt.glb?v=${carAssetVersion}`,e=>onProgress(e.total?e.loaded/e.total:undefined));
       const model=gltf.scene;const rawBox=new T.Box3().setFromObject(model);const scale=vehicleConfig.length/rawBox.getSize(new T.Vector3()).z;
       model.scale.setScalar(scale);model.rotation.y=Math.PI;model.updateMatrixWorld(true);
       const box=new T.Box3().setFromObject(model);model.position.y=-.62-box.min.y;this.car.add(model);this.car.updateMatrixWorld(true);

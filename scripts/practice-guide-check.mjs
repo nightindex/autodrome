@@ -11,6 +11,35 @@ try{
  await page.goto('http://127.0.0.1:5173/');await page.waitForFunction(()=>window.__avtodrom?.snapshot().loaded,null,{timeout:60000});
  const freeChecks=[];
  if(phase==='after'){
+  assert(await page.locator('#guided').isVisible());
+  await page.click('#guided');await page.waitForFunction(()=>document.querySelector('#exercise-count')?.textContent==='01 / 13');
+  assert.equal(await page.evaluate(()=>window.__avtodrom.snapshot().freePractice),false);
+  assert(await page.locator('#practice-coach').isVisible());assert(await page.locator('.exercise-progress').isVisible());
+  assert.equal(await page.locator('#retry-stage').isVisible(),false);
+  await page.evaluate(async()=>{const a=window.__avtodrom,{course}=await import('/src/data/course.ts'),e=course.exercises[0];a.vehicle.reset(e.point,e.yaw);a.vehicle.belt=true;a.vehicle.drivetrain.engine=true;a.vehicle.drivetrain.gear=1;a.vehicle.drivetrain.handbrake=false;a.vehicle.indicator='left';a.step(1/60);});
+  await page.waitForFunction(()=>document.querySelector('#exercise-count')?.textContent==='02 / 13');
+  await page.evaluate(async()=>{
+   const a=window.__avtodrom,{vehicleConfig}=await import('/src/data/vehicle.ts'),{stopLineApproachEdge}=await import('/src/data/marking-standards.ts');
+   const e=a.tracker().current,s=e.stop,edge=stopLineApproachEdge(s.point,s.normal),offset=vehicleConfig.length/2+5.6;
+   a.vehicle.reset({x:edge.x-s.normal.x*offset,z:edge.z-s.normal.z*offset},e.yaw);
+  });
+  await page.waitForFunction(()=>!document.querySelector('#exercise-feedback').hidden&&document.querySelector('#exercise-feedback').textContent.includes('5.6 м'));
+  assert(await page.locator('#practice-coach').isVisible());
+  await page.screenshot({path:`${directory}/guided-distance.png`});
+  freeChecks.push('guided route keeps live distance visible alongside preparation coaching');
+  await page.evaluate(async()=>{
+   const a=window.__avtodrom,{vehicleConfig}=await import('/src/data/vehicle.ts'),{stopLineApproachEdge}=await import('/src/data/marking-standards.ts');
+   const e=a.tracker().current,s=e.stop,edge=stopLineApproachEdge(s.point,s.normal),offset=vehicleConfig.length/2+.5;
+   a.vehicle.reset({x:edge.x-s.normal.x*offset,z:edge.z-s.normal.z*offset},e.yaw);a.vehicle.belt=true;a.vehicle.drivetrain.engine=true;
+   a.engine().update(a.vehicle.telemetry(),{stopDistance:.5},1);
+  });
+  await page.waitForFunction(()=>!document.querySelector('#exercise-feedback').hidden&&document.querySelector('#exercise-feedback').textContent.includes('Стойте ещё'));
+  freeChecks.push('guided route shows the live stop countdown');
+  await page.evaluate(()=>window.__avtodrom.pause());await page.click('#resume');
+  await page.waitForFunction(()=>document.querySelector('#exercise-count')?.textContent==='02 / 13');
+  assert(await page.locator('#practice-coach').isVisible());
+  await page.evaluate(()=>window.__avtodrom.pause());await page.click('#menu');
+  freeChecks.push('guided route entry, ordered progress and pause/resume');
   await page.click('#practice');await page.waitForTimeout(200);
   assert(await page.locator('#free-practice').isVisible());assert.equal(await page.locator('#practice-coach').isVisible(),false);
   assert.equal(await page.evaluate(()=>window.__avtodrom.scene.goal.visible||window.__avtodrom.scene.guide.visible),false);
@@ -51,6 +80,7 @@ try{
   if(phase==='after'){
    assert(visits.at(-1).coach,`Stage ${i} has a live action`);assert(visits.at(-1).arrows<16,`Stage ${i} shows only nearby arrows`);
    assert(visits.at(-1).guideVisible);
+   if(i===3||i===5){assert(await page.locator('#exercise-feedback').isVisible());assert((await page.locator('#exercise-feedback').innerText()).includes('Осталось времени'));}
   }
   if(phase==='after'||[0,4,6,10].includes(i))await page.screenshot({path:`${directory}/${phase}-${i}.png`});
  }
@@ -91,7 +121,7 @@ try{
    a.engine().update(a.vehicle.telemetry(),{stopDistance:.5},1);
   });
   await page.waitForFunction(()=>document.querySelector('#practice-coach').dataset.phase==='stop-hold');
-  const hold=await page.locator('#coach-detail').innerText();assert(/Стойте ещё/.test(hold));await page.screenshot({path:`${directory}/stop-hold.png`});checks.push('live stop countdown');
+  const hold=await page.locator('#exercise-feedback').innerText();assert(/Стойте ещё/.test(hold));assert.equal(await page.locator('#coach-detail').isVisible(),false);await page.screenshot({path:`${directory}/stop-hold.png`});checks.push('live stop countdown without duplicated coaching text');
   // Cover both UI languages and compact screens, including expanded text.
   for(const [name,width,height,language]of [['desktop',1440,900,'ru'],['small',375,667,'ru'],['landscape',844,390,'ru'],['uzbek',1024,768,'uz']]){
    await page.setViewportSize({width,height});
@@ -114,6 +144,10 @@ try{
   }
   await page.evaluate(()=>window.__avtodrom.start('exam'));await page.waitForTimeout(150);
   assert.equal(await page.locator('#practice-coach').isVisible(),false);assert.equal(await page.locator('#retry-stage').isVisible(),false);
+  assert.equal(await page.locator('#exercise-method').isVisible(),false);
+  await page.evaluate(()=>{const a=window.__avtodrom;a.tracker().reset(1);a.engine().setExercise(a.tracker().current.id);});
+  await page.waitForFunction(()=>document.querySelector('#exercise-count')?.textContent==='02 / 13');
+  assert.equal(await page.locator('#exercise-feedback').isVisible(),false);
   assert.equal(await page.evaluate(()=>window.__avtodrom.scene.guide.visible||window.__avtodrom.scene.goal.visible),false);checks.push('exam excludes training aids');
  }
  await writeFile(`${directory}/${phase}.json`,JSON.stringify({visits,checks,layouts,errors},null,2));assert.deepEqual(errors,[]);
