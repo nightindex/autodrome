@@ -157,9 +157,9 @@ export function curbSurfaces(sections:BoundarySection[],asphalt:MultiPolygon):{b
 }
 /** Closed curb solids with outward walls, including holes and exposed stripe ends. */
 export function curbGeometry(surfaces:{black:MultiPolygon;yellow:MultiPolygon},options:{height?:number;bevel?:number;color?:number;sideColor?:number;seams?:{axis:'x'|'z';value:number}[]}={}):T.BufferGeometry{
-  const positions:number[]=[],colors:number[]=[],indices:number[]=[];
+  const positions:number[]=[],colors:number[]=[],indices:number[]=[],references:number[]=[];
   const top=.02+(options.height??roadPaint.curbHeight),bevel=options.bevel??0;
-  const add=(x:number,z:number,height:number,color:T.Color)=>{positions.push(x,hillHeight(x,z)+height,z);colors.push(color.r,color.g,color.b);};
+  const add=(x:number,z:number,height:number,color:T.Color,reference=new T.Vector2(x,z))=>{positions.push(x,hillHeight(x,z)+height,z);colors.push(color.r,color.g,color.b);references.push(reference.x,reference.y);};
   for(const [surface,hex]of [[surfaces.black,0x242923],[surfaces.yellow,0xf0ce45]] as const){
     const color=new T.Color(options.color??hex),sideColor=new T.Color(options.sideColor??options.color??hex);
     for(const polygon of surface){
@@ -171,7 +171,7 @@ export function curbGeometry(surfaces:{black:MultiPolygon;yellow:MultiPolygon},o
         return new T.Vector2(p.x,p.z);
       })):contours;
       const triangles=T.ShapeUtils.triangulateShape(topContours[0],topContours.slice(1));
-      for(const p of topContours.flat())add(p.x,p.y,top,color);
+      topContours.forEach((ring,j)=>ring.forEach((p,i)=>add(p.x,p.y,top,color,contours[j][i])));
       for(const [a,b,c]of triangles)indices.push(base+c,base+b,base+a);
       const bottom=positions.length/3;
       for(const p of contours.flat())add(p.x,p.y,roadPaint.curbBase,color);
@@ -186,12 +186,12 @@ export function curbGeometry(surfaces:{black:MultiPolygon;yellow:MultiPolygon},o
           if(rightFacing)indices.push(k,k+2,k+1,k,k+3,k+2);else indices.push(k,k+1,k+2,k,k+2,k+3);
           if(bevel){
             const ta=topContours[ringIndex][i-1],tb=topContours[ringIndex][i%(ring.length-1)],j=positions.length/3;
-            add(a[0],a[1],top-bevel,color);add(b[0],b[1],top-bevel,color);add(tb.x,tb.y,top,color);add(ta.x,ta.y,top,color);
+            add(a[0],a[1],top-bevel,color);add(b[0],b[1],top-bevel,color);add(tb.x,tb.y,top,color,new T.Vector2(...b));add(ta.x,ta.y,top,color,new T.Vector2(...a));
             if(rightFacing)indices.push(j,j+2,j+1,j,j+3,j+2);else indices.push(j,j+1,j+2,j,j+2,j+3);
           }
         }
       });
     }
   }
-  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setIndex(indices);g.computeVertexNormals();return g;
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(positions,3));g.setAttribute('color',new T.Float32BufferAttribute(colors,3));g.setAttribute('curbReference',new T.Float32BufferAttribute(references,2));g.setIndex(indices);g.computeVertexNormals();return g;
 }

@@ -25,6 +25,7 @@ import { addStaticObstacle } from '../simulation/static-collision';
 import { markingDimensions } from '../data/marking-standards';
 import {courseSigns,courseSignPoint} from '../data/course-signs';
 import {CurbAppearance} from './curb-appearance';
+import {curbRibbonGeometries} from './curb-ribbon';
 import {createRailwayCrossing} from './railway-crossing';
 import {addRailwayColliders} from '../simulation/railway-collision';
 import {railwayDeckBounds,railwayMarkings} from '../data/railway';
@@ -167,6 +168,8 @@ export class CourseWorld {
     const meshes:T.Mesh<T.BufferGeometry,T.MeshStandardMaterial>[]=[];
     // Raised ramp walls retain their neutral concrete finish in either curb style.
     this.group.traverse(node=>{if(node instanceof T.Mesh&&node.material instanceof T.MeshStandardMaterial&&['course-curbs','intersection-curbs','departure-curbs'].includes(node.name))meshes.push(node);});
+    const ribbons=curbRibbonGeometries(curbSections,{minX:hillProfile.start,maxX:hillProfile.end,minZ:hillBounds.minZ,maxZ:hillBounds.maxZ});
+    for(const mesh of meshes){mesh.geometry.dispose();mesh.geometry=ribbons[mesh.name as keyof typeof ribbons];}
     this.curbAppearance=new CurbAppearance(meshes,boundaryLoops);this.setCurbStyle('yellow-black');this.batchStaticGeometry();
   }
   private batchStaticGeometry(){

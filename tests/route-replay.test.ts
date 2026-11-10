@@ -5,20 +5,22 @@ import { ExamEngine } from '../src/simulation/exam';
 import { distance,lineDistance,localPoint } from '../src/simulation/math';
 import { vehicleConfig as car,wheelCenter } from '../src/data/vehicle';
 import type { Vec2,VehicleTelemetry } from '../src/types';
+import {PracticeGuide} from '../src/simulation/practice-guide';
 function sample(p:Vec2,yaw:number,speed=2.5,reverse=false):VehicleTelemetry{
   return {time:20,position:p,yaw,speed,signedSpeed:reverse?-speed:speed,rpm:1500,gear:reverse?-1:2,throttle:.2,brake:0,clutch:0,steering:0,engine:true,stalled:false,belt:true,handbrake:false,indicator:'off',hazards:false,ignition:false,positionLights:false,headlights:false,fogLights:false,bumper:localPoint(p,yaw,0,car.length/2),wheels:[0,1,2,3].map(index=>{const {x,z}=wheelCenter(index);return localPoint(p,yaw,x,z);}),collision:false};
 }
 describe('complete reference route sensor replay',()=>{
-  it('completes every exercise, including a second intersection visit',()=>{
-    const tracker=new CourseTracker(false),engine=new ExamEngine('exam');engine.setExercise('start');let visits=1;const stops=new Set<number>();let emergencyStopped=false;const controlHits:unknown[]=[];
+  for(const mode of ['exam','practice'] as const)it(`completes every ${mode} exercise, including a second intersection visit`,()=>{
+    const tracker=new CourseTracker(false),engine=new ExamEngine(mode);engine.setExercise('start');let guide=new PracticeGuide(tracker.current),visits=1;const stops=new Set<number>();let emergencyStopped=false;const controlHits:unknown[]=[];
     function feed(t:VehicleTelemetry,dt=.04){
       const e=tracker.current;t.indicator=e.id==='start'?'left':e.indicator??'off';
       if(e.stop?.light)t.time=e.stop.normal.x?56:20;
       if(e.id==='acceleration')t.speed=7;
       const result=tracker.update(t,dt);engine.update(t,result.observations,dt);
+      if(mode==='practice'){guide.update(t,engine,result.observations,dt);guide.view(t,engine,'ru');}
       if(result.observations.controlLine&&controlHits.length<5)controlHits.push({exercise:e.id,position:t.position,yaw:t.yaw,wheels:t.wheels});
-      const done=e.id==='emergency'?engine.emergencyCompleted&&!t.hazards&&t.speed>.25:result.atGoal;
-      if(done&&tracker.next()){engine.setExercise(tracker.current.id);visits++;}
+      const done=e.id==='emergency'?engine.emergencyCompleted&&!t.hazards&&t.speed>.25:mode==='practice'?guide.canComplete(result.atGoal,t,engine):result.atGoal;
+      if(done&&tracker.next()){engine.setExercise(tracker.current.id);guide=new PracticeGuide(tracker.current,tracker.index);visits++;}
       return result;
     }
     for(let leg=1;leg<course.route.length;leg++){

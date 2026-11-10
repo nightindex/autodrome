@@ -19,12 +19,12 @@ describe('mirror actuator settings',()=>{
 describe('reflected mirror directions',()=>{
   const azimuth=(direction:ReturnType<typeof sideMirrorDirection>)=>Math.atan2(direction.x,-direction.z);
   const elevation=(direction:ReturnType<typeof sideMirrorDirection>)=>Math.asin(direction.y);
-  it('starts with level rearward views looking outward on opposite sides',()=>{
+  it('starts with symmetric rearward views tilted toward the rear tyres and road',()=>{
     const left=sideMirrorDirection('left',{yaw:0,pitch:0}),right=sideMirrorDirection('right',{yaw:0,pitch:0});
     expect(left.x).toBeGreaterThan(0);expect(right.x).toBeLessThan(0);
     expect(left.x).toBeCloseTo(-right.x);expect(left.z).toBeCloseTo(right.z);
-    expect(azimuth(left)).toBeCloseTo(Math.atan(.7));
-    expect(left.z).toBeLessThan(0);expect(left.y).toBe(0);expect(right.y).toBe(0);
+    expect(azimuth(left)).toBeCloseTo(Math.atan(.35));
+    expect(left.z).toBeLessThan(0);expect(elevation(left)).toBeCloseTo(-10*Math.PI/180);expect(right.y).toBeCloseTo(left.y);
   });
   for(const side of ['left','right'] as const){
     it.each([-mirrorLimits.pitch,0,mirrorLimits.pitch])(`${side}: horizontal arrows look in their labelled direction at pitch %d`,pitch=>{

@@ -9,7 +9,7 @@ export class Input {
   constructor(public bindings:Record<string,string>){
     window.addEventListener('keydown',e=>{
       if(!this.enabled || (e.target instanceof HTMLElement && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)))return;
-      if(e.target instanceof HTMLElement&&e.target.closest('button')&&['Space','Enter','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))return;
+      if(e.target instanceof HTMLElement&&e.target.closest('button,summary')&&['Space','Enter','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))return;
       const action=Object.keys(this.bindings).find(a=>this.bindings[a]===e.code);
       if(!action)return;e.preventDefault();this.held.add(e.code);
       if(!e.repeat)this.onAction(action);

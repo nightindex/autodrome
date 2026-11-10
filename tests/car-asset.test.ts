@@ -6,6 +6,65 @@ import * as T from 'three';
 let doc:Document;
 beforeAll(async()=>{doc=await new NodeIO().registerExtensions(ALL_EXTENSIONS).read('public/assets/cobalt.glb');});
 describe('refined Cobalt asset',()=>{
+  it('joins the mirror caps to the lower casings with continuous positions and normals',()=>{
+    const r=doc.getRoot().getExtras().cobaltRefinement as {sourceOffset:number;sourceScale:number};
+    const normalize=new T.Matrix4().compose(new T.Vector3(0,r.sourceOffset,0),new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),Math.PI),new T.Vector3().setScalar(r.sourceScale));
+    for(const side of ['Left','Right']){
+      const vertices=(part:string)=>{
+        const node=doc.getRoot().listNodes().find(n=>n.getName()===`COBALT_SideMirror${part}_${side}`)!;
+        expect(node,`${side} ${part}`).toBeDefined();const matrix=normalize.clone().multiply(new T.Matrix4().fromArray(node.getWorldMatrix())),normals=new T.Matrix3().getNormalMatrix(matrix);
+        return node.getMesh()!.listPrimitives().flatMap(p=>{
+          const a=p.getAttribute('POSITION')!,n=p.getAttribute('NORMAL')!;
+          return Array.from({length:a.getCount()},(_,i)=>({p:new T.Vector3().fromArray(a.getArray(),i*3).applyMatrix4(matrix),n:new T.Vector3().fromArray(n.getArray(),i*3).applyMatrix3(normals).normalize()}));
+        });
+      };
+      const key=(p:T.Vector3)=>p.toArray().map(v=>Math.round(v*1e6)).join(','),shell=new Map(vertices('Shell').map(v=>[key(v.p),v.n]));
+      let shared=0;
+      for(const vertex of vertices('Cap')){
+        expect(vertex.p.y,`${side} straight paint seam`).toBeGreaterThanOrEqual(.374-1e-6);
+        if(Math.abs(vertex.p.y-.374)>1e-6)continue;
+        const normal=shell.get(key(vertex.p));expect(normal,`${side} closed paint seam at ${vertex.p.toArray()}`).toBeDefined();
+        expect(vertex.n.dot(normal!)).toBeGreaterThan(.9999);shared++;
+      }
+      expect(shared,`${side} sampled seam`).toBeGreaterThan(12);
+    }
+  });
+  it('closes both mirror-neck openings without piercing the inner sail trim',()=>{
+    const r=doc.getRoot().getExtras().cobaltRefinement as {sourceOffset:number;sourceScale:number};
+    const normalize=new T.Matrix4().compose(new T.Vector3(0,r.sourceOffset,0),new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),Math.PI),new T.Vector3().setScalar(r.sourceScale));
+    const material=new T.MeshBasicMaterial(),doubleSided=new T.MeshBasicMaterial({side:T.DoubleSide}),surfaces:T.Mesh[]=[];
+    try{
+      for(const node of doc.getRoot().listNodes())for(const primitive of node.getMesh()?.listPrimitives()??[]){
+        if(primitive.getMaterial()?.getAlphaMode()==='BLEND')continue;
+        const geometry=new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(primitive.getAttribute('POSITION')!.getArray()!,3));
+        if(primitive.getIndices())geometry.setIndex(Array.from(primitive.getIndices()!.getArray()!));
+        geometry.applyMatrix4(normalize.clone().multiply(new T.Matrix4().fromArray(node.getWorldMatrix())));
+        const surface=new T.Mesh(geometry,primitive.getMaterial()!.getDoubleSided()?doubleSided:material);surface.name=node.getName();surface.userData.material=primitive.getMaterial()!.getName();surfaces.push(surface);
+      }
+      const without=surfaces.filter(m=>!/^COBALT_SideMirror(Mount|Shell|Cap|Cavity)_/.test(m.name)),eye=new T.Vector3(.31,.48,.2);
+      // Actual sightlines through the missing source-model necks on each side.
+      for(const [side,point]of [['Left',[.779338,.364135,.747130]],['Right',[-.801070,.324428,.734561]]]as const){
+        const target=new T.Vector3(...point),ray=new T.Raycaster(eye,target.clone().sub(eye).normalize(),0,target.distanceTo(eye)+.08);
+        expect(ray.intersectObjects(without),`${side} original opening`).toHaveLength(0);
+        expect(ray.intersectObjects(surfaces)[0]?.object.name,`${side} covered opening`).toMatch(new RegExp(`^COBALT_SideMirror(Mount|Shell|Cavity)_${side}$`));
+      }
+      for(const side of [1,-1]){
+        const target=new T.Vector3(side*.712471,.331345,.799329),ray=new T.Raycaster(eye,target.sub(eye).normalize());
+        expect(ray.intersectObjects(surfaces)[0]?.object.name,`inner sail ${side}`).not.toMatch(/^COBALT_SideMirrorMount_/);
+        const upper=new T.Vector3(side*.804347,.450088,.710834),edge=new T.Raycaster(eye,upper.sub(eye).normalize()).intersectObjects(surfaces)[0];
+        expect(edge,`covered upper cap ${side}`).toBeDefined();
+        expect(edge.object.userData.material,`no old lining shards over the cap ${side}`).not.toBe('COBALT_Headliner');
+      }
+    }finally{surfaces.forEach(m=>m.geometry.dispose());material.dispose();doubleSided.dispose();}
+    const housing=doc.getRoot().listMaterials().find(m=>m.getName()==='COBALT_SideMirrorHousing')!;
+    const mount=doc.getRoot().listMaterials().find(m=>m.getName()==='COBALT_SideMirrorMount')!;
+    expect(housing.getBaseColorFactor()).toEqual(mount.getBaseColorFactor());
+    for(const finish of [housing,mount]){
+      expect(finish.getAlphaMode()).toBe('OPAQUE');expect(finish.getMetallicFactor()).toBe(0);
+      expect(finish.getRoughnessFactor()).toBeGreaterThanOrEqual(.8);
+      expect(Math.max(...finish.getBaseColorFactor().slice(0,3))).toBeLessThan(.03);
+    }
+  });
   it('keeps opaque housing triangles out of both mirror images from the driver seat',()=>{
     const r=doc.getRoot().getExtras().cobaltRefinement as {sourceOffset:number;sourceScale:number};
     const normalize=new T.Matrix4().compose(new T.Vector3(0,r.sourceOffset,0),new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),Math.PI),new T.Vector3().setScalar(r.sourceScale));

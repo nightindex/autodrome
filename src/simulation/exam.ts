@@ -26,7 +26,8 @@ export class ExamEngine {
   private emergencyAt:number|null=null; private emergencyStop:number|null=null; private emergencyHazards=false;
   private emergencyHazardsAt:number|null=null;
   private hadParkingReverse=false;
-  constructor(public mode:Mode, public limitSeconds=900) {}
+  private beltEpisodes=0;private wasUnbelted=false;private speed40Episodes=0;private wasOver40=false;
+  constructor(public mode:Mode, public limitSeconds=900, public readonly freeDriving=false) {}
   setExercise(id:ExerciseId) {
     this.exercise=id;this.exerciseTime=0;this.visit++;
     this.stoppedAt=null;this.stoppedFor=0;this.stopSatisfied=false;this.wasStopped=false;
@@ -42,12 +43,20 @@ export class ExamEngine {
   get stopSeconds(){return this.stoppedFor;}
   get emergencyCompleted(){return this.emergencyStop!==null && this.emergencyHazards && this.time-this.emergencyStop>=3;}
   get parkingReversed(){return this.hadParkingReverse;}
+  get emergencySignalled(){return this.emergencyAt!==null;}
+  get emergencyStopped(){return this.emergencyStop!==null;}
+  get emergencyHoldRemaining(){return this.emergencyStop===null?3:Math.max(0,3-(this.time-this.emergencyStop));}
+  get secondGearUsed(){return this.secondGear;}
   update(t:VehicleTelemetry,o:Observations,dt:number) {
     if(this.status!=='running')return;
     this.time+=dt;this.exerciseTime+=dt;
     const stopped=t.speed<0.12, moving=t.speed>0.25;
-    if(!this.started){if(this.time>=30&&(!moving||this.time>30))this.add(10,'start-30');if(this.time>=40&&(!moving||this.time>40))this.add(23,'start-40');}
-    if(moving && !t.belt)this.add(1,'belt');
+    const free=this.mode==='practice'&&this.freeDriving;
+    // Free driving scores vehicle handling without assigning an exam route or task.
+    if(free)o={};
+    if(!free&&!this.started){if(this.time>=30&&(!moving||this.time>30))this.add(10,'start-30');if(this.time>=40&&(!moving||this.time>40))this.add(23,'start-40');}
+    if(t.belt)this.wasUnbelted=false;
+    if(moving && !t.belt){if(!free||!this.wasUnbelted)this.add(1,free?`belt:${++this.beltEpisodes}`:'belt');this.wasUnbelted=true;}
     if(moving)this.started=true;
     if(o.startCrossed){this.crossedStart=true;if(t.indicator!=='left')this.add(2,'start-indicator');}
     if(this.crossedStart && !this.startCancelChecked && (o.distanceFromStart??0)>=10){this.startCancelChecked=true;if(t.indicator==='left')this.add(3,'start-cancel');}
@@ -85,7 +94,7 @@ export class ExamEngine {
       if(this.greenSeconds>30)this.add(9);
     }
     if(this.exercise==='hill' && (o.hillRollback??0)>0.3+1e-8)this.add(14);
-    if(this.exercise==='snake'||this.exercise==='rightAngle'){
+    if(!free&&(this.exercise==='snake'||this.exercise==='rightAngle')){
       if(o.controlLine)this.add(15);
       if(this.exerciseTime>120)this.add(16);
     }
@@ -113,10 +122,12 @@ export class ExamEngine {
     if(o.abandoned)this.add(26,'abandon');
     if(o.skippedExercise)this.add(27);
     if(o.offRoute)this.add(28);
-    if(t.signedSpeed<-.2 && !['garage','parallel','hill'].includes(this.exercise))this.add(29);
+    if(!free && t.signedSpeed<-.2 && !['garage','parallel','hill'].includes(this.exercise))this.add(29);
     if(t.collision && !this.wasCollision){this.collisionCount++;this.add(30,`collision:${this.collisionCount}`);}
     this.wasCollision=t.collision;
-    if(t.speed*3.6>40)this.add(31,'speed-40');
+    const over40=t.speed*3.6>40;
+    if(over40&&(!free||!this.wasOver40))this.add(31,free?`speed-40:${++this.speed40Episodes}`:'speed-40');
+    this.wasOver40=over40;
     if(this.mode==='exam' && this.time>this.limitSeconds)this.add(32,'time-limit');
     if(this.mode==='exam' && this.score>=100)this.status='failed';
     else if(o.finished)this.status=this.score<100?'passed':this.mode==='exam'?'failed':'passed';

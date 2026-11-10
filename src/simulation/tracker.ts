@@ -3,10 +3,9 @@ import type { Observations } from './exam';
 import { course, itinerary, mapPoint,startLinePoint,finishLinePoint } from '../data/course';
 import { roadDistance } from '../render/course-world';
 import { signalAxis,signalState } from '../data/traffic-signals';
-import { angleDifference, crossedLine, distance, lineDistance, segmentDistance } from './math';
-import { vehicleConfig } from '../data/vehicle';
+import { crossedLine, distance, lineDistance, segmentDistance } from './math';
 import { stopLineApproachEdge } from '../data/marking-standards';
-import { wheelsOnParkingLine } from './parking';
+import { parkingFit } from './parking';
 export class CourseTracker {
   index=0;previous:VehicleTelemetry|null=null;offRoadTime=0;routeTime=0;goalTime=0;visitTime=0;
   emergencyTriggered=false;hillPeak=-Infinity;private startPosition=startLinePoint;
@@ -47,13 +46,7 @@ export class CourseTracker {
     }
     if(e.parking){
       if(dist<12)this.parkingApproached=true;
-      const park=e.parking,sin=Math.sin(park.yaw),cos=Math.cos(park.yaw);
-      const dx=t.position.x-park.center.x,dz=t.position.z-park.center.z;
-      const lateral=dx*cos-dz*sin,longitudinal=dx*sin+dz*cos;
-      const angle=Math.abs(angleDifference(t.yaw,park.yaw));
-      const contained=Math.abs(lateral)<(park.width-vehicleConfig.width)/2 && Math.abs(longitudinal)<(park.length-vehicleConfig.length)/2;
-      o.parkingCorrect=contained&&angle<.15&&wheelsOnParkingLine(t.wheels,park.controlLine)&&
-        (park.controlLine!==undefined||Math.abs(longitudinal)<.32);
+      o.parkingCorrect=parkingFit(t,e.parking).correct;
       atGoal=dist<2.3&&t.speed<.12;
       if(atGoal)this.goalTime+=dt;else this.goalTime=0;
       atGoal=this.goalTime>2;o.parkingFinished=atGoal;

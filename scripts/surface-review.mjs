@@ -113,13 +113,16 @@ try {
   const captures = [];
   const witnesses = [];
   for (const [name, pose] of poses) for (const mode of ['paint', 'normal']) {
+    const selected=process.argv.find(a=>a.startsWith('--poses='))?.slice(8).split(',');
+    if(selected&&!selected.includes(name))continue;
     await page.evaluate(pose => { window.surfacePose = pose; }, { ...pose, mode });
     await page.waitForTimeout(180);
     const path = `${directory}/${phase}-${name}-${mode}.png`;
     await page.screenshot({ path });
     captures.push(path);
     const pixels = name === 'front-left' ? [[815, 625], [822, 625], [812, 620], [812, 631], [815, 615]]
-      : name === 'rear-left' ? [[875, 416], [910, 408], [950, 402], [990, 399], [1030, 398]] : [];
+      : name === 'rear-left' ? [[875, 416], [910, 408], [950, 402], [990, 399], [1030, 398]]
+      : name === 'roof-edge' ? [[403,563],[411,570],[416,577],[420,580],[431,594],[438,597],[444,600],[451,615],[470,640],[490,665],[515,700],[540,735]] : [];
     if (mode === 'normal' && pixels.length) witnesses.push({ pose: name, probes: await page.evaluate(pixels => window.surfaceProbe(pixels), pixels) });
   }
   const report = { date: new Date().toISOString(), phase, geometry, errors, captures, witnesses };

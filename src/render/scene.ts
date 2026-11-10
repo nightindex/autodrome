@@ -16,6 +16,8 @@ import { carAssetVersion } from './car-asset-version';
 import {fitCarDimensions} from './car-dimensions';
 import {fitCarTyreProfile} from './car-tyre-profile';
 import {CabinExamDisplay,type CabinExamDisplayState} from './cabin-exam-display';
+import type {PracticeHint} from '../simulation/practice-guide';
+import type {Exercise} from '../types';
 import { moveMirrorAngle,readMirrorAdjustments,sideMirrorDirection,sideMirrorView,type MirrorAdjustments } from './mirror-adjustment';
 
 export class GameScene {
@@ -33,7 +35,9 @@ export class GameScene {
   private guide=new T.Group();private goal=new T.Group();
   private mirrorCamera=new T.PerspectiveCamera(20,3.2,.025,120);private mirrorTarget=new T.WebGLRenderTarget(512,160);
   private cabinMirror:T.Mesh|undefined;private mirrorFrustum=new T.Frustum();private mirrorProjection=new T.Matrix4();
-  private sideTargets=[new T.WebGLRenderTarget(256,144),new T.WebGLRenderTarget(256,144)];
+  // Retain daylight highlights until the mirror surface is tone mapped on
+  // screen. Byte targets clipped white paint and erased the handle contours.
+  private sideTargets=[new T.WebGLRenderTarget(512,288,{type:T.HalfFloatType}),new T.WebGLRenderTarget(512,288,{type:T.HalfFloatType})];
   private sideMirrors:(T.Mesh|undefined)[]=[];private sideMirrorPositions:T.Vector3[]=[];
   private sideMirrorPivots:T.Group[]=[];
   private mirrorAdjustments=readMirrorAdjustments(null);private mirrorAngles=readMirrorAdjustments(null);
@@ -87,7 +91,7 @@ export class GameScene {
             const uv=new Float32Array(p.count*2);
             points.forEach((point,i)=>{uv[i*2]=(point.x-bounds.min.x)/(bounds.max.x-bounds.min.x);uv[i*2+1]=(point.y-bounds.min.y)/(bounds.max.y-bounds.min.y);});
             n.geometry.setAttribute('uv',new T.BufferAttribute(uv,2));
-            const display=new T.MeshBasicMaterial({name:m.name,map:sideIndex<0?this.mirrorTarget.texture:this.sideTargets[sideIndex].texture,toneMapped:false});
+            const display=new T.MeshBasicMaterial({name:m.name,map:sideIndex<0?this.mirrorTarget.texture:this.sideTargets[sideIndex].texture,toneMapped:sideIndex>=0});
             if(Array.isArray(n.material))n.material[index]=display;else n.material=display;
             if(sideIndex<0)this.cabinMirror=n;else {this.sideMirrors[sideIndex]=n;this.sideMirrorPositions[sideIndex]=bounds.getCenter(new T.Vector3());}
             n.castShadow=false;
@@ -114,23 +118,34 @@ export class GameScene {
     const material=new T.MeshBasicMaterial({color:0xe7bd60,transparent:true,opacity:.85,depthWrite:false});
     const shape=new T.Shape();shape.moveTo(-.3,-.3);shape.lineTo(0,.25);shape.lineTo(.3,-.3);shape.lineTo(0,-.04);shape.closePath();
     const geometry=new T.ShapeGeometry(shape);
-    const transforms:T.Matrix4[]=[];
+    const arrows=new T.InstancedMesh(geometry,material,64);arrows.count=0;arrows.frustumCulled=false;arrows.instanceMatrix.setUsage(T.DynamicDrawUsage);this.guide.add(arrows);
+    const outline=new T.LineLoop(new T.BufferGeometry().setFromPoints([
+      new T.Vector3(-vehicleConfig.width/2,0,-vehicleConfig.length/2),new T.Vector3(vehicleConfig.width/2,0,-vehicleConfig.length/2),
+      new T.Vector3(vehicleConfig.width/2,0,vehicleConfig.length/2),new T.Vector3(-vehicleConfig.width/2,0,vehicleConfig.length/2),
+    ]),new T.LineBasicMaterial({color:0xe7bd60,depthWrite:false}));outline.name='practice-parking-outline';outline.visible=false;this.goal.add(outline);
+    this.setGoal({x:0,z:0},false);
+  }
+  setPracticeGuide(hint:PracticeHint,parking?:Exercise['parking']){
+    this.setGoal(hint.target,true);
+    const arrows=this.guide.children[0] as T.InstancedMesh,arrow=new T.Object3D();let count=0,station=2;
     const junction={minX:Math.min(...intersectionApproaches.map(a=>a.stop.x))-3,maxX:Math.max(...intersectionApproaches.map(a=>a.stop.x))+3,minZ:Math.min(...intersectionApproaches.map(a=>a.stop.z))-3,maxZ:Math.max(...intersectionApproaches.map(a=>a.stop.z))+3};
-    let remaining=0;
-    for(let i=1;i<course.route.length;i++){
-      const a=course.route[i-1],b=course.route[i],dx=b.x-a.x,dz=b.z-a.z,len=Math.hypot(dx,dz);
-      for(let d=remaining;d<len;d+=3){const x=a.x+dx*d/len,z=a.z+dz*d/len;
-        // Keep navigation chevrons off the junction's zebra/stop/turn markings.
+    for(let i=1;i<hint.route.length;i++){
+      const a=hint.route[i-1],b=hint.route[i],dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz);if(length<1e-6)continue;
+      for(;station<length;station+=3){
+        const x=a.x+dx*station/length,z=a.z+dz*station/length;
+        // Navigation must leave the actual signal-junction markings legible.
         if(x>junction.minX&&x<junction.maxX&&z>junction.minZ&&z<junction.maxZ)continue;
-        const arrow=new T.Object3D();arrow.rotation.set(-Math.PI/2,0,Math.PI+Math.atan2(dx,dz));arrow.position.set(x,hillHeight(x,z)+.075,z);arrow.updateMatrix();transforms.push(arrow.matrix.clone());}remaining=(remaining-len)%3+3;
+        arrow.rotation.set(-Math.PI/2,0,Math.PI+Math.atan2(dx,dz));arrow.position.set(x,hillHeight(x,z)+.075,z);arrow.updateMatrix();
+        if(count<64)arrows.setMatrixAt(count++,arrow.matrix);
+      }station-=length;
     }
-    const arrows=new T.InstancedMesh(geometry,material,transforms.length);transforms.forEach((m,i)=>arrows.setMatrixAt(i,m));this.guide.add(arrows);
-    const ring=new T.Mesh(new T.RingGeometry(1.6,1.72,48),new T.MeshBasicMaterial({color:0xedd18b,transparent:true,opacity:.9,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;this.goal.add(ring);
-    const beam=new T.Mesh(new T.CylinderGeometry(.03,.03,2.3,8),new T.MeshBasicMaterial({color:0xedd18b,transparent:true,opacity:.6}));beam.position.y=1.15;this.goal.add(beam);
+    arrows.count=count;arrows.instanceMatrix.needsUpdate=true;
+    const outline=this.goal.getObjectByName('practice-parking-outline')!;outline.visible=!!parking;
+    if(parking)outline.rotation.y=parking.yaw;
   }
   setGoal(point:Vec2,visible:boolean){this.goal.position.set(point.x,hillHeight(point.x,point.z)+.06,point.z);this.goal.visible=visible;this.guide.visible=visible;}
   setCurbStyle(style:Settings['curbStyle']){this.world.setCurbStyle(style);}
-  setQuality(q:Settings['quality']){if(this.quality===q)return;this.quality=q;this.world.setTreeQuality(q);const mirrorScale=q==='low'?.5:q==='medium'?.75:1;this.mirrorTarget.setSize(512*mirrorScale,160*mirrorScale);for(const target of this.sideTargets)target.setSize(256*mirrorScale,144*mirrorScale);this.renderer.setPixelRatio(Math.min(devicePixelRatio,q==='high'?1.75:q==='medium'?1.25:1));this.renderer.shadowMap.enabled=q!=='low';this.sun.shadow.mapSize.set(2048,2048);this.sun.shadow.map?.dispose();this.sun.shadow.map=null;this.resize();}
+  setQuality(q:Settings['quality']){if(this.quality===q)return;this.quality=q;this.world.setTreeQuality(q);const mirrorScale=q==='low'?.5:q==='medium'?.75:1;this.mirrorTarget.setSize(512*mirrorScale,160*mirrorScale);for(const target of this.sideTargets)target.setSize(512*mirrorScale,288*mirrorScale);this.renderer.setPixelRatio(Math.min(devicePixelRatio,q==='high'?1.75:q==='medium'?1.25:1));this.renderer.shadowMap.enabled=q!=='low';this.sun.shadow.mapSize.set(2048,2048);this.sun.shadow.map?.dispose();this.sun.shadow.map=null;this.resize();}
   resize(){const w=window.innerWidth,h=window.innerHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
   cycleCamera(){this.cameraMode=this.cameraMode==='chase'?'cockpit':this.cameraMode==='cockpit'?'overview':'chase';}
   setMirrorAdjustments(value:MirrorAdjustments){this.mirrorAdjustments=readMirrorAdjustments(value);}
@@ -187,6 +202,9 @@ export class GameScene {
         }
         else{const i=which-1,side=i===0?1:-1;
           this.mirrorCamera.position.copy(this.car.localToWorld(this.sideMirrorPositions[i].clone()));
+          // Sample the outer portion of the real pane: the door shoulder
+          // otherwise conceals the rear sidewall and its contact with the road.
+          this.mirrorCamera.position.add(new T.Vector3(side*sideMirrorView.outboard,0,0).applyQuaternion(this.car.quaternion));
           this.mirrorCamera.position.add(new T.Vector3(-side*.48,0,-.88).applyQuaternion(this.car.quaternion).multiplyScalar(.012));
           const angles=this.mirrorAngles[i===0?'left':'right'];
           // Turning mirror glass deflects its reflected view by twice the angle.

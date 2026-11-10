@@ -25,6 +25,7 @@ try{
     return s.wheels.map(w=>({base:w.base.toArray(),pivot:w.pivot.position.toArray(),size:new T.Box3().setFromObject(w.spin).getSize(new T.Vector3()).toArray()}));
   });
   if(confirming)assert(findings.wheels.every(w=>Math.abs(w.base[1]-w.pivot[1])<.001),'Menu wheels must remain in their wheel arches');
+  await page.click('#practice');await page.waitForTimeout(150);
   findings.routeArrows=await page.evaluate(async()=>{
     const T=await import('/node_modules/three/build/three.module.js');
     const {course}=await import('/src/data/course.ts');
@@ -46,8 +47,8 @@ try{
       return alignments.length?[{leg:j,alignment:Math.max(...alignments)}]:[];
     });
   });
-  if(confirming)assert(findings.routeArrows.length>0&&findings.routeArrows.every(a=>a.alignment>.99),'Route arrows must point along the driven route');
-  await page.click('#practice');await page.keyboard.press('KeyB');await page.keyboard.press('KeyI');
+  if(confirming)assert.equal(findings.routeArrows.length,0,'Free practice must not impose route arrows');
+  await page.keyboard.press('KeyB');await page.keyboard.press('KeyI');
   await page.keyboard.down('ShiftLeft');await page.waitForTimeout(300);await page.keyboard.press('Digit1');await page.keyboard.press('Space');await page.keyboard.press('KeyQ');
   await page.keyboard.down('KeyW');await page.keyboard.up('ShiftLeft');await page.waitForTimeout(1100);await page.keyboard.up('KeyW');
   findings.forward=await snap();
@@ -71,12 +72,12 @@ try{
     assert(findings.pedestrianStop,'Keyboard driver must stop within one metre of the pedestrian line');
     await page.waitForTimeout(3200);await shot('pedestrian-stop');
     findings.stopSatisfied=await page.evaluate(()=>window.__avtodrom.engine().stoppedCorrectly);
-    assert(findings.stopSatisfied,'Three-second stop must be recognised');
+    assert.equal(findings.stopSatisfied,false,'Free driving does not evaluate exercise stops');
     await page.keyboard.up('KeyS');await page.keyboard.down('KeyW');await page.waitForTimeout(2300);await page.keyboard.up('KeyW');
     await page.keyboard.down('KeyS');await page.waitForTimeout(1300);await page.keyboard.up('KeyS');
     findings.afterCrossing=await snap();
-    assert(findings.afterCrossing.exercise==='hill','Driving across the crossing must advance to the hill exercise');
-    assert.equal(findings.afterCrossing.score,0,'Correct start and crossing must incur no penalties');
+    assert(findings.afterCrossing.freePractice&&findings.afterCrossing.index===0,'Free driving must not advance through assigned tasks');
+    assert(!findings.afterCrossing.events.some(e=>[10,23,26,27,28,29,32].includes(e.ruleId)),'Free driving has no assigned-route or exam time penalties');
   }
   await page.keyboard.press('KeyC');await page.waitForTimeout(400);await shot('cockpit');
   await page.keyboard.press('Escape');await page.click('#modal #settings');

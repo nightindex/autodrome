@@ -4,6 +4,7 @@ import { mergeGeometries,mergeVertices } from 'three/addons/utils/BufferGeometry
 import { buildCobaltUpholstery } from './cobalt-upholstery.mjs';
 import { conformSurface } from './cobalt-surfaces.mjs';
 import { buildColumnControls } from './cobalt-column-controls.mjs';
+import { smoothBodyGeometry } from './cobalt-body.mjs';
 
 /** Manual Cobalt cabin with the examination-centre monitor from the supplied 2026 photo.
  * Coordinates are metres in the normalized car frame, +Z forward, +X driver's side.
@@ -79,7 +80,8 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
     }
     const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();dashParts.push(g);
   }
-  const dashboard=mergeGeometries(dashParts);
+  const joinedDashboard=mergeGeometries(dashParts),dashboard=smoothBodyGeometry(joinedDashboard);
+  joinedDashboard.dispose();dashParts.forEach(part=>part.dispose());
   // Fit the thin defrost slots to the real dashboard crown; fixed Y buried
   // them several centimetres beneath the moulded top surface.
   for(const side of [-1,1]){
@@ -272,6 +274,18 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
     rear.quadraticCurveTo(side*-.91,-.04,side*-1.12,.12);rear.lineTo(side*-1.22,.21);rear.closePath();
     put(shaped(rear,.025,.018),lower,[side*.694,0,0],[0,-side*Math.PI/2,0]);
     box(.045,.065,.37,mats.plastic,[side*.664,-.03,-.72],[0,0,0],.018);
+    // Close the door-card joint over the B-pillar jamb. The small gap between
+    // the separately moulded cards exposed the white outer door skin below
+    // the belt anchor when looking across the cabin.
+    box(.028,.704,.074,lower,[side*.704,-.028,-.287],[0,0,0],.004);
+    // The rear card follows the wheel arch, but its short rear edge left an
+    // open view onto exterior paint beside the bench. A fitted quarter-panel
+    // return joins the card to the C-pillar above the existing wheel-well shell.
+    const quarter=new T.Shape();quarter.moveTo(side*-.95,.29);
+    quarter.quadraticCurveTo(side*-1.2,.31,side*-1.48,.29);
+    quarter.lineTo(side*-1.51,.08);quarter.quadraticCurveTo(side*-1.31,.035,side*-1.16,-.045);
+    quarter.quadraticCurveTo(side*-1.015,-.035,side*-.95,.09);quarter.closePath();
+    put(shaped(quarter,.022,.007,{bevelSegments:2,curveSegments:10}),lower,[side*.696,0,0],[0,-side*Math.PI/2,0],`COBALT_RearQuarterPanel_${side}`);
     // Keep the source A-pillar shell and its inward-facing trim. Additional
     // tubes duplicate that frame and pierce the upper windshield surface.
   }

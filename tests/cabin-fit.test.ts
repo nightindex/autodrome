@@ -33,6 +33,63 @@ const castPillarPhotoPixel=(side:number,x:number,y:number)=>{
 };
 
 describe('cabin surfaces fit their supports',()=>{
+  it('keeps the pale roof-rail lining below the metal and its seal gaps',()=>{
+    const roof=surfaces.filter(mesh=>/^chassis_primary/.test(mesh.name)&&mesh.userData.material==='Realistic_Car_Paint');
+    let checked=0;const seen=new Set<string>();
+    for(const mesh of surfaces.filter(mesh=>/^(chassis_|interior_1|door_[lr][fr])/.test(mesh.name)&&mesh.userData.material==='COBALT_Headliner')){
+      const p=mesh.geometry.getAttribute('position');
+      const used=new Set(mesh.geometry.index?.array??Uint32Array.from({length:p.count},(_,i)=>i));
+      for(const i of used){
+        const point=new T.Vector3().fromBufferAttribute(p,i);
+        if(point.y<.64||Math.abs(point.x)<.42||Math.abs(point.x)>.74||point.z< -1.25||point.z>0)continue;
+        const key=point.toArray().map(v=>Math.round(v*1e6)).join(',');if(seen.has(key))continue;seen.add(key);
+        let support=cast(new T.Vector3(point.x,1.5,point.z),new T.Vector3(0,-1,0),roof);
+        if(!support)for(const inset of [.005,.01,.02,.04,.06]){
+          support=cast(new T.Vector3(point.x-Math.sign(point.x)*inset,1.5,point.z),new T.Vector3(0,-1,0),roof);
+          if(support&&support.point.y>.65)break;
+        }
+        if(!support||support.point.y<.65||support.face!.normal.y<.5)continue;
+        expect(support.point.y-point.y,`roof lining clearance ${mesh.name} ${point.toArray()}`).toBeGreaterThan(.001);
+        checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(100);
+  });
+  it('covers exterior paint at the door-card jambs and beside the rear bench',()=>{
+    for(const side of [-1,1]){
+      for(const y of [-.25,-.12,.02,.18]){
+        const hit=cast(new T.Vector3(side*.60,y,-.287),new T.Vector3(side,0,0));
+        expect(hit?.object.userData.material,`closed door-card jamb ${side},${y}`).toBe('COBALT_LowerDash');
+      }
+      for(const [y,z]of [[.15,-1.25],[.18,-1.35],[.20,-1.44]]){
+        const hit=cast(new T.Vector3(side*.60,y,z),new T.Vector3(side,0,0));
+        expect(hit?.object.name,`closed rear-quarter lining ${side},${y},${z}`).toBe(`COBALT_RearQuarterPanel_${side}`);
+      }
+    }
+  });
+  it('shares smooth normals where the dashboard sections join beside the instrument hood',()=>{
+    const mesh=surfaces.find(mesh=>mesh.name==='COBALT_MouldedDashboard')!,p=mesh.geometry.getAttribute('position'),n=mesh.geometry.getAttribute('normal');
+    const indices=mesh.geometry.index?.array??Uint32Array.from({length:p.count},(_,i)=>i),edges=new Map<string,Array<{a:number;b:number;face:T.Vector3}>>();
+    const points=Array.from({length:p.count},(_,i)=>new T.Vector3().fromBufferAttribute(p,i)),keys=points.map(p=>p.toArray().map(v=>Math.round(v*1e6)).join(','));
+    for(let i=0;i<indices.length;i+=3){
+      const ids=[indices[i],indices[i+1],indices[i+2]],face=points[ids[1]].clone().sub(points[ids[0]]).cross(points[ids[2]].clone().sub(points[ids[0]])).normalize();
+      for(let j=0;j<3;j++){const a=ids[j],b=ids[(j+1)%3],key=[keys[a],keys[b]].sort().join('|'),adjacent=edges.get(key)??[];adjacent.push({a,b,face});edges.set(key,adjacent);}
+    }
+    let checked=0;
+    for(const [key,adjacent]of edges){
+      if(adjacent.length!==2)continue;
+      const [a,b]=adjacent;if(keys[a.a]!==keys[b.b]||keys[a.b]!==keys[b.a]||a.face.dot(b.face)<=.5)continue;
+      for(const [i,j]of [[a.a,b.b],[a.b,b.a]])expect(new T.Vector3().fromBufferAttribute(n,i).distanceTo(new T.Vector3().fromBufferAttribute(n,j)),`dashboard shading seam ${key}`).toBeLessThan(1e-5);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(1000);
+  });
+  it('keeps both exterior door shoulders painted below the window seals',()=>{
+    for(const side of [-1,1])for(const y of [.28,.30,.315])for(const z of [-.1,.1,.3,.5]){
+      const hit=cast(new T.Vector3(side*1.2,y,z),new T.Vector3(-side,0,0));
+      expect(hit?.object.userData.material,`painted outer door shoulder ${side},${y},${z}`).toBe('Realistic_Car_Paint');
+    }
+  });
   it('faces the physical mirror switch toward the driver and leaves its controls unobstructed',()=>{
     const legends=surfaces.find(mesh=>mesh.name==='COBALT_MirrorSwitchLegends')!;
     expect(legends).toBeDefined();
@@ -51,7 +108,7 @@ describe('cabin surfaces fit their supports',()=>{
     for(const eye of [new T.Vector3(.31,.48,.2),new T.Vector3(.28,.48,.16)])for(const [x,y]of perimeter){
       const target=new T.Vector3(x,y,.004).applyMatrix4(mirrorSwitchFrame);
       const backdrop=cast(eye,target.sub(eye).normalize(),supports);
-      expect(['COBALT_LowerDash','COBALT_Dashboard','COBALT_Rubber'],`dark bezel clearance ${eye.toArray()},${x},${y}`).toContain(backdrop?.object.userData.material);
+      expect(['COBALT_LowerDash','COBALT_Dashboard','COBALT_Rubber','COBALT_SideMirrorHousing'],`dark bezel clearance ${eye.toArray()},${x},${y}`).toContain(backdrop?.object.userData.material);
     }
   });
   it('matches both door-side pillar returns to the surrounding grey trim',()=>{
@@ -63,7 +120,7 @@ describe('cabin surfaces fit their supports',()=>{
   it('keeps exposed painted shards out of the dark window ledges below both mirrors',()=>{
     for(const side of [-1,1])for(const z of [.44,.50,.55]){
       const eye=new T.Vector3(side*.31,.48,.2),target=new T.Vector3(side*.74,.32,z);
-      expect(cast(eye,target.sub(eye).normalize())?.object.userData.material,`inner window ledge ${side},${z}`).toMatch(/^COBALT_(Rubber|Dashboard)$/);
+      expect(cast(eye,target.sub(eye).normalize())?.object.userData.material,`inner window ledge ${side},${z}`).toMatch(/^COBALT_(Rubber|Dashboard|SideMirrorHousing)$/);
     }
   });
   it('keeps the mirror-mount joint dark on both sides of the cabin',()=>{

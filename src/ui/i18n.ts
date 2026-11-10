@@ -1,4 +1,8 @@
 import type { Language } from '../types';
+export const practiceCopy={
+  ru:{free:'Свободная практика',description:'Ездите в своём темпе. Ошибки добавляют штрафные баллы, но не завершают поездку. Для проверки конкретного манёвра выберите упражнение.',choose:'Выбрать упражнение',history:'Ошибки за поездку',empty:'Ошибок пока нет.',selection:'Задание засчитывается после выполнения всех его условий. Можно повторить попытку или вернуться к свободному вождению.',map:'Схема автодрома'},
+  uz:{free:'Erkin mashq',description:'O‘z sur’atingizda yuring. Xatolar jarima ballarini qo‘shadi, ammo mashqni tugatmaydi. Muayyan manyovrni tekshirish uchun mashqni tanlang.',choose:'Mashq tanlash',history:'Haydashdagi xatolar',empty:'Hozircha xatolar yo‘q.',selection:'Mashq barcha shartlari bajarilgach qabul qilinadi. Qayta urinishingiz yoki erkin haydashga qaytishingiz mumkin.',map:'Avtodrom sxemasi'},
+};
 const steeringCopy={
   uz:{steeringAssist:'Rul yordami (faqat mashqda)',steeringAssistHelp:'Tezlikda g‘ildiraklarning burilish burchagini cheklaydi. To‘liq boshqarish uchun o‘chiring.',steeringAssistOn:'RUL YORDAMI'},
   ru:{steeringAssist:'Помощь рулению (только в практике)',steeringAssistHelp:'Ограничивает поворот колёс на скорости. Выключите для полного управления.',steeringAssistOn:'ПОМОЩЬ РУЛЕНИЮ'},

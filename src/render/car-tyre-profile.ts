@@ -28,24 +28,37 @@ export function fitCarTyreProfile(pivot:T.Group,rimDiameter:number,tyreWidth:num
   }
   if(rubber.isEmpty()||metal.isEmpty())throw new Error('Missing Cobalt tyre or rim surface');
   const center=(rubber.min.x+rubber.max.x)/2,rubberScale=tyreWidth/(rubber.max.x-rubber.min.x),metalScale=.9*tyreWidth/(metal.max.x-metal.min.x);
-  const radialScale=targetRim/sourceRim,span=outer-sourceRim;
-  const profile=(r:number)=>{
-    if(r<=sourceRim)return {radius:r*radialScale,slope:radialScale};
+  let rubberInner=Infinity;
+  for(const part of parts.filter(p=>p.rubber)){
+    const positions=part.mesh.geometry.getAttribute('position'),index=part.mesh.geometry.index;
+    for(let i=0;i<(index?.count??positions.count);i++){
+      point.fromBufferAttribute(positions,index?index.getX(i):i).applyMatrix4(part.matrix);
+      rubberInner=Math.min(rubberInner,Math.hypot(point.y,point.z));
+    }
+  }
+  if(!(rubberInner>0&&rubberInner<outer))throw new Error('Invalid Cobalt tyre opening');
+  // Fit the rubber opening independently: the donor's bead extended in front
+  // of the metal flange, hiding about 12 mm of its radius after resizing.
+  // Retain a 1 mm overlap at the lip so there is no open seam to the barrel.
+  const profile=(r:number,inner:number,targetInner:number)=>{
+    const radialScale=targetInner/inner,span=outer-inner;
+    if(r<=inner)return {radius:r*radialScale,slope:radialScale};
     if(r>=outer)return {radius:r,slope:1};
     // Cubic Hermite joins the uniformly scaled rim to the unchanged tread,
     // matching radial derivatives at both ends to retain smooth sidewalls.
-    const t=(r-sourceRim)/span,t2=t*t,t3=t2*t;
+    const t=(r-inner)/span,t2=t*t,t3=t2*t;
     return {
-      radius:(2*t3-3*t2+1)*targetRim+(t3-2*t2+t)*span*radialScale+(-2*t3+3*t2)*outer+(t3-t2)*span,
-      slope:(6*t2-6*t)*targetRim/span+(3*t2-4*t+1)*radialScale+(-6*t2+6*t)*outer/span+3*t2-2*t,
+      radius:(2*t3-3*t2+1)*targetInner+(t3-2*t2+t)*span*radialScale+(-2*t3+3*t2)*outer+(t3-t2)*span,
+      slope:(6*t2-6*t)*targetInner/span+(3*t2-4*t+1)*radialScale+(-6*t2+6*t)*outer/span+3*t2-2*t,
     };
   };
   for(const part of parts){
+    const inner=part.rubber?rubberInner:sourceRim,targetInner=part.rubber?targetRim-.001:targetRim;
     const geometry=part.mesh.geometry.clone(),positions=geometry.getAttribute('position'),normals=geometry.getAttribute('normal'),tangents=geometry.getAttribute('tangent');
     const normalToFrame=new T.Matrix3().getNormalMatrix(part.matrix),normalToLocal=normalToFrame.clone().invert(),sx=part.rubber?rubberScale:metalScale;
     for(let i=0;i<positions.count;i++){
       point.fromBufferAttribute(positions,i).applyMatrix4(part.matrix);
-      const r=Math.hypot(point.y,point.z),mapped=profile(r),a=r>1e-9?mapped.radius/r:radialScale;
+      const r=Math.hypot(point.y,point.z),mapped=profile(r,inner,targetInner),a=r>1e-9?mapped.radius/r:targetInner/inner;
       const y=r>1e-9?point.y/r:1,z=r>1e-9?point.z/r:0;
       if(normals){
         direction.fromBufferAttribute(normals,i).applyMatrix3(normalToFrame);

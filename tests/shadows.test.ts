@@ -32,7 +32,7 @@ describe('moving car shadow stability',()=>{
     expect(seat.castShadow).toBe(true);expect(seat.receiveShadow).toBe(false);
   });
   it('keeps reconstructed rear upholstery, small fittings and inner arch lining free of coarse shadow bands',()=>{
-    for(const name of ['COBALT_RearSeatBack','COBALT_DefrostGrille_1','COBALT_ShiftPattern','COBALT_DashboardTray','COBALT_InstrumentHood','COBALT_Column_Indicator_COBALT_ColumnPlastic','chassis_door_lining']){
+    for(const name of ['COBALT_RearSeatBack','COBALT_RearQuarterPanel_1','COBALT_DefrostGrille_1','COBALT_ShiftPattern','COBALT_DashboardTray','COBALT_InstrumentHood','COBALT_Column_Indicator_COBALT_ColumnPlastic','chassis_door_lining']){
       const material=new T.MeshStandardMaterial();if(name==='chassis_door_lining')material.name='COBALT_RearWheelWellLining';
       const mesh=new T.Mesh(new T.BoxGeometry(),material);mesh.name=name;
       configureCarShadows(mesh);expect(mesh.castShadow).toBe(true);expect(mesh.receiveShadow).toBe(false);

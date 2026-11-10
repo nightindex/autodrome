@@ -86,7 +86,9 @@ try {
     await page.screenshot({ path });
     captures.push(path);
     const detailPixels = name === 'driver' ? [[250, 220], [390, 360], [1260, 360]]
-      : name === 'rear-bench' ? [[200, 600], [280, 600], [1150, 600]] : [];
+      : name === 'rear-bench' ? [[200,600],[280,600],[1150,600],[30,300],[50,420],[150,260],[1300,260],[1390,400]]
+      : name === 'roofliner' ? [[310,240],[330,300],[360,350],[1110,300],[1090,350]]
+      : name === 'driver-door' ? [[400,143],[700,150],[900,160]] : [];
     witnesses.push({ pose: name, probes: await page.evaluate(pixels => window.cabinProbe(pixels), [...pixels, ...detailPixels]) });
   }
   const checks = await page.evaluate(async () => {

@@ -1,4 +1,16 @@
-import type { Exercise,Vec2 } from '../types';
+import type { Exercise,Vec2,VehicleTelemetry } from '../types';
+import {angleDifference} from './math';
+import {vehicleConfig} from '../data/vehicle';
+
+export function parkingFit(t:VehicleTelemetry,park:NonNullable<Exercise['parking']>){
+  const sin=Math.sin(park.yaw),cos=Math.cos(park.yaw),dx=t.position.x-park.center.x,dz=t.position.z-park.center.z;
+  const lateral=dx*cos-dz*sin,longitudinal=dx*sin+dz*cos;
+  const contained=Math.abs(lateral)<(park.width-vehicleConfig.width)/2&&Math.abs(longitudinal)<(park.length-vehicleConfig.length)/2;
+  const aligned=Math.abs(angleDifference(t.yaw,park.yaw))<.15;
+  const onLine=wheelsOnParkingLine(t.wheels,park.controlLine)&&(park.controlLine!==undefined||Math.abs(longitudinal)<.32);
+  const wheels=park.controlLine?.wheels??[],matched=wheels.filter(index=>wheelsOnParkingLine(t.wheels,park.controlLine?{...park.controlLine,wheels:[index]}:undefined)).length;
+  return {contained,aligned,onLine,matched,total:wheels.length,correct:contained&&aligned&&onLine};
+}
 
 /** Wheel telemetry is the ground contact centre; both selected wheels must
  * lie within the actual painted rectangle, including its finite end caps. */

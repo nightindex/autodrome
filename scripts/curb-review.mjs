@@ -19,15 +19,17 @@ try{
     await page.evaluate(p=>window.curbPose=p,pose);await page.waitForTimeout(250);await page.screenshot({path:`${directory}/${phase}-${name}.png`});
   }
   const sides=await page.evaluate(async()=>{
-    const T=await import('/node_modules/three/build/three.module.js'),{hillProfile}=await import('/src/data/course.ts'),mesh=window.__avtodrom.scene.world.group.getObjectByName('course-curbs');
-    const position=mesh.geometry.getAttribute('position'),normal=mesh.geometry.getAttribute('normal');let minZ=Infinity,maxZ=-Infinity;
+    const T=await import('/node_modules/three/build/three.module.js'),{hillProfile}=await import('/src/data/course.ts'),group=window.__avtodrom.scene.world.group,mesh=group.getObjectByName('course-curbs'),meshes=['course-curbs','intersection-curbs','departure-curbs'].map(name=>group.getObjectByName(name));
+    let minZ=Infinity,maxZ=-Infinity;
     // The sampled road curves slightly here; select the real ramp-cut end cap.
-    for(let i=0;i<position.count;i++)if(Math.abs(position.getX(i)-hillProfile.start)<1e-4&&Math.abs(normal.getX(i))>.99){minZ=Math.min(minZ,position.getZ(i));maxZ=Math.max(maxZ,position.getZ(i));}
+    for(const curb of meshes){const position=curb.geometry.getAttribute('position'),normal=curb.geometry.getAttribute('normal');
+      for(let i=0;i<position.count;i++)if(Math.abs(position.getX(i)-hillProfile.start)<1e-4&&Math.abs(normal.getX(i))>.99&&position.getZ(i)>hillProfile.deckMaxZ){minZ=Math.min(minZ,position.getZ(i));maxZ=Math.max(maxZ,position.getZ(i));}
+    }
     const endZ=(minZ+maxZ)/2;
     const out=[{name:'road',origin:[-29,.12,43],direction:[0,0,1]},{name:'grass',origin:[-29,.12,46],direction:[0,0,-1]},{name:'end',origin:[hillProfile.start+1,.12,endZ],direction:[-1,0,0]}].map(p=>{
-      const hit=new T.Raycaster(new T.Vector3(...p.origin),new T.Vector3(...p.direction),0,3).intersectObject(mesh)[0];return {name:p.name,hit:!!hit,normal:hit?.face.normal.toArray(),point:hit?.point.toArray()};
+      const hit=new T.Raycaster(new T.Vector3(...p.origin),new T.Vector3(...p.direction),0,3).intersectObjects(meshes)[0];return {name:p.name,hit:!!hit,normal:hit?.face.normal.toArray(),point:hit?.point.toArray()};
     });mesh.geometry.computeBoundingBox();return {faces:out,bottom:mesh.geometry.boundingBox.min.y,materialSide:mesh.material.side,triangles:mesh.geometry.index.count/3};
   });
-  if(phase==='after'){assert(sides.faces.every(face=>face.hit),JSON.stringify(sides));assert(sides.faces[0].point[2]<sides.faces[1].point[2]);assert(sides.bottom<0);assert.equal(sides.materialSide,0);}
+  if(phase==='after'){assert(sides.faces.every(face=>face.hit&&face.point.every(Number.isFinite)),JSON.stringify(sides));assert(sides.faces[0].point[2]<sides.faces[1].point[2]);assert(sides.bottom<0);assert.equal(sides.materialSide,0);}
   assert.deepEqual(errors,[]);await writeFile(`${directory}/${phase}-report.json`,JSON.stringify({date:new Date().toISOString(),sides,errors},null,2));console.log(JSON.stringify({phase,sides,errors}));
 }finally{await browser.close();}

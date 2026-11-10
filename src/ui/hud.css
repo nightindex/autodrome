@@ -11,11 +11,38 @@
 .exam-stats{gap:28px}
 .exam-stats span{color:var(--hud-secondary);font-size:9px;letter-spacing:.5px}
 .exam-stats small{color:var(--hud-secondary)}
-.exercise-card{top:96px;left:var(--hud-gap);width:272px;padding:16px 18px 0;background:#f7f6ecf5;box-shadow:none;border-color:#d6ddce}
+.exercise-card{top:96px;left:var(--hud-gap);width:272px;padding:16px 18px 0;background:#f7f6ecf5;box-shadow:none;border-color:#d6ddce;max-height:calc(100dvh - 120px);overflow:auto;scrollbar-color:#9baa91 var(--hud-paper);scrollbar-width:thin}
 .exercise-eyebrow{font-size:10px;letter-spacing:.4px;color:var(--hud-secondary)}
 .exercise-card h2{font-size:20px;margin:9px 0}
 .exercise-card p{font-size:12px;color:#4c624b;line-height:1.6;margin:0 0 14px}
 .exercise-progress{margin:0 -18px}
+#practice-coach{padding:1px 0 12px;color:var(--hud-ink)}
+#coach-action{display:block;font-size:14px;line-height:1.45;font-weight:600}
+#practice-coach #coach-detail{font-size:12px;line-height:1.5;margin:7px 0 0;color:#4c624b}
+#coach-keys{display:flex;align-items:center;gap:5px;margin-top:9px;font-size:11px;color:var(--hud-secondary)}
+#coach-keys kbd{font-size:11px;color:var(--hud-ink)}
+#practice-coach[data-state=warning] #coach-action{color:#9a402b}
+#practice-coach[data-state=hold] #coach-action{color:#77571e}
+#practice-coach[data-state=ready] #coach-action{color:#286540}
+#exercise-method{margin-bottom:10px;pointer-events:auto}
+#exercise-method summary{cursor:pointer;min-height:44px;display:list-item;align-content:center;font-size:12px;color:var(--hud-ink);text-decoration:underline;text-underline-offset:3px}
+#exercise-method p{margin:3px 0 12px}
+#exercise-method summary:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+#retry-stage,#leave-exercise{pointer-events:auto;display:flex;align-items:center;gap:8px;min-height:44px;width:100%;padding:8px 0;border-top:1px solid #d6ddce;background:transparent;color:var(--hud-ink);font-size:12px;text-align:left}
+#retry-stage:hover,#leave-exercise:hover{color:#163c2d;background:#e9edde}
+#hud[data-practice=true][data-free=false] .startup-hint{display:none}
+#hud[data-free=true] .exercise-card>:not(#free-practice){display:none}
+#practice-errors{pointer-events:auto;margin-bottom:12px;border-top:1px solid #d6ddce}
+#practice-errors summary{cursor:pointer;min-height:44px;align-content:center;font-size:12px;color:var(--hud-ink)}
+#practice-errors summary:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+#practice-error-count{font-variant-numeric:tabular-nums;margin-left:6px}
+#practice-error-list{list-style:none;padding:0;margin:0;font-size:12px;line-height:1.5}
+#practice-error-list li{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:10px 0;border-top:1px solid #d6ddce;color:var(--hud-ink)}
+#practice-error-list time{grid-column:1/-1;font-size:11px;color:var(--hud-secondary);font-variant-numeric:tabular-nums}
+#practice-error-list strong{color:#9a402b;white-space:nowrap}
+.driving #toast{white-space:pre-line}
+#choose-practice-exercise{pointer-events:auto;display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;width:100%;padding:10px 8px;margin-bottom:16px;background:var(--green);color:#fffdf2;font-size:12px;border-radius:5px}
+#choose-practice-exercise:hover{background:#163c2d}
 .instrument-panel{left:auto;right:var(--hud-gap);bottom:24px;transform:none;width:236px;padding:13px 18px;background:#f7f6ecf5;backdrop-filter:none;box-shadow:none;border-color:#d6ddce}
 .instrument-top{color:var(--hud-secondary);font-size:9px;letter-spacing:1.5px}
 .speed-row strong{font-size:52px}.gear-box strong{font-size:34px}
@@ -64,7 +91,7 @@
  .exam-stats{gap:16px}.exam-stats span{font-size:8px;letter-spacing:0}.exam-stats strong{font-size:20px}
  .header-controls{grid-column:1/-1;justify-content:flex-end;gap:6px}.header-controls button{min-width:44px;padding:8px}
  .header-controls #map-button span,.header-controls #controls-button span{display:inline;font-size:11px}
- .exercise-card{top:124px;width:224px;padding:12px 14px 0}.exercise-card h2{font-size:17px;margin:6px 0}.exercise-card p{font-size:11px;line-height:1.5;margin-bottom:10px}.exercise-eyebrow{font-size:9px}.exercise-progress{margin:0 -14px}
+ .exercise-card{top:124px;width:224px;padding:12px 14px 0;max-height:calc(100dvh - 388px)}.exercise-card h2{font-size:17px;margin:6px 0}.exercise-card p{font-size:11px;line-height:1.5;margin-bottom:10px}.exercise-eyebrow{font-size:9px}.exercise-progress{margin:0 -14px}
  .instrument-panel{left:auto;right:12px;bottom:20px;width:188px;padding:10px 14px}.instrument-top{font-size:8px}.speed-row strong{font-size:44px}.gear-box{padding-left:14px}.gear-box strong{font-size:30px}.vehicle-status{font-size:9px}.pedals span{font-size:7px}
  .startup-hint{bottom:20px;max-width:calc(100vw - 224px);padding:10px;font-size:10px;line-height:1.6}
  #route-map{bottom:244px;width:min(300px,calc(100vw - 24px));max-height:calc(100dvh - 368px)}
@@ -76,7 +103,8 @@
  #recovery-prompt{bottom:248px}
 }
 @media(max-height:600px) and (min-width:651px){
- .drive-header{height:64px}.exercise-card{top:80px;width:240px;padding-top:12px}.exercise-card h2{font-size:17px}
+ .drive-header{height:64px}.exercise-card{top:80px;width:240px;padding-top:12px;max-height:calc(100dvh - 100px)}.exercise-card h2{font-size:17px}
+ #hud[data-free=true] .exercise-card{max-height:calc(100dvh - 182px)}
  #route-map{top:80px;bottom:auto;right:272px;width:260px;max-height:calc(100dvh - 104px)}
  #route-map canvas{max-height:calc(100dvh - 202px)}
  #driving-controls{top:80px;bottom:auto;max-height:calc(100dvh - 100px)}

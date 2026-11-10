@@ -5,11 +5,12 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { buildCobaltCabin } from './cobalt-cabin.mjs';
 import { segmentRearLens } from './cobalt-lamps.mjs';
-import { frontGrilleMaterials,interiorTrimMaterials,fitRoofLining } from './cobalt-body.mjs';
+import { frontGrilleMaterials,interiorTrimMaterials,fitRoofLining,buildRoofSeals } from './cobalt-body.mjs';
 import { trimSourceInterior,lineRearWheelWells,refineRearCabinTrim } from './cobalt-interior.mjs';
 import { fitFrontPillarFeet } from './cobalt-pillar-fit.mjs';
 import { buildMirrorSwitch } from './cobalt-mirror-switch.mjs';
 import { extractRearGlassExterior,extractSideMirror } from './cobalt-glass.mjs';
+import {buildSideMirrorMounts,rebuildSideMirrorShells} from './cobalt-mirror-mount.mjs';
 
 /** Refine the supplied mesh using authored materials/details, without embedding reference photos. */
 export async function refineCar(doc){
@@ -27,6 +28,7 @@ export async function refineCar(doc){
     reverse:material('COBALT_REVERSE',0xb7c0ba,.15,.22),left:material('COBALT_INDICATOR_LEFT',0xc0c3ba,.15,.25),right:material('COBALT_INDICATOR_RIGHT',0xc0c3ba,.15,.25),
     glass:material('COBALT_Windshield',0xbac8ce,.02,.12,.12),rearGlass:material('COBALT_RearGlass',0x3c4c54,.05,.16,.38),
     mirrorLeft:material('COBALT_SideMirrorLeft',0xaab9bd,.95,.12),mirrorRight:material('COBALT_SideMirrorRight',0xaab9bd,.95,.12),
+    mirrorHousing:material('COBALT_SideMirrorHousing',0x282b29,0,.82),
     frontLeft:material('COBALT_FRONT_INDICATOR_LEFT',0xbfc6c7,.55,.25),frontRight:material('COBALT_FRONT_INDICATOR_RIGHT',0xbfc6c7,.55,.25),
     // A single rear pane replaces two blended .38-opacity shell faces.
     rearWindshield:material('COBALT_RearWindshield',0x3c4c54,.05,.16,1-(1-.38)**2),
@@ -112,7 +114,10 @@ export async function refineCar(doc){
       else if(/^bancos_/.test(name))target=mats.rubber;
       else if(/^pedais_/.test(name))target=mats.rubber;
       else if(/door_.*door_rr_ok/.test(name)){
-        target=mats.plastic;
+        // The remaining front-door plastic is the mirror casing, sail and
+        // window seals. Use one finish across that assembly, without cutting
+        // a material boundary through the source's large support triangles.
+        target=/^door_[lr]f/.test(name)?mats.mirrorHousing:mats.plastic;
         if(/^door_[lr]f/.test(name))extractSideMirror({doc,buffer,node,primitive,worldPoint,material:/^door_lf/.test(name)?mats.mirrorLeft:mats.mirrorRight});
         // Remove the old inner door cards before fitting the moulded panels.
         // Keep the window seals, mirror mount and exposed outer door shell.
@@ -171,6 +176,9 @@ export async function refineCar(doc){
   const plane=(w,h,mat,pos,tilt=0,name)=>put(new T.PlaneGeometry(w,h),mat,pos,[tilt,Math.PI,0],name);
   const textureMaterial=async(name,svg)=>{const m=material(name,0xffffff,0,.7);m.setBaseColorTexture(await svgTexture(name,svg));return m;};
   await buildCobaltCabin({doc,root,mats,material,svgTexture,put,emit});
+  buildSideMirrorMounts({emit,material});
+  rebuildSideMirrorShells({doc,buffer,worldPoint,emit});
+  buildRoofSeals({nodes:originalNodes,worldPoint,put,material:mats.rubber});
   // Put the lit strip in front of the source stop lamp's opaque cover, inside
   // its factory housing and behind the rear glass, rather than on the glass.
   put(new T.PlaneGeometry(.246,.013),mats.highStop,[0,.488,-1.660],[0,Math.PI,0],'COBALT_HighStopLens');

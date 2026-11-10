@@ -7,6 +7,39 @@ export const telemetry=(patch:Partial<VehicleTelemetry>={}):VehicleTelemetry=>({
 const make=(exercise:ExerciseId='start')=>{const e=new ExamEngine('practice');e.setExercise(exercise);return e;};
 const tick=(e:ExamEngine,t:Partial<VehicleTelemetry>={},o:Observations={},dt=1/60)=>e.update(telemetry(t),o,dt);
 const has=(e:ExamEngine,id:number)=>e.events.some(x=>x.ruleId===id);
+
+describe('educational free-driving scores',()=>{
+  const free=()=>new ExamEngine('practice',60,true);
+  it('allows preparation, reversing, a chosen route and unlimited time',()=>{
+    const e=free();tick(e,{speed:0,signedSpeed:0},{},1000);
+    tick(e,{signedSpeed:-1},{offRoute:true,skippedExercise:true,abandoned:true,finished:true,startCrossed:true});
+    expect(e.score).toBe(0);expect(e.status).toBe('running');expect(e.time).toBeGreaterThan(1000);
+  });
+  it('scores each unbelted episode once, including after correction',()=>{
+    const e=free();for(let i=0;i<20;i++)tick(e,{belt:false});
+    tick(e,{speed:0,signedSpeed:0,belt:false});tick(e,{belt:false});
+    expect(e.events.map(x=>x.ruleId)).toEqual([1]);
+    tick(e,{belt:true});tick(e,{belt:false});expect(e.score).toBe(10);
+  });
+  it('scores a continuous speeding interval every five seconds and clears it on slowing',()=>{
+    const e=free();tick(e,{speed:6},{},10);expect(e.score).toBe(10);
+    tick(e,{speed:6},{},4);tick(e,{speed:5});tick(e,{speed:6},{},4);expect(e.score).toBe(10);
+  });
+  it('continues above 100 and counts separate collisions and stalls',()=>{
+    const e=free();tick(e,{collision:true,stalled:true,engine:false});
+    tick(e,{collision:true,stalled:true,engine:false});expect(e.score).toBe(120);
+    tick(e,{collision:false,stalled:false,engine:true});tick(e,{collision:true,stalled:true,engine:false});
+    expect(e.score).toBe(240);expect(e.status).toBe('running');
+    expect(e.events.map(x=>x.ruleId)).toEqual([22,30,22,30]);
+  });
+  it('records a new 40 km/h violation after slowing rather than per frame',()=>{
+    const e=free();tick(e,{speed:12});tick(e,{speed:12});expect(e.score).toBe(100);
+    tick(e,{speed:10});tick(e,{speed:12});expect(e.score).toBe(200);expect(e.status).toBe('running');
+  });
+  it('keeps normal exam failure behavior',()=>{
+    const e=new ExamEngine('exam',60,true);tick(e,{collision:true});expect(e.status).toBe('failed');
+  });
+});
 type Scenario={id:number;exercise?:ExerciseId;bad:(e:ExamEngine)=>void;good:(e:ExamEngine)=>void};
 const cases:Scenario[]=[
   {id:1,bad:e=>tick(e,{belt:false}),good:e=>tick(e,{belt:true})},

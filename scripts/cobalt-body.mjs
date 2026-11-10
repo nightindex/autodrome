@@ -78,7 +78,7 @@ export function fitRoofLining(doc,buffer,normalize){
     const mesh=new T.Mesh(geometry,material);mesh.updateMatrixWorld();surfaces.push(mesh);
   }
   let corrected=0;const ray=new T.Raycaster(new T.Vector3(),new T.Vector3(0,-1,0),0,2);
-  for(const node of doc.getRoot().listNodes())if(/^(chassis_door|interior_1)/.test(node.getName())){
+  for(const node of doc.getRoot().listNodes())if(/^(chassis_|interior_1|door_[lr][fr])/.test(node.getName())){
     const matrix=normalize.clone().multiply(new T.Matrix4().fromArray(node.getWorldMatrix())),inverse=matrix.clone().invert(),accessors=new Map();
     for(const p of node.getMesh()?.listPrimitives()??[]){if(p.getMaterial()?.getName()!=='COBALT_Headliner')continue;const position=p.getAttribute('POSITION');const used=accessors.get(position)??new Set();for(const i of p.getIndices()?.getArray()??Uint32Array.from({length:position.getCount()},(_,i)=>i))used.add(i);accessors.set(position,used);}
     for(const [position,used]of accessors){
@@ -86,9 +86,17 @@ export function fitRoofLining(doc,buffer,normalize){
       for(const i of used){
         const point=new T.Vector3().fromArray(values,i*3).applyMatrix4(matrix);
         if(point.y<.64||Math.abs(point.x)<.42||Math.abs(point.x)>.74||point.z< -1.25||point.z>.5)continue;
-        ray.ray.origin.set(point.x,1.5,point.z);const roof=ray.intersectObjects(surfaces)[0];
-        // Preserve the intentional roof/door seal gaps. Fit only beneath an
-        // existing metal surface, with clearance for the separate triangulation.
+        const exterior=()=>ray.intersectObjects(surfaces).find(hit=>hit.face.normal.y>.1&&hit.point.y>.65);
+        ray.ray.origin.set(point.x,1.5,point.z);let roof=exterior();
+        // A trim vertex can sit directly under the narrow roof/door seam,
+        // where the vertical ray misses the painted sheet. Continue the roof
+        // envelope from its inboard neighbour rather than leaving a pale spike
+        // sticking out through the otherwise dark seal.
+        if(!roof)for(const inset of [.005,.01,.02,.04,.06]){
+          ray.ray.origin.x=point.x-Math.sign(point.x)*inset;
+          roof=exterior();
+          if(roof)break;
+        }
         if(!roof||roof.point.y<.65||point.y<=roof.point.y-.015)continue;
         point.y=roof.point.y-.015;
         point.applyMatrix4(inverse).toArray(values,i*3);changed++;
@@ -101,6 +109,38 @@ export function fitRoofLining(doc,buffer,normalize){
     }
   }
   surfaces.forEach(m=>m.geometry.dispose());material.dispose();return corrected;
+}
+
+/** A continuous rubber moulding over the source roof gutter. Its triangulated
+ * lip and the adjacent paint have different edge samples, exposing tiny white
+ * teeth in the joint. Follow the actual outer seal rail rather than a straight
+ * decorative line or a colour patch on the roof. */
+export function buildRoofSeals({nodes,worldPoint,put,material}){
+  const rails=[new Map(),new Map()];
+  for(const node of nodes)if(/^chassis_door/.test(node.getName()))for(const primitive of node.getMesh()?.listPrimitives()??[]){
+    if(primitive.getMaterial()?.getName()!=='bump_front_ok.014')continue;
+    const positions=primitive.getAttribute('POSITION'),normals=primitive.getAttribute('NORMAL');if(!normals)continue;
+    const matrix=new T.Matrix3().getNormalMatrix(new T.Matrix4().fromArray(node.getWorldMatrix()));
+    for(const i of new Set(primitive.getIndices()?.getArray()??Uint32Array.from({length:positions.getCount()},(_,i)=>i))){
+      const p=worldPoint(node,positions,i),n=new T.Vector3().fromArray(normals.getArray(),i*3).applyMatrix3(matrix).normalize();
+      if(p.y<.65||Math.abs(p.x)<.54||Math.abs(p.x)>.59||p.z< -1.12||p.z>.32||n.y<.35)continue;
+      const rail=rails[p.x>0?0:1],key=Math.round(p.z/.04),candidates=rail.get(key)??[];
+      candidates.push(p);rail.set(key,candidates);
+    }
+  }
+  for(const [side,rail]of rails.entries()){
+    let points=[...rail.values()].map(candidates=>{
+      const top=Math.max(...candidates.map(p=>p.y));
+      return candidates.filter(p=>p.y>top-.006).sort((a,b)=>Math.abs(b.x)-Math.abs(a.x))[0].clone();
+    }).sort((a,b)=>a.z-b.z);
+    if(points.length<12)throw new Error(`Missing Cobalt roof seal rail ${side}`);
+    // The source lip has alternating upper/lower bevel samples. Filter those
+    // millimetre-scale steps before lofting the moulding over the gutter.
+    for(let pass=0;pass<4;pass++)points=points.map((p,i)=>i===0||i===points.length-1?p:p.clone().multiplyScalar(.5).addScaledVector(points[i-1],.25).addScaledVector(points[i+1],.25));
+    points.forEach(p=>p.y+=.001);
+    const curve=new T.CatmullRomCurve3(points,false,'centripetal');
+    put(new T.TubeGeometry(curve,48,.005,5,false),material,[0,0,0],[0,0,0],`COBALT_RoofSeal_${side}`);
+  }
 }
 
 /** The grille's disconnected centre bowtie is gold; its surround is chrome. */
@@ -138,7 +178,12 @@ export function interiorTrimMaterials({doc,buffer,node,primitive,worldPoint,trim
     // The inner window ledge is a black weatherstrip. Leaving its upward
     // painted faces visible between the door card and glass made white shards
     // below the mirror; keep the outer door skin and mirror shell painted.
-    const doorBelt=/^door_[lr]f/.test(node.getName())&&p.y>.29&&p.y<.35&&Math.abs(p.x)>.695&&Math.abs(p.x)<.77&&p.z>-.35&&p.z<.78&&Math.abs(normal.y)>.25;
+    const vertices=[0,1,2].map(j=>worldPoint(node,position,indices[i+j]));
+    const face=vertices[1].clone().sub(vertices[0]).cross(vertices[2].clone().sub(vertices[0])).normalize();
+    // Smoothed bevel normals also point upward on the exterior door shoulder.
+    // Classify the actual horizontal ledge so rubber cannot spill down the
+    // painted skin in jagged triangles along the window.
+    const doorBelt=/^door_[lr]f/.test(node.getName())&&p.y>.29&&p.y<.35&&Math.abs(p.x)>.695&&Math.abs(p.x)<.77&&p.z>-.35&&p.z<.78&&face.y>.9;
     (doorBelt?beltline:pillar||ceiling?inside:outside).push(indices[i],indices[i+1],indices[i+2]);
   }
   if(!inside.length&&!beltline.length)return;

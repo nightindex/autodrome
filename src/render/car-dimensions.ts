@@ -11,9 +11,9 @@ export function fitCarDimensions(car:T.Object3D,model:T.Object3D,wheels:CarWheel
   model.traverse(node=>{
     if(!(node instanceof T.Mesh))return;
     const materials=Array.isArray(node.material)?node.material:[node.material];
-    // Front-door paint also contains the separate mirror housings. The shell
-    // and rear doors establish body width without counting those housings.
-    if(!materials.some(m=>m.name==='Realistic_Car_Paint')||/^door_[lr]f/.test(node.name))return;
+    // Source front-door paint and authored mirror caps extend past the body.
+    // The shell and rear doors establish width without counting either case.
+    if(!materials.some(m=>m.name==='Realistic_Car_Paint')||/^door_[lr]f|^COBALT_SideMirror/.test(node.name))return;
     const p=node.geometry.getAttribute('position'),index=node.geometry.index,matrix=toCar.clone().multiply(node.matrixWorld);
     for(let i=0;i<(index?.count??p.count);i++)bounds.expandByPoint(point.fromBufferAttribute(p,index?index.getX(i):i).applyMatrix4(matrix));
   });

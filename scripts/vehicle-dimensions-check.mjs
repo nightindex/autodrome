@@ -32,9 +32,12 @@ try{
         for(let j=group.start;j<group.start+group.count;j++)visit(point.fromBufferAttribute(p,index?index.getX(j):j).applyMatrix4(matrix));}
     };
     s.car.traverse(node=>{if(!node.isMesh)return;const matrix=inverse.clone().multiply(node.matrixWorld);
-      vertices(node,matrix,p=>{paint.expandByPoint(p);if(!/^door_[lr]f/.test(node.name))shell.expandByPoint(p);},true);
+      vertices(node,matrix,p=>{paint.expandByPoint(p);if(!/^door_[lr]f|^COBALT_SideMirror/.test(node.name))shell.expandByPoint(p);},true);
     });
     const frame=box=>({min:box.min.toArray(),max:box.max.toArray(),size:box.getSize(new T.Vector3()).toArray()});
+    // Inspect the actual outer paint at each wheel opening rather than using
+    // the overall body width (which says little about local fender clearance).
+    const paintMeshes=[];s.car.traverse(n=>{if(n.isMesh&&(Array.isArray(n.material)?n.material:[n.material]).some(m=>m.name==='Realistic_Car_Paint'))paintMeshes.push(n);});
     const telemetry=v.telemetry(),wheels=s.wheels.map(w=>{
       const bounds=new T.Box3(),rimBounds=new T.Box3(),tyreBounds=new T.Box3();w.pivot.traverse(n=>{
         if(!n.isMesh)return;const box=new T.Box3();vertices(n,inverse.clone().multiply(n.matrixWorld),p=>box.expandByPoint(p));bounds.union(box);
@@ -45,6 +48,30 @@ try{
       const hub=w.pivot.getWorldPosition(new T.Vector3()),connection=v.controller.wheelChassisConnectionPointCs(w.index),length=v.controller.wheelSuspensionLength(w.index);
       const physics=new T.Vector3(connection.x,connection.y-length,connection.z).applyQuaternion(new T.Quaternion().copy(v.body.rotation())).add(v.body.translation());
       const expected=wheelCenter(w.index),mark=telemetry.wheels[w.index],ground=v.controller.wheelIsInContact(w.index);
+      const side=Math.sign(expected.x),localHub=hub.clone().applyMatrix4(inverse),outward=new T.Vector3(side,0,0).transformDirection(s.car.matrixWorld);
+      const sideRay=(radius,angle,objects)=>{
+        const origin=s.car.localToWorld(new T.Vector3(side*1.3,localHub.y+radius*Math.sin(angle),localHub.z+radius*Math.cos(angle)));
+        return new T.Raycaster(origin,outward.clone().negate(),0,.7).intersectObjects(objects,true).find(hit=>{
+          const m=Array.isArray(hit.object.material)?hit.object.material[hit.face?.materialIndex??0]:hit.object.material;
+          return objects===paintMeshes?m.name==='Realistic_Car_Paint':true;
+        });
+      };
+      const arch=[];
+      for(const degrees of [45,60,75,90,105,120,135]){
+        const angle=degrees*Math.PI/180;let hit;
+        for(let radius=c.wheelRadius;radius<=.55;radius+=.001){hit=sideRay(radius,angle,paintMeshes);if(hit){arch.push({degrees,radius,gap:radius-c.wheelRadius,x:hit.point.clone().applyMatrix4(inverse).x});break;}}
+      }
+      // The first visible surface must really be the rim, not rubber in front
+      // of a larger hidden metal barrel that merely passes a bounds check.
+      const visibleRim=[];
+      for(let degrees=0;degrees<360;degrees+=10){let radius=0;const angle=degrees*Math.PI/180;
+        for(let r=.17;r<=.215;r+=.001){const hit=sideRay(r,angle,[w.pivot]);if(hit){const m=Array.isArray(hit.object.material)?hit.object.material[hit.face?.materialIndex??0]:hit.object.material;if(m.name==='COBALT_SatinTrim')radius=r;}}
+        visibleRim.push(radius);
+      }
+      const rimSurfaces=[.189,.192,.195,.2,.203,.205].map(radius=>{
+        const origin=s.car.localToWorld(new T.Vector3(side*1.3,localHub.y,localHub.z+radius));
+        return {radius,hits:new T.Raycaster(origin,outward.clone().negate(),0,.7).intersectObject(w.pivot,true).map(hit=>({x:hit.point.clone().applyMatrix4(inverse).x,name:hit.object.name,material:(Array.isArray(hit.object.material)?hit.object.material[hit.face?.materialIndex??0]:hit.object.material).name}))};
+      });
       const node=w.spin.children[0].children[0],toNode=node.matrixWorld.clone().invert(),local=new T.Box3();
       node.traverse(n=>{if(n.isMesh)vertices(n,toNode.clone().multiply(n.matrixWorld),p=>local.expandByPoint(p));});
       const center=local.getCenter(new T.Vector3()),callipers=w.pivot.children.filter(n=>n.isMesh),fixed=callipers.map(n=>n.getWorldPosition(new T.Vector3()));
@@ -59,6 +86,7 @@ try{
       w.pivot.rotation.y=0;w.spin.rotation.x=0;s.car.updateMatrixWorld(true);
       return {index:w.index,expected,hub:hub.toArray(),physics:physics.toArray(),contact:ground,bounds:frame(bounds),radius:w.radius,
         rimBounds:frame(rimBounds),tyreBounds:frame(tyreBounds),
+        fit:{arch,visibleRimRadius:{min:Math.min(...visibleRim),max:Math.max(...visibleRim)},rimSurfaces,bodyInset:(c.width-(w.index<2?c.frontTrack:c.rearTrack)-c.tyreWidth)/2},
         hubError:hub.distanceTo(physics),telemetryError:Math.hypot(hub.x-mark.x,hub.z-mark.z),hubDrift,calliperDrift,groundDrift,callipers:fixed.length};
     }).sort((a,b)=>a.index-b.index);
     const axleCenter=indices=>indices.reduce((out,i)=>out.add(new T.Vector3(...wheels[i].hub)),new T.Vector3()).divideScalar(indices.length);
@@ -85,6 +113,10 @@ try{
     // R15 is the 381 mm bead seat. The visible outer flange is modelled
     // 12.7 mm taller on each radius; it must not retain the source's oversized rim.
     check(`Wheel ${w.index}: R15 rim and correct rubber width`,close(Math.max(w.rimBounds.size[1],w.rimBounds.size[2]),.4064,.002)&&close(w.tyreBounds.size[0],.195,.001));
+    // The simplified circular lip consists of chords; allow their ~2 mm
+    // sagitta and the 1 mm ray sampling step, rather than testing a perfect disk.
+    check(`Wheel ${w.index}: rubber leaves the outer rim flange visible from every sampled angle`,w.fit.visibleRimRadius.min>.1995&&w.fit.visibleRimRadius.max<.204);
+    check(`Wheel ${w.index}: paint clears the upper tyre and covers its outer sidewall`,w.fit.arch.length===7&&w.fit.arch.every(p=>p.gap>.015&&p.gap<.065&&Math.abs(p.x)>Math.abs(w.expected.x)+.195/2));
     check(`Wheel ${w.index}: visual and physical hubs match`,w.hubError<.001&&w.telemetryError<.001&&w.contact);
     check(`Wheel ${w.index}: steering and spin preserve hub, calliper and ground contact`,w.hubDrift<1e-6&&w.calliperDrift<1e-6&&w.groundDrift<.003&&w.callipers>0);
   }
@@ -101,7 +133,7 @@ try{
     const production=s.render.bind(s);window.dimensionPose={eye:[8,.8,0],span:5.6,label:'Cobalt · 4479 × 1735 × 1514 мм · база 2620 мм'};
     s.render=(...args)=>{production(...args);const p=window.dimensionPose,aspect=innerWidth/innerHeight;
       const camera=p.perspective?new T.PerspectiveCamera(40,aspect,.05,100):new T.OrthographicCamera(-p.span/2,p.span/2,p.span/aspect/2,-p.span/aspect/2,.05,100);
-      camera.position.set(...p.eye);camera.lookAt(0,.78,0);camera.updateMatrixWorld();label.textContent=p.label;s.renderer.render(stage,camera);
+      camera.position.set(...p.eye);camera.lookAt(...(p.target??[0,.78,0]));camera.updateMatrixWorld();label.textContent=p.label;s.renderer.render(stage,camera);
     };
   });
   for(const [name,eye,span,label,perspective]of [
@@ -111,6 +143,11 @@ try{
     ['three-quarter',[5,2.8,6],5.6,'195/65 R15 · диаметр 634,5 мм · клиренс 160 мм',true],
   ]){
     await page.evaluate(p=>{window.dimensionPose=p;const a=window.__avtodrom;a.scene.render(a.vehicle,1/60,a.vehicle.time,false,0);},{eye,span,label,perspective});
+    await page.screenshot({path:`${directory}/${name}.png`});
+  }
+  for(const [name,z]of [['front-wheel',1.31],['rear-wheel',-1.31]]){
+    await page.evaluate(p=>{window.dimensionPose=p;const a=window.__avtodrom;a.scene.render(a.vehicle,1/60,a.vehicle.time,false,0);},
+      {eye:[8,.31725,z],target:[0,.31725,z],span:1.8,label:'195/65 R15 · шина Ø634,5 мм · посадочный диаметр диска 381 мм · ширина шины 195 мм'});
     await page.screenshot({path:`${directory}/${name}.png`});
   }
   check('No browser errors',errors.length===0);console.log(JSON.stringify({body:report.body,axles:report.axles,clearance:report.clearance,checks},null,2));

@@ -10,12 +10,14 @@ import {railwayCrossing,railwayRailCenters,railwaySleeperCenters} from '../data/
 
 const colors={paper:'#f4f5ec',grass:'#b7c6a5',road:'#5d6868',edge:'#f5f4e7',route:'#f4ca70',car:'#075a47',goal:'#e4b346'};
 let cachedBase:HTMLCanvasElement|undefined;
+let cachedFreeBase:HTMLCanvasElement|undefined;
 
 /** The cached background uses the same compound road polygon as the 3D asphalt. */
 export class Minimap {
   readonly projection;
   private ctx:CanvasRenderingContext2D;
   private base:HTMLCanvasElement;
+  private freeBase:HTMLCanvasElement;
   private asphalt=new Path2D();
   constructor(private canvas:HTMLCanvasElement){
     canvas.width=720;canvas.height=552;this.ctx=canvas.getContext('2d')!;
@@ -23,8 +25,10 @@ export class Minimap {
     for(const polygon of roadSurface)for(const ring of polygon){ring.forEach(([x,z],i)=>{const point=this.projection.project({x,z});i?this.asphalt.lineTo(point.x,point.y):this.asphalt.moveTo(point.x,point.y);});this.asphalt.closePath();}
     if(!cachedBase){cachedBase=document.createElement('canvas');cachedBase.width=canvas.width;cachedBase.height=canvas.height;this.drawBase(cachedBase.getContext('2d')!);}
     this.base=cachedBase;
+    if(!cachedFreeBase){cachedFreeBase=document.createElement('canvas');cachedFreeBase.width=canvas.width;cachedFreeBase.height=canvas.height;this.drawBase(cachedFreeBase.getContext('2d')!,false);}
+    this.freeBase=cachedFreeBase;
   }
-  private drawBase(ctx:CanvasRenderingContext2D){
+  private drawBase(ctx:CanvasRenderingContext2D,showRoute=true){
     const {width,height}=this.canvas,p=this.projection,project=p.project;
     ctx.fillStyle=colors.paper;ctx.fillRect(0,0,width,height);
     ctx.fillStyle=colors.grass;ctx.fillRect(p.left-8,p.top-8,(p.maxX-p.minX)*p.scale+16,(p.maxZ-p.minZ)*p.scale+16);
@@ -71,8 +75,8 @@ export class Minimap {
       ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
     }
     // A fine route stays subordinate to the driver and current destination.
-    ctx.beginPath();course.route.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});
-    ctx.strokeStyle=colors.route;ctx.globalAlpha=.25;ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.setLineDash([6,7]);ctx.stroke();ctx.restore();
+    if(showRoute){ctx.beginPath();course.route.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});
+      ctx.strokeStyle=colors.route;ctx.globalAlpha=.25;ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.setLineDash([6,7]);ctx.stroke();}ctx.restore();
     for(const [id,text]of [['start','START →'],['finish','← FINISH']] as const){
       const point=project(id==='start'?startLinePoint:course.exercises.find(e=>e.id===id)!.point);ctx.fillStyle=colors.car;ctx.font='bold 19px "Segoe UI",sans-serif';ctx.textAlign='center';ctx.fillText(text,point.x,point.y+(id==='start'?27:-18));
       ctx.strokeStyle=colors.edge;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(point.x,point.y-10);ctx.lineTo(point.x,point.y+10);ctx.stroke();
@@ -80,9 +84,9 @@ export class Minimap {
     const bar=10*p.scale,x=p.left,y=height-11;ctx.strokeStyle='#5b705c';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y-5);ctx.lineTo(x,y);ctx.lineTo(x+bar,y);ctx.lineTo(x+bar,y-5);ctx.stroke();
     ctx.fillStyle='#48604d';ctx.font='20px "Segoe UI",sans-serif';ctx.textAlign='left';ctx.fillText('10 m',x+bar+9,y+2);
   }
-  draw(t:VehicleTelemetry,exercise:Exercise,index=0,single=false){
-    const ctx=this.ctx;ctx.clearRect(0,0,this.canvas.width,this.canvas.height);ctx.drawImage(this.base,0,0);
-    const leg=mapRouteLeg(exercise,index,single),project=this.projection.project;
+  draw(t:VehicleTelemetry,exercise:Exercise|undefined,index=0,single=false,targetPoint=exercise?.point,activeRoute?:{x:number;z:number}[]){
+    const ctx=this.ctx;ctx.clearRect(0,0,this.canvas.width,this.canvas.height);ctx.drawImage(exercise?this.base:this.freeBase,0,0);
+    const leg=activeRoute??(exercise?mapRouteLeg(exercise,index,single):[]),project=this.projection.project;
     ctx.save();ctx.clip(this.asphalt,'evenodd');ctx.beginPath();
     leg.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});
     ctx.strokeStyle=colors.route;ctx.lineWidth=5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
@@ -95,9 +99,11 @@ export class Minimap {
         ctx.beginPath();ctx.moveTo(center.x-dx*5-dy*5,center.y-dy*5+dx*5);ctx.lineTo(center.x+dx*3,center.y+dy*3);ctx.lineTo(center.x-dx*5+dy*5,center.y-dy*5-dx*5);ctx.lineWidth=3;ctx.stroke();
       }station-=length;
     }ctx.restore();
-    const target=this.projection.project(exercise.point),car=this.projection.project(t.position);
-    ctx.beginPath();ctx.arc(target.x,target.y,12,0,Math.PI*2);ctx.fillStyle=colors.goal;ctx.fill();ctx.strokeStyle='#fffef5';ctx.lineWidth=3;ctx.stroke();
-    ctx.beginPath();ctx.arc(target.x,target.y,3.5,0,Math.PI*2);ctx.fillStyle='#5c441e';ctx.fill();
+    const car=this.projection.project(t.position);
+    if(targetPoint){const target=this.projection.project(targetPoint);
+      ctx.beginPath();ctx.arc(target.x,target.y,12,0,Math.PI*2);ctx.fillStyle=colors.goal;ctx.fill();ctx.strokeStyle='#fffef5';ctx.lineWidth=3;ctx.stroke();
+      ctx.beginPath();ctx.arc(target.x,target.y,3.5,0,Math.PI*2);ctx.fillStyle='#5c441e';ctx.fill();
+    }
     const marker=carMapMarker(car,t.yaw);ctx.beginPath();marker.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();
     ctx.fillStyle=colors.car;ctx.fill();ctx.lineJoin='round';ctx.strokeStyle='#fffef5';ctx.lineWidth=3.5;ctx.stroke();
   }
