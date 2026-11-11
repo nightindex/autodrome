@@ -66,3 +66,17 @@
 #hud[data-mirror-adjusting=true] .exercise-card{display:none}
 @media(max-width:650px){#mirror-controls{left:12px;top:85px;width:200px;padding:12px}#mirrors-button{font-size:10px}}
 @media(max-height:650px){#mirror-controls{top:85px;max-height:calc(100vh - 100px);overflow:auto}#mirror-controls p{margin:6px 0}.mirror-pad{grid-template-rows:repeat(3,32px)}}
+
+/* Keep the menu content and status footer in separate rows at desktop heights. */
+@media(min-height:851px){
+  #menu-shell{display:grid;grid-template-rows:auto minmax(min-content,1fr) auto;overflow-y:auto}
+  .hero{position:relative;top:auto;left:auto;align-self:center;margin:24px 5%}
+  .menu-footer{position:relative;left:auto;right:auto;bottom:auto;margin:0 5%}
+}
+@media(min-height:851px) and (max-height:1000px){
+  .hero{margin-block:16px}
+  .hero h1{font-size:clamp(46px,5vw,60px)}
+}
+@media(min-height:851px) and (min-width:1600px){
+  .hero,.menu-footer{margin-inline:7%}
+}

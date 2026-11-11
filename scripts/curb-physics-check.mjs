@@ -25,12 +25,17 @@ try{
     const T=await import('/node_modules/three/build/three.module.js');
     const {ExamEngine}=await import('/src/simulation/exam.ts');
     const {vehicleConfig}=await import('/src/data/vehicle.ts');
+    const {courseSigns,courseSignPoint}=await import('/src/data/course-signs.ts');
     const source=await fetch('/src/simulation/vehicle.ts').then(response=>response.text());
     const R=(await import(source.match(/import RAPIER from ["']([^"']+)["']/)[1])).default;
     const v=a.vehicle,s=a.scene,idle={down:()=>false};
     for(let i=0;i<60;i++)v.update(1/60,idle,true);
-    // The old x=-29 approach has a sign pole immediately beyond the curb.
-    // This lane crosses the same concrete section with the full course intact.
+    // Resolve the current sign placement; historical coordinates can miss a
+    // relocated pole and turn an obstacle check into another free curb lane.
+    const polePosition=courseSignPoint(courseSigns.find(sign=>sign.id==='start-speed20'));
+    const poleCollider=[...v.obstacles].map(handle=>v.world.getCollider(handle)).find(c=>{
+      const p=c.translation();return Math.hypot(p.x-polePosition.x,p.z-polePosition.z)<.01;
+    });
     const laneX=-25,mesh=s.world.group.getObjectByName('course-curbs');
     const ray=(z,direction)=>new T.Raycaster(new T.Vector3(laneX,.1,z),new T.Vector3(0,0,direction),0,10).intersectObject(mesh)[0];
     const near=ray(40,1).point.z,far=ray(47,-1).point.z;
@@ -49,11 +54,12 @@ try{
         return {index,center,extentZ,length:v.controller.wheelSuspensionLength(index),force:v.controller.wheelSuspensionForce(index),ground:v.controller.wheelIsInContact(index),onCurb:v.controller.wheelGroundObject(index)?.handle===curb.handle,solidContact:tyreContacts.includes(index)};
       });
       const fullClear=state.reverse?wheels.every(w=>w.center.z+w.extentZ<near):wheels.every(w=>w.center.z-w.extentZ>far);
-      return {frame:state.frame,time:state.frame/60,position:p,rotation:q,velocity,speedKmh:telemetry.speed*3.6,collision:telemetry.collision,up:1-2*(q.x*q.x+q.z*q.z),wheels,fullClear,examEpisodes:state.exam.events.filter(event=>event.ruleId===30).length};
+      const poleContact=!!poleCollider&&v.impactPatches.has(poleCollider.handle);
+      return {frame:state.frame,time:state.frame/60,position:p,rotation:q,velocity,speedKmh:telemetry.speed*3.6,collision:telemetry.collision,poleContact,up:1-2*(q.x*q.x+q.z*q.z),wheels,fullClear,examEpisodes:state.exam.events.filter(event=>event.ruleId===30).length};
     };
     const setup=(scenario)=>{
       const angle=(scenario.angle??0)*Math.PI/180,reverse=!!scenario.reverse;
-      v.reset({x:scenario.pole?-29:laneX,z:reverse?46.5:40},angle);
+      v.reset({x:scenario.pole?polePosition.x:laneX,z:reverse?46.5:40},angle);
       for(let i=0;i<60;i++)v.update(1/60,idle,true);
       v.drivetrain.handbrake=false;
       v.body.setLinvel({x:Math.sin(angle)*scenario.kmh/3.6,y:0,z:Math.cos(angle)*scenario.kmh/3.6*(reverse?-1:1)},true);
@@ -74,7 +80,7 @@ try{
     };
     const result=()=>{
       const samples=state.samples,firstImpact=samples.find(sample=>sample.collision),firstClear=samples.find(sample=>sample.fullClear);
-      return {name:state.name,initialKmh:state.kmh,reverse:state.reverse,angle:state.angle??0,firstImpact,firstClear,peakHeight:Math.max(...samples.map(sample=>sample.position.y)),furthest:state.reverse?Math.min(...samples.map(sample=>sample.position.z)):Math.max(...samples.map(sample=>sample.position.z)),minimumUp:Math.min(...samples.map(sample=>sample.up)),collisionEpisodes:state.exam.events.filter(event=>event.ruleId===30).length,suspensionRange:[0,1,2,3].map(index=>({wheel:index,min:Math.min(...samples.map(sample=>sample.wheels[index].length)),max:Math.max(...samples.map(sample=>sample.wheels[index].length))})),finite:samples.every(sample=>[sample.position.x,sample.position.y,sample.position.z,sample.speedKmh,...sample.wheels.flatMap(wheel=>[wheel.length,wheel.force])].every(Number.isFinite)),final:samples.at(-1)};
+      return {name:state.name,initialKmh:state.kmh,reverse:state.reverse,angle:state.angle??0,firstImpact,firstClear,poleContact:samples.some(sample=>sample.poleContact),peakHeight:Math.max(...samples.map(sample=>sample.position.y)),furthest:state.reverse?Math.min(...samples.map(sample=>sample.position.z)):Math.max(...samples.map(sample=>sample.position.z)),minimumUp:Math.min(...samples.map(sample=>sample.up)),collisionEpisodes:state.exam.events.filter(event=>event.ruleId===30).length,suspensionRange:[0,1,2,3].map(index=>({wheel:index,min:Math.min(...samples.map(sample=>sample.wheels[index].length)),max:Math.max(...samples.map(sample=>sample.wheels[index].length))})),finite:samples.every(sample=>[sample.position.x,sample.position.y,sample.position.z,sample.speedKmh,...sample.wheels.flatMap(wheel=>[wheel.length,wheel.force])].every(Number.isFinite)),final:samples.at(-1)};
     };
     const originalRender=s.render.bind(s);
     s.render=(...args)=>{
@@ -94,12 +100,15 @@ try{
     return results;
   });
   const stages=[];
+  report={date:new Date().toISOString(),fixture,checks,errors,scenarios,stages};
   stages.push({name:'approach',...await page.evaluate(()=>window.__curbPhysical.setup({name:'visual-fast',kmh:50}))});
   await capture('50-approach');
   for(const [name,condition]of [
     ['first-impact','s.collision'],
     ['flight','s.position.y>1.1&&s.wheels.filter(w=>w.ground).length<2'],
-    ['rear-contact','s.wheels.some(w=>w.index>=2&&(w.solidContact||w.onCurb))'],
+    // A fast impact may jump the rear tyres over the concrete. Verify their
+    // actual passage instead of requiring a second impact on the same curb.
+    ['rear-axle-passage',`s.wheels.filter(w=>w.index>=2).every(w=>w.center.z-w.extentZ>${fixture.far})`],
     ['clearance','s.fullClear'],
   ]){
     const stage=await page.evaluate(({condition})=>window.__curbPhysical.until(new Function('s',`return ${condition}`)),{condition});
@@ -124,7 +133,7 @@ try{
     check(`${row.name}: finite suspension and vehicle state`,row.finite);
   }
   check('Suspension responds during the fast impact',fast.suspensionRange.some(range=>range.max-range.min>.05));
-  check('The sign pole behind the old approach still blocks the car',!!pole.firstImpact&&!pole.firstClear&&pole.furthest<fixture.near);
+  check('The actual sign pole records contact and blocks the car before clearance',pole.poleContact&&!!pole.firstImpact&&!pole.firstClear&&pole.final.speedKmh<.5);
   check('Staged traversal scores one impact across both axles',traversal.collisionEpisodes===1&&traversal.firstClear.fullClear);
   check('The staged car settles with the service brake',settled.speedKmh<.5);
   check('No browser errors',errors.length===0);

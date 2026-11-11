@@ -33,6 +33,22 @@ const castPillarPhotoPixel=(side:number,x:number,y:number)=>{
 };
 
 describe('cabin surfaces fit their supports',()=>{
+  it('forms a passenger shelf with real depth behind its rolled upper edge',()=>{
+    for(const x of [-.54,-.42,-.30]){
+      const back=cast(new T.Vector3(x,0,.50),new T.Vector3(0,0,1));
+      const brow=cast(new T.Vector3(x,.09,.50),new T.Vector3(0,0,1));
+      expect(back?.object.name,`recessed shelf at ${x}`).toBe('COBALT_PassengerShelfInterior');
+      expect(brow).toBeDefined();
+      expect(back!.point.z-brow!.point.z,`usable shelf depth at ${x}`).toBeGreaterThan(.11);
+      expect(back!.point.z-brow!.point.z).toBeLessThan(.23);
+    }
+  });
+  it('keeps the inner roof and upper A-pillar continuous pale trim on both sides',()=>{
+    for(const side of [-1,1])for(const [x,y,z]of [[.585,.695,.08],[.60,.68,.18],[.61,.63,.31],[.62,.58,.43]]){
+      const eye=new T.Vector3(side*.31,.56,0),target=new T.Vector3(side*x,y,z);
+      expect(cast(eye,target.sub(eye).normalize())?.object.userData.material,`pale inner rail ${side},${x},${y},${z}`).toBe('COBALT_Headliner');
+    }
+  });
   it('keeps the pale roof-rail lining below the metal and its seal gaps',()=>{
     const roof=surfaces.filter(mesh=>/^chassis_primary/.test(mesh.name)&&mesh.userData.material==='Realistic_Car_Paint');
     let checked=0;const seen=new Set<string>();
@@ -180,6 +196,20 @@ describe('cabin surfaces fit their supports',()=>{
       const target=support!.point.clone().add(new T.Vector3(0,.006,0));
       const visible=cast(eye,target.sub(eye).normalize());
       expect(visible?.object.userData.material,`unobstructed dashboard beside pillar ${side},${x},${z}`).toBe('COBALT_Dashboard');
+    }
+  });
+  it('closes both outboard windscreen pockets with dashboard plastic',()=>{
+    const plastic=surfaces.filter(mesh=>mesh.userData.material==='COBALT_Dashboard');
+    const crown=surfaces.filter(mesh=>mesh.name==='COBALT_MouldedDashboard');
+    for(const side of [-1,1])for(const x of [.702,.712])for(const z of [1.17,1.22,1.26]){
+      const cover=cast(new T.Vector3(side*x,.40,z),new T.Vector3(0,-1,0),plastic);
+      const support=cast(new T.Vector3(side*.686,.40,z),new T.Vector3(0,-1,0),crown);
+      expect(cover,`closed cowl pocket ${side},${x},${z}`).toBeDefined();
+      expect(support).toBeDefined();
+      expect(Math.abs(cover!.point.y-support!.point.y)).toBeLessThan(.002);
+    }
+    for(const side of [-1,1])for(const z of [1.29,1.31]){
+      expect(cast(new T.Vector3(side*.74,.40,z),new T.Vector3(0,-1,0),plastic),`closed outer cowl corner ${side},${z}`).toBeDefined();
     }
   });
   it('preserves the painted rim outside the rear glass opening',()=>{

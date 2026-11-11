@@ -14,6 +14,7 @@ try{
   await page.goto('http://127.0.0.1:5173/');
   await page.waitForFunction(()=>window.__avtodrom?.snapshot().loaded,null,{timeout:60000});
   await page.click('#practice');
+  const live=await page.evaluate(()=>{const s=window.__avtodrom.scene,eye=s.cockpitEye.toArray();return {eye,target:[eye[0],eye[1]-.025,eye[2]+1],fov:s.cockpitView.fov};});
   await page.addStyleTag({content:'#hud,#menu-shell,#modal,.vignette,#toast{display:none!important}'});
   await page.evaluate(async()=>{
     const T=await import('/node_modules/three/build/three.module.js'),s=window.__avtodrom.scene,render=s.render.bind(s);
@@ -28,7 +29,9 @@ try{
   const poses=[
     ['left-windscreen-joint',{eye:[.31,.48,.2],target:[.63,.39,.92],fov:40}],
     ['right-windscreen-joint',{eye:[-.31,.48,.2],target:[-.63,.39,.92],fov:40}],
-    ['game-driver',{eye:[.31,.48,.2],target:[.31,.455,1.20],fov:70}],
+    ['game-driver',live],
+    ['driver-left-joint',{...live,target:[.68,.34,1.02],fov:45}],
+    ['driver-right-joint',{...live,target:[-.68,.34,1.02],fov:45}],
     ['wide-front-pillars',{eye:[0,.55,-.05],target:[0,.43,1.1],fov:70}],
   ];
   for(const [name,pose]of poses){

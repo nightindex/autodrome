@@ -1,4 +1,6 @@
 import * as T from 'three';
+import {weldPrimitive,simplifyPrimitive} from '@gltf-transform/functions';
+import {MeshoptSimplifier} from 'meshoptimizer';
 
 /** Corner-angle weighted normals on edge-connected smoothing fans. Precise
  * position matching joins UV seams without blending nearby sheet-metal lips.
@@ -189,4 +191,54 @@ export function interiorTrimMaterials({doc,buffer,node,primitive,worldPoint,trim
   if(!inside.length&&!beltline.length)return;
   for(const [mat,list]of [[trim,inside],[belt,beltline],[primitive.getMaterial(),outside]])if(list.length)node.getMesh().addPrimitive(primitive.clone().setMaterial(mat).setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint32Array(list)).setBuffer(buffer)));
   node.getMesh().removePrimitive(primitive);primitive.dispose();
+}
+
+/** The source combines mirror plastic with the upper door frame. Its inward
+ * rail overlaps the pale lining, producing long black wedges from the seat.
+ * Split only that inner rail; exterior window seals and mirrors stay dark. */
+export function refineCabinRailMaterials({doc,buffer,nodes,worldPoint,lining}){
+  let corrected=0;
+  for(const node of nodes){
+    if(!/^(door_[lr]f|chassis_door)/.test(node.getName()))continue;
+    for(const primitive of [...node.getMesh()?.listPrimitives()??[]]){
+      if(!['COBALT_SideMirrorHousing','bump_front_ok.014'].includes(primitive.getMaterial()?.getName()))continue;
+      const position=primitive.getAttribute('POSITION'),indices=primitive.getIndices()?.getArray()??Uint32Array.from({length:position.getCount()},(_,i)=>i);
+      const attributes=primitive.listSemantics().map(semantic=>({semantic,accessor:primitive.getAttribute(semantic)})),groups=new Map();
+      const planes=[p=>p.y-.42,p=>.82-p.y,p=>.705-p.x,p=>.705+p.x,p=>p.z+.95,p=>1.12-p.z];
+      const vertex=i=>({point:worldPoint(node,position,i),values:attributes.map(({accessor:a})=>Array.from(a.getArray().slice(i*a.getElementSize(),(i+1)*a.getElementSize())))});
+      const clip=(polygon,field,inside)=>{
+        if(!polygon.length)return [];const out=[],sign=inside?1:-1;let a=polygon.at(-1),da=field(a.point)*sign;
+        for(const b of polygon){const db=field(b.point)*sign;
+          if((da>=0)!==(db>=0)){const t=da/(da-db);out.push({point:a.point.clone().lerp(b.point,t),values:a.values.map((v,j)=>v.map((n,k)=>T.MathUtils.lerp(n,b.values[j][k],t)))});}
+          if(db>=0)out.push(b);a=b;da=db;
+        }return out;
+      };
+      const add=(polygon,material)=>{
+        if(polygon.length<3)return;
+        const arrays=groups.get(material)??attributes.map(()=>[]);
+        for(let j=1;j<polygon.length-1;j++)for(const v of [polygon[0],polygon[j],polygon[j+1]])v.values.forEach((a,k)=>arrays[k].push(...a));
+        groups.set(material,arrays);
+      };
+      for(let i=0;i<indices.length;i+=3){
+        let polygon=[0,1,2].map(j=>vertex(indices[i+j]));
+        // Split at the actual trim boundary, never at triangle centroids.
+        // Adjacent triangles then share an exact edge instead of saw teeth.
+        for(const plane of planes){add(clip(polygon,plane,false),primitive.getMaterial());polygon=clip(polygon,plane,true);}
+        add(polygon,lining);
+      }
+      if(!groups.has(lining))continue;
+      for(const [material,arrays]of groups){
+        const part=doc.createPrimitive().setMaterial(material);
+        attributes.forEach(({semantic,accessor},i)=>{
+          if(semantic==='NORMAL')for(let j=0;j<arrays[i].length;j+=3)new T.Vector3().fromArray(arrays[i],j).normalize().toArray(arrays[i],j);
+          part.setAttribute(semantic,doc.createAccessor().setType(accessor.getType()).setArray(new Float32Array(arrays[i])).setBuffer(buffer));
+        });
+        weldPrimitive(part,{overwrite:true});
+        simplifyPrimitive(part,{simplifier:MeshoptSimplifier,ratio:.65,error:.0001,lockBorder:true});
+        node.getMesh().addPrimitive(part);
+      }
+      corrected+=groups.get(lining)[0].length/9;
+      node.getMesh().removePrimitive(primitive);primitive.dispose();
+    }
+  }return corrected;
 }

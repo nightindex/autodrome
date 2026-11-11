@@ -1,6 +1,7 @@
 import { mapPoint } from './course';
 import { markingDimensions } from './marking-standards';
 import type { Vec2 } from '../types';
+import {parkingMouths} from './parking-control-lines';
 
 // Positions traced against the supplied plan; headings point towards the driver’s destination.
 export interface SurfaceLabel {text:string;point:Vec2;normal:Vec2;width:number;length:number}
@@ -51,6 +52,9 @@ export const paintedArrows:PaintedArrow[]=[
 // pavement boundary rather than drawing a second, approximate road outline.
 const traced=(points:number[][])=>points.map(([x,y])=>mapPoint(x,y));
 export const yellowBoundaryRoads=[
+  // Continue yellow around the connecting lips as well as each recessed bay.
+  {width:.8,points:traced([[66,585],[507,585],[507,550]])},
+  {width:.8,points:traced([[350,735],[350,695],[510,695],[510,735]])},
   // These are colour-selection envelopes, not physical road widths. Include
   // the rounded kerb returns so the clipped edge has no isolated white wedges.
   {width:5.3,points:traced([[985,615],[917.5,615],[917.5,745],[850,745]])},
@@ -68,6 +72,7 @@ export const yellowBoundaryRoads=[
   ...[[70,165],[215,312],[350,458]].map(([left,right])=>({width:3.4,points:traced([[left,600],[right,600]])})),
   {width:4.3,points:traced([[350,715],[510,715]])},
 ];
+export const parkingMouthLines=parkingMouths.map(m=>({...m,points:traced(m.points)}));
 export const yellowControlLines:Vec2[][]=[
   [[333,898],[333,972]],
   [[985,592],[985,638]],[[850,722.5],[850,767.5]],
@@ -76,9 +81,20 @@ export const yellowControlLines:Vec2[][]=[
   [[1102,340],[1160,340]],[[819,230],[878,230]],
   [[245,295],[295,295]],[[183,343],[230,343]],
   [[475,243],[525,243]],[[392,400],[455,400]],
-  [[66,585],[507,585]],[[350,735],[510,735]],
   [[600,79],[600,114]],[[1018,79],[1018,114]],
-].map(traced);
+].map(traced).concat(parkingMouthLines.map(m=>m.points));
+
+/** Identical dash stations in the scene and mini-map; leave both bay corners clear. */
+export function yellowControlPaintPaths(points:Vec2[]):Vec2[][]{
+  const [a,b]=points,length=Math.hypot(b.x-a.x,b.z-a.z),dash=.32,pitch=.65;
+  if(length<1e-8)return [];
+  const parking=parkingMouthLines.some(m=>m.points===points);
+  const count=Math.max(1,Math.floor((length-.4+.33)/pitch));
+  const inset=parking?(length-((count-1)*pitch+dash))/2:0,result:Vec2[][]=[];
+  const at=(d:number)=>({x:a.x+(b.x-a.x)*d/length,z:a.z+(b.z-a.z)*d/length});
+  for(let d=inset;d<length-inset-1e-8;d+=pitch)result.push([at(d),at(Math.min(length-inset,d+dash))]);
+  return result;
+}
 
 // Both borders start at the lane-divider tip, then meet opposite sides of the
 // rounded island nose. The arc follows the existing edge-paint centreline.

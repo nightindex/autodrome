@@ -1,9 +1,10 @@
 import type { Exercise,Language,VehicleTelemetry } from '../types';
 import { course,hillBounds,hillProfile,startLinePoint } from '../data/course';
-import { coursePaintedArrows,roadSurface,pedestrianCrossingLayout,whiteEdgeSurface,yellowEdgeSurface,intersectionCrossings,roadStopLines } from '../render/course-world';
+import { coursePaintedArrows,roadSurface,pedestrianCrossingLayout,whiteEdgeSurface,yellowEdgeSurface,intersectionCrossings,roadStopLines,emergencyStopMarking } from '../render/course-world';
 import { carMapMarker,mapProjection } from './map-projection';
 import { mapRouteLeg } from './map-route';
 import { roadArrowOutline } from '../render/road-arrows';
+import {yellowControlLines,yellowControlPaintPaths} from '../data/road-markings';
 import { crosswalkStripes } from '../render/crosswalk';
 import { laneLines,laneGores,lanePaintPaths } from '../data/lane-markings';
 import {railwayCrossing,railwayRailCenters,railwaySleeperCenters} from '../data/railway';
@@ -46,14 +47,21 @@ export class Minimap {
     for(const gore of laneGores)for(const points of gore.paintPaths??[[...gore.outline,gore.outline[0]]]){ctx.beginPath();points.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});ctx.lineWidth=.75;ctx.stroke();}
     const hillStart=project({x:hillProfile.start,z:hillBounds.minZ}),hillEnd=project({x:hillProfile.end,z:hillBounds.maxZ});
     ctx.fillStyle='#718076';ctx.fillRect(hillStart.x,hillStart.y,hillEnd.x-hillStart.x,hillEnd.y-hillStart.y);
-    // Parking, the pedestrian crossing and railway give recognisable landmarks.
-    ctx.strokeStyle=colors.edge;ctx.lineWidth=1.6;
-    for(const exercise of course.exercises){if(!exercise.parking)continue;
-      const bay=exercise.parking,center=project(bay.center);ctx.save();ctx.translate(center.x,center.y);ctx.rotate(-bay.yaw);
-      ctx.strokeRect(-bay.width*p.scale/2,-bay.length*p.scale/2,bay.width*p.scale,bay.length*p.scale);ctx.restore();
+    // Real bay boundaries and wheel-contact stripes are already shared above;
+    // scoring rectangles are not painted parking-space outlines.
+    ctx.strokeStyle='#e4c465';
+    for(const line of yellowControlLines)for(const points of yellowControlPaintPaths(line)){
+      ctx.beginPath();points.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});
+      ctx.lineWidth=Math.max(.65,.1*p.scale);ctx.stroke();
     }
+    ctx.strokeStyle=colors.edge;
     const crossing=pedestrianCrossingLayout();
     for(const line of roadStopLines){ctx.beginPath();line.points.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});ctx.lineWidth=line.width*p.scale;ctx.stroke();}
+    for(const contour of emergencyStopMarking.contours){
+      ctx.beginPath();contour.points.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});
+      ctx.strokeStyle=emergencyStopMarking.color;ctx.lineWidth=Math.max(.65,contour.width*p.scale);ctx.lineJoin='miter';ctx.stroke();
+    }
+    ctx.strokeStyle=colors.edge;
     const crossings=[crossing,...intersectionCrossings];
     for(const layout of crossings)for(const stripe of crosswalkStripes(layout)){
       ctx.beginPath();stripe.points.forEach((point,i)=>{const a=project(point);i?ctx.lineTo(a.x,a.y):ctx.moveTo(a.x,a.y);});ctx.closePath();ctx.fillStyle=stripe.yellow?'#e4c465':colors.edge;ctx.fill();

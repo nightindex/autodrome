@@ -2,11 +2,11 @@ import * as T from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import polygonClipping from 'polygon-clipping';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { course, hillBounds, hillHeight, hillProfile, mapPoint,startLinePoint } from '../data/course';
+import { course, hillBounds, hillHeight, hillProfile, mapPoint,startLinePoint,emergencyStopStation } from '../data/course';
 import { distance, segmentDistance } from '../simulation/math';
 import type { Vec2,Settings } from '../types';
 import { asphaltGeometry, boundaryPaintSurface, boundarySections, curbGeometry, curbSurfaces, offsetPath, paintPolygonGeometry, paintStripGeometry, paintJoinSurface, roadBoundaryLoops, roadPaint, unifiedRoads,type PaintPath } from './road-geometry';
-import { categoryLabels, departureHatching, departureTurnArrows, paintedArrows, yellowBoundaryRoads, yellowControlLines,type PaintedArrow } from '../data/road-markings';
+import { categoryLabels, departureHatching, departureTurnArrows, paintedArrows, yellowBoundaryRoads, yellowControlLines,yellowControlPaintPaths,type PaintedArrow } from '../data/road-markings';
 import { laneLines,laneGores,lanePaintPaths } from '../data/lane-markings';
 import { centerArrowBetweenLines,roadArrowOutline } from './road-arrows';
 import { createRoadSign,type SignKind } from './road-signs';
@@ -18,7 +18,7 @@ import {pedestrianSignalLayout} from './pedestrian-signal-layout';
 import {IntersectionSignalAssembly} from './intersection-signal-assembly';
 import { signalAxis } from '../data/traffic-signals';
 import { intersectionApproaches } from '../data/intersection';
-import { fitCrosswalk,crosswalkStripes } from './crosswalk';
+import { fitCrosswalk,crosswalkStripes,crossingPaint } from './crosswalk';
 import { courseEnvelope,courseGrassIslands } from '../data/course-layout';
 import { departureMarkingPaths } from './departure-markings';
 import { addStaticObstacle } from '../simulation/static-collision';
@@ -130,6 +130,21 @@ function stopStripe(name:string,point:Vec2,normal:Vec2,span:'road'|'lane'|'appro
   }
   return {name,point,normal,width:markingDimensions.stop,points:[low,high].map(offset=>({x:center.x+right.x*offset,z:center.z+right.z*offset}))};
 }
+// uz_video.mp4 08:12-08:15: compact nested yellow triangles, centred in
+// the incoming lane between the opposing arrow and the next left-turn arrow.
+// Dimensions are reconstructed from the footage, not regulatory stop stripes.
+const hazardTriangle=(scale:number)=>{
+  const {point,normal}=emergencyStopStation,w=1.65*scale,h=1.45*scale;
+  return [[-w/2,-h/3],[w/2,-h/3],[0,2*h/3],[-w/2,-h/3]].map(([across,along])=>({
+    x:point.x+normal.z*across+normal.x*along,z:point.z-normal.x*across+normal.z*along,
+  }));
+};
+const hazardOuter=hazardTriangle(1),hazardInner=hazardTriangle(.55);
+export const emergencyStopMarking={
+  name:'paint-emergency-hazard-triangle',width:.10,color:'#efcc59',point:emergencyStopStation.point,
+  points:hazardOuter,innerPoints:hazardInner,
+  contours:[{points:hazardOuter,width:.10},{points:hazardInner,width:.07}],
+};
 export const roadStopLines=[
   ...course.exercises.filter(e=>e.stop&&!e.stop.light).map(e=>stopStripe(`paint-${e.id}-stop-line`,e.stop!.point,e.stop!.normal,e.id==='railway'?'lane':'road')),
   ...intersectionApproaches.map(a=>stopStripe(`intersection-stop-${a.id}`,a.stop,a.normal,'approach')),
@@ -287,9 +302,8 @@ export class CourseWorld {
     const outerGuide=this.strip(departurePaint.rightGuide,departureHatching.lineWidth,this.white,departurePaintHeight);outerGuide.name='paint-departure-right-guide';outerGuide.userData.preserveMesh=true;
     // Dashed yellow exercise entry/control lines visible in the reference video.
     const controlGeometries:T.BufferGeometry[]=[];
-    for(const [start,end]of yellowControlLines){
-      const length=distance(start,end);
-      for(let d=0;d<length;d+=.65){const t=d/length,u=Math.min(length,d+.32)/length;controlGeometries.push(paintStripGeometry([{x:start.x+(end.x-start.x)*t,z:start.z+(end.z-start.z)*t},{x:start.x+(end.x-start.x)*u,z:start.z+(end.z-start.z)*u}],.1,roadSurface,.054));}
+    for(const control of yellowControlLines)for(const points of yellowControlPaintPaths(control)){
+      controlGeometries.push(paintStripGeometry(points,.1,roadSurface,.054));
     }
     const controls=new T.Mesh(mergeGeometries(controlGeometries)!,this.yellow);controlGeometries.forEach(g=>g.dispose());
     controls.name='paint-yellow-control-lines';controls.userData.preserveMesh=true;controls.receiveShadow=true;this.group.add(controls);
@@ -316,6 +330,9 @@ export class CourseWorld {
       const pedestrian=createRoadSign('pedestrian',n.x>0||n.z>0,undefined,{center:1.85,post:false});pedestrian.position.set(signalPosition.x,0,signalPosition.z);pedestrian.rotation.y=yaw;this.group.add(pedestrian);
       const direction=roadsidePosition({x:p.x-n.x*1.6,z:p.z-n.z*1.6},n);this.sign(approach.turn??'straight',direction.x,direction.z,yaw,false,undefined,undefined,1.5).name=`signal-${approach.id}-direction`;
     }
+    const hazardParts=emergencyStopMarking.contours.map(c=>paintStripGeometry(c.points,c.width,roadSurface,.055));
+    const hazard=new T.Mesh(mergeGeometries(hazardParts)!,this.yellow);hazardParts.forEach(g=>g.dispose());hazard.receiveShadow=true;this.group.add(hazard);
+    hazard.name=emergencyStopMarking.name;hazard.userData={preserveMesh:true,width:emergencyStopMarking.width};
     for(const marking of roadStopLines){const line=this.strip(marking.points,marking.width,this.white,.055);line.name=marking.name;line.userData={preserveMesh:true,normal:marking.normal,width:marking.width};}
     this.text('START',startLinePoint.x-1.4,42,-Math.PI/2,2,'#eeede1',2.8,1.2);this.text('START',startLinePoint.x-1.4,38.5,-Math.PI/2,2,'#eeede1',2.8,1.2);
     this.text('FINISH',-48.2,26.5,Math.PI/2,2,'#eeede1',2.6,1.2);this.text('FINISH',-48.2,22.5,Math.PI/2,2,'#eeede1',2.6,1.2);

@@ -22,6 +22,7 @@ export class Vehicle {
   private tyreContactForces=new Map<number,number>();
   private contactPairs=new Set<string>();private collisionHold=0;
   private impactPatches=new Map<number,Vec2>();
+  private failedLaunchTime=0;private failedLaunchOrigin:Vec2|undefined;private stuckOrigin:Vec2|undefined;
   private readonly tyreShape=new RAPIER.RoundCylinder(tyreHalfWidth-tyreShoulder,config.wheelRadius-tyreClearance-tyreShoulder,tyreShoulder);
   // Ray suspension supplies tyre traction and braking. The massless tyre
   // solids resolve obstacle normals only: they have no independent spin, so
@@ -70,6 +71,7 @@ export class Vehicle {
     this.body.setRotation(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),yaw),true);
     this.body.setLinvel({x:0,y:0,z:0},true);this.body.setAngvel({x:0,y:0,z:0},true);this.body.resetForces(true);this.body.resetTorques(true);
     this.drivetrain.reset();this.steering.reset();this.belt=false;this.indicator='off';this.hazards=false;this.ignitionOn=false;this.positionLights=false;this.headlights=false;this.fogLights=false;this.time=0;this.collision=false;this.collisionHold=0;this.contactPairs.clear();this.impactPatches.clear();this.tyreContactForces.clear();this.queue.clear();
+    this.failedLaunchTime=0;this.failedLaunchOrigin=undefined;this.stuckOrigin=undefined;
     this.tyres.forEach((tyre,i)=>{
       const {x,z}=wheelCenter(i);
       this.controller.setWheelSteering(i,0);
@@ -79,13 +81,17 @@ export class Vehicle {
       tyre.setRotationWrtParent(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2));
     });
   }
-  /** Only offer recovery after a car on its side/roof has slowed down. */
-  get canRecover(){
-    const q=this.body.rotation(),v=this.body.linvel();
-    return 1-2*(q.x*q.x+q.z*q.z)<.25&&Math.hypot(v.x,v.y,v.z)<3;
+  /** A failed launch remains recoverable after the driver releases the pedals. */
+  get recoveryReason():'overturned'|'stuck'|null{
+    const q=this.body.rotation(),v=this.body.linvel(),angular=this.body.angvel();
+    const up=1-2*(q.x*q.x+q.z*q.z),speed=Math.hypot(v.x,v.y,v.z);
+    if(up<.25&&speed<3)return 'overturned';
+    if(this.stuckOrigin&&up>.75&&speed<.4&&Math.hypot(angular.x,angular.y,angular.z)<.4)return 'stuck';
+    return null;
   }
+  get canRecover(){return this.recoveryReason!==null;}
   recover(){
-    if(!this.canRecover)return false;
+    const reason=this.recoveryReason;if(!reason)return false;
     const rotation=new T.Quaternion().copy(this.body.rotation()),forward=new T.Vector3(0,0,1).applyQuaternion(rotation),right=new T.Vector3(1,0,0).applyQuaternion(rotation);
     const yaw=Math.hypot(forward.x,forward.z)>.1?Math.atan2(forward.x,forward.z):Math.atan2(-right.z,right.x),upright=new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),yaw);
     // Cover the whole upright chassis and the fully extended tyres at the
@@ -96,11 +102,19 @@ export class Vehicle {
     const halfWidth=Math.max(.96,config.width/2+.09,Math.max(config.frontTrack,config.rearTrack)/2+tyreHalfWidth+.09);
     const halfLength=Math.max(2.3,config.length/2+.06,config.wheelbase/2+config.wheelRadius+.06);
     const origin=this.body.translation(),clearance=new RAPIER.Cuboid(halfWidth,(top-bottom)/2,halfLength);
-    // Keep the current location where possible; step clear of a kerb or post.
+    // Prefer a complete asphalt tyre footprint, including when the nearest
+    // clear space is grass. A second pass keeps off-road righting available.
     let placement:{x:number;y:number;z:number}|undefined;
-    for(const radius of [0,1.25,2.5,4]){
-      for(let i=0;i<(radius===0?1:8);i++){
-        const angle=yaw+Math.PI+i*Math.PI/4,x=origin.x+Math.sin(angle)*radius,z=origin.z+Math.cos(angle)*radius;
+    for(const requireAsphalt of reason==='stuck'?[true]:[true,false]){
+     for(const radius of [0,1.25,2.5,4,6,8]){
+      const directions=radius===0?1:radius<4?8:16;
+      for(let i=0;i<directions;i++){
+        const angle=yaw+Math.PI+i*Math.PI*2/directions,x=origin.x+Math.sin(angle)*radius,z=origin.z+Math.cos(angle)*radius;
+        if(requireAsphalt&&![0,1,2,3].every(index=>{
+          const wheel=wheelCenter(index);
+          return [-tyreHalfWidth,0,tyreHalfWidth].every(side=>[-config.wheelRadius,0,config.wheelRadius].every(end=>
+            this.surfaceAt(localPoint({x,z},yaw,wheel.x+side,wheel.z+end))==='asphalt'));
+        }))continue;
         const heights=[hillHeight(x,z)];
         for(const side of [-halfWidth,halfWidth])for(const end of [-halfLength,halfLength]){
           const corner=localPoint({x,z},yaw,side,end);heights.push(hillHeight(corner.x,corner.z));
@@ -109,6 +123,8 @@ export class Vehicle {
         if(!this.world.intersectionWithShape({x,y:y+clearanceY,z},upright,clearance,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,undefined,this.body,c=>this.obstacles.has(c.handle))){placement={x,y,z};break;}
       }
       if(placement)break;
+     }
+     if(placement)break;
     }
     if(!placement)return false;
     const saved={time:this.time,belt:this.belt,engine:this.drivetrain.engine,ignition:this.ignitionOn,indicator:this.indicator,hazards:this.hazards,positionLights:this.positionLights,headlights:this.headlights,fogLights:this.fogLights};
@@ -118,12 +134,12 @@ export class Vehicle {
     if(saved.engine)this.drivetrain.ignite();
     return true;
   }
-  action(action:string,assist=false){
+  action(action:string,assist=false,clutchHeld=false){
     if(action==='positionLights'){this.positionLights=!this.positionLights;if(!this.positionLights){this.headlights=false;this.fogLights=false;}}
     if(action==='headlights'){this.headlights=!this.headlights;if(this.headlights)this.positionLights=true;}
     if(action==='fogLights'&&this.canUseFogLights)this.fogLights=!this.fogLights;
-    if(action.startsWith('gear'))this.drivetrain.shift(Number(action.slice(-1)),assist);
-    if(action==='reverse')this.drivetrain.shift(-1,assist);if(action==='neutral')this.drivetrain.shift(0);
+    if(action.startsWith('gear'))this.drivetrain.shift(Number(action.slice(-1)),assist,clutchHeld);
+    if(action==='reverse')this.drivetrain.shift(-1,assist,clutchHeld);if(action==='neutral')this.drivetrain.shift(0);
     if(action==='ignition'){this.ignitionOn=!this.drivetrain.engine;this.drivetrain.ignite();if(!this.ignitionOn)this.fogLights=false;}
     if(action==='handbrake'){this.drivetrain.handbrake=!this.drivetrain.handbrake;this.body.wakeUp();}
     if(action==='belt')this.belt=!this.belt;if(action==='hazards')this.hazards=!this.hazards;
@@ -198,8 +214,10 @@ export class Vehicle {
       this.tyres[i].setRotationWrtParent(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),this.controller.wheelSteering(i)??0).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),Math.PI/2)));
     }
     // At rest, static tyre friction balances the component of gravity along
-    // the road. The ray controller otherwise leaves a one-step downhill creep.
-    if(Math.abs(speed)<.15&&(drive.braking>100||drive.parkingBrake>0)){
+    // the road. Integrate this as a force alongside gravity: a whole-step
+    // impulse arrives before Rapier's gravity substeps and creeps uphill.
+    let staticTyreForce:T.Vector3|undefined;
+    if(Math.abs(speed)<.15&&horizontalSpeed<.15&&(drive.braking>100||drive.parkingBrake>0)){
       const normal=new T.Vector3();let contacts=0,holdingForce=0;
       for(let i=0;i<4;i++)if(this.controller.wheelIsInContact(i)){
         normal.add(this.controller.wheelContactNormal(i)!);contacts++;
@@ -208,7 +226,10 @@ export class Vehicle {
       if(contacts>=2){
         normal.normalize();
         const tangent=new T.Vector3(-normal.x*normal.y,1-normal.y*normal.y,-normal.z*normal.y).multiplyScalar(config.mass*9.81);
-        if(holdingForce>=tangent.length())this.body.applyImpulse(tangent.multiplyScalar(dt),false);
+        if(holdingForce>=tangent.length()){
+          staticTyreForce=tangent;
+          this.body.addForce(staticTyreForce,false);
+        }
       }
     }
     for(const a of [0,2]){
@@ -219,6 +240,9 @@ export class Vehicle {
     }
     this.tyreContactForces.clear();
     this.world.timestep=dt;this.world.step(this.queue,this.hooks);
+    // User forces persist in Rapier. Remove only this step's static friction,
+    // preserving external forces and allowing immediate rollback on release.
+    if(staticTyreForce)this.body.addForce(staticTyreForce.negate(),false);
     this.collisionHold=Math.max(0,this.collisionHold-dt);
     // Front and rear axles can touch the same curb seconds apart. Keep that
     // local impact episode until the whole footprint clears it, even in the
@@ -261,6 +285,22 @@ export class Vehicle {
     });
     this.contactPairs=contacts;
     this.collision=this.contactPairs.size>0||this.collisionHold>0||this.impactPatches.size>0;
+    this.updateFailedLaunch(dt,input);
+  }
+  private updateFailedLaunch(dt:number,input:Input){
+    const p=this.body.translation(),v=this.body.linvel(),q=this.body.rotation(),angular=this.body.angvel(),d=this.drivetrain;
+    if(this.stuckOrigin&&Math.hypot(p.x-this.stuckOrigin.x,p.z-this.stuckOrigin.z)>=1)this.stuckOrigin=undefined;
+    if(this.stuckOrigin)return;
+    const supported=[0,1,2,3].filter(i=>this.controller.wheelIsInContact(i)).length>=2;
+    const attempting=input.down('throttle')&&!input.down('brake')&&!input.down('clutch')&&d.throttle>.2&&d.engine&&d.gear!==0&&d.clutch<.85&&d.brake<.1&&!d.handbrake;
+    if(!attempting||!supported||1-2*(q.x*q.x+q.z*q.z)<=.75||Math.hypot(v.x,v.y,v.z)>=.4||Math.hypot(angular.x,angular.y,angular.z)>=.4){
+      this.failedLaunchTime=0;this.failedLaunchOrigin=undefined;return;
+    }
+    if(!this.failedLaunchOrigin||Math.hypot(p.x-this.failedLaunchOrigin.x,p.z-this.failedLaunchOrigin.z)>.5){
+      this.failedLaunchOrigin={x:p.x,z:p.z};this.failedLaunchTime=0;
+    }
+    this.failedLaunchTime+=dt;
+    if(this.failedLaunchTime>=3){this.stuckOrigin={x:p.x,z:p.z};this.failedLaunchTime=0;this.failedLaunchOrigin=undefined;}
   }
   private wheelSupport(index:number,position:RAPIER.Vector,rotation:T.Quaternion,steer:number){
     // The centre ray misses a curb or narrow railhead under the tyre. Sweep
@@ -326,8 +366,22 @@ export class Vehicle {
   telemetry():VehicleTelemetry{
     const p=this.body.translation(),q=this.body.rotation(),v=this.body.linvel();
     const dir=new T.Vector3(0,0,1).applyQuaternion(new T.Quaternion(q.x,q.y,q.z,q.w));const yaw=Math.atan2(dir.x,dir.z);
+    // Ground speed follows the supporting road plane, including sideways
+    // slipping. Suspension velocity along its normal is not road travel.
+    // With no stable support, keep reporting horizontal airborne motion.
+    const groundNormal=new T.Vector3();let supportingWheels=0;
+    for(let i=0;i<4;i++)if(this.controller.wheelIsInContact(i)){
+      const normal=this.controller.wheelContactNormal(i);
+      if(normal&&normal.y>.25){groundNormal.add(normal);supportingWheels++;}
+    }
+    let speed=Math.hypot(v.x,v.z);
+    if(supportingWheels>=2){
+      groundNormal.normalize();
+      const normalSpeed=v.x*groundNormal.x+v.y*groundNormal.y+v.z*groundNormal.z;
+      speed=Math.hypot(v.x-groundNormal.x*normalSpeed,v.y-groundNormal.y*normalSpeed,v.z-groundNormal.z*normalSpeed);
+    }
     const d=this.drivetrain;
-    return {time:this.time,position:{x:p.x,z:p.z},yaw,speed:Math.hypot(v.x,v.z),signedSpeed:v.x*dir.x+v.y*dir.y+v.z*dir.z,rpm:d.rpm,gear:d.gear,throttle:d.throttle,brake:d.brake,clutch:d.clutch,steering:this.steering.normalized,engine:d.engine,stalled:d.stalled,belt:this.belt,handbrake:d.handbrake,indicator:this.indicator,hazards:this.hazards,ignition:this.ignitionOn||d.engine,positionLights:this.positionLights||this.headlights,headlights:this.headlights,fogLights:this.fogLights&&this.canUseFogLights,bumper:localPoint(p,yaw,0,config.length/2),wheels:[0,1,2,3].map(i=>{const {x,z}=wheelCenter(i);return localPoint(p,yaw,x,z);}),collision:this.collision};
+    return {time:this.time,position:{x:p.x,z:p.z},yaw,speed,signedSpeed:v.x*dir.x+v.y*dir.y+v.z*dir.z,rpm:d.rpm,gear:d.gear,throttle:d.throttle,brake:d.brake,clutch:d.clutch,steering:this.steering.normalized,engine:d.engine,stalled:d.stalled,belt:this.belt,handbrake:d.handbrake,indicator:this.indicator,hazards:this.hazards,ignition:this.ignitionOn||d.engine,positionLights:this.positionLights||this.headlights,headlights:this.headlights,fogLights:this.fogLights&&this.canUseFogLights,bumper:localPoint(p,yaw,0,config.length/2),wheels:[0,1,2,3].map(i=>{const {x,z}=wheelCenter(i);return localPoint(p,yaw,x,z);}),collision:this.collision};
   }
   dispose(){this.queue.free();this.world.removeVehicleController(this.controller);this.world.removeRigidBody(this.body);}
 }

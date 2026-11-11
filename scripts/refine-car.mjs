@@ -5,7 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { buildCobaltCabin } from './cobalt-cabin.mjs';
 import { segmentRearLens } from './cobalt-lamps.mjs';
-import { frontGrilleMaterials,interiorTrimMaterials,fitRoofLining,buildRoofSeals } from './cobalt-body.mjs';
+import { frontGrilleMaterials,interiorTrimMaterials,fitRoofLining,buildRoofSeals,refineCabinRailMaterials } from './cobalt-body.mjs';
 import { trimSourceInterior,lineRearWheelWells,refineRearCabinTrim } from './cobalt-interior.mjs';
 import { fitFrontPillarFeet } from './cobalt-pillar-fit.mjs';
 import { buildMirrorSwitch } from './cobalt-mirror-switch.mjs';
@@ -196,6 +196,7 @@ export async function refineCar(doc){
   const plate=await textureMaterial('COBALT_DemoPlate',`<svg xmlns="http://www.w3.org/2000/svg" width="768" height="192"><rect x="5" y="5" width="758" height="182" rx="12" fill="#eaece8" stroke="#283d42" stroke-width="7"/><text x="365" y="130" fill="#203239" font-family="Arial" font-size="92" text-anchor="middle">AVTODROM</text><path d="M698 35h45v12h-45" fill="#58a8d4"/><path d="M698 50h45v12h-45" fill="#7da764"/><text x="699" y="153" fill="#31515b" font-family="Arial" font-size="35">UZ</text></svg>`);
   box(.439,.112,.008,mats.rubber,[0,-.154,-2.226]);plane(.425,.1,plate,[0,-.154,-2.232]);
   for(const [mat,geometries]of batches){const indexed=geometries.map(g=>g.index?g.toNonIndexed():g);const merged=mergeGeometries(indexed);if(!merged)throw new Error(`Could not batch ${mat.getName()}`);emit(merged,mat,`COBALT_Detail_${mat.getName()}`);}
+  refineCabinRailMaterials({doc,buffer,nodes:originalNodes,worldPoint,lining:mats.headliner});
   const fittedRoofVertices=fitRoofLining(doc,buffer,normalize);
   const specular=doc.createExtension(KHRMaterialsSpecular);
   const matte=(name,hex)=>material(name,hex,0,1).setExtension('KHR_materials_specular',specular.createSpecular().setSpecularFactor(.12));

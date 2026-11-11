@@ -5,6 +5,8 @@ import { buildCobaltUpholstery } from './cobalt-upholstery.mjs';
 import { conformSurface } from './cobalt-surfaces.mjs';
 import { buildColumnControls } from './cobalt-column-controls.mjs';
 import { smoothBodyGeometry } from './cobalt-body.mjs';
+import { buildDashboardJoinery } from './cobalt-dashboard-joinery.mjs';
+import { buildCobaltFrontDoors } from './cobalt-door-trim.mjs';
 
 /** Manual Cobalt cabin with the examination-centre monitor from the supplied 2026 photo.
  * Coordinates are metres in the normalized car frame, +Z forward, +X driver's side.
@@ -28,8 +30,9 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   };
   const textureMaterial=async(name,svg)=>{const m=material(name,0xffffff,0,.83);m.setBaseColorTexture(await svgTexture(name,svg));return m;};
   const shape=(points)=>{const s=new T.Shape();s.moveTo(...points[0]);for(const p of points.slice(1))s.lineTo(...p);s.closePath();return s;};
-  const dark=material('COBALT_CabinRecess',0x1e2022,0,.96),lower=material('COBALT_LowerDash',0x3c3e40,0,.94);
-  const satin=material('COBALT_ConsoleSatin',0x909294,.24,.43),seam=material('COBALT_CabinSeams',0x2e3032,0,1);
+  const dark=material('COBALT_CabinRecess',0x20211f,0,.96),lower=material('COBALT_LowerDash',0x3f403c,0,.94);
+  const satin=material('COBALT_ConsoleSatin',0xaaa9a2,.28,.46),seam=material('COBALT_CabinSeams',0x292a27,0,1);
+  mats.plastic.setBaseColorFactor([...new T.Color(0x595a54).toArray(),1]);
   const grain=new Uint8Array(128*128*4);let seed=8721;
   for(let i=0;i<grain.length;i+=4){seed=(Math.imul(seed,1664525)+1013904223)>>>0;const n=(seed/4294967296-.5)*38;grain.set([128+n,128-n*.6,254,255],i);}
   const grainTexture=doc.createTexture('Cobalt moulded plastic grain').setMimeType('image/png').setImage(await (await import('sharp')).default(grain,{raw:{width:128,height:128,channels:4}}).png().toBuffer());
@@ -52,17 +55,40 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
     for(let i=1;i<hoodCrown.length;i++)if(local<=hoodCrown[i].x){const a=hoodCrown[i-1],b=hoodCrown[i];return .182+T.MathUtils.lerp(a.y,b.y,T.MathUtils.clamp((local-a.x)/(b.x-a.x),0,1));}
     return .182+hoodCrown.at(-1).y;
   };
-  const dashParts=[];
+  // The passenger fascia rolls into a real open shelf and back out into the
+  // knee panel. These are measured sections, not a black plate on the cowl.
+  const passengerSections=[
+    [0,.300,1.245],[3,.295,1.140],[6,.282,1.015],[8,.262,.932],
+    [10,.222,.858],[12,.158,.814],[14,.082,.803],[15,.048,.806],
+    [15.6,.035,.827],[16.4,.025,.973],[17.4,-.024,.990],
+    [18.2,-.047,.966],[19,-.062,.814],[19.6,-.073,.803],
+    [21,-.148,.824],[22.5,-.237,.865],[23.3,-.272,.912],[24,-.280,1.160],
+  ];
+  const passengerAt=row=>{
+    const k=passengerSections.findIndex(p=>p[0]>=row);
+    if(k<=0)return new T.Vector2(passengerSections[0][1],passengerSections[0][2]);
+    const a=passengerSections[k-1],b=passengerSections[k],t=(row-a[0])/(b[0]-a[0]);
+    return new T.Vector2(T.MathUtils.lerp(a[1],b[1],t),T.MathUtils.lerp(a[2],b[2],t));
+  };
+  const dashParts=[],faceClasses=[];
   const hoodLeft=.109,hoodRight=.523;
   for(const [left,right,start,end,columns]of [[-.695,hoodLeft,0,24,36],[hoodRight,.695,0,24,16],[hoodLeft,hoodRight,0,8,20],[hoodLeft,hoodRight,19,24,20]]){
-    const vertices=[],uv=[],indices=[],rows=end-start;
+    const rowValues=Array.from(new Set([...Array.from({length:end-start+1},(_,i)=>start+i),...passengerSections.map(p=>p[0]).filter(r=>r>start&&r<end)])).sort((a,b)=>a-b);
+    const vertices=[],uv=[],indices=[],rows=rowValues.length-1;
     for(let xIndex=0;xIndex<=columns;xIndex++)for(let j=0;j<=rows;j++){
-      const x=left+(right-left)*xIndex/columns,p=profile.getPoint((start+j)/24),edge=Math.abs(x)/.695;
+      const x=left+(right-left)*xIndex/columns,row=rowValues[j],p=profile.getPoint(row/24),edge=Math.abs(x)/.695;
+      if(x<-.16){
+        const section=passengerAt(row),blend=1-T.MathUtils.smoothstep(x,-.20,-.16);
+        const pocket=T.MathUtils.smoothstep(x,-.690,-.632)*(1-T.MathUtils.smoothstep(x,-.222,-.178));
+        // Close the shelf at its two ends while keeping the same curved brow.
+        if(row>15&&row<19.6)section.y=T.MathUtils.lerp(.806,section.y,pocket);
+        p.y=T.MathUtils.lerp(p.y,section.x,blend);p.z=T.MathUtils.lerp(p.z,section.y,blend);
+      }
       const crown=.011*Math.cos(x/.695*Math.PI/2),sweep=.04*edge**3;
       // The cowl flows over the instrument hood instead of stopping in a
       // vertical cut at its sides. The aperture remains open in front.
-      const brow=.09*Math.exp(-(((x-.315)/.225)**4))*Math.exp(-(((p.z-.955)/.23)**4));
-      const row=start+j,middle=start===19||end===8;
+      const brow=.055*Math.exp(-(((x-.315)/.225)**4))*Math.exp(-(((p.z-.955)/.23)**4));
+      const middle=start===19||end===8;
       const boundary=x<.315?hoodLeft:hoodRight;
       const sideBlend=1-T.MathUtils.smoothstep(Math.abs(x-boundary),0,.075);
       let join=0,joinY=crownAt(middle?x:boundary),joinZ=.934;
@@ -76,7 +102,12 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
       // Continue the join along the hood's side walls. Dropping the blend to
       // zero after row 8 folded the outer dashboard into sharp open wedges.
       vertices.push(x,T.MathUtils.lerp(p.y+crown-.012*edge**4+brow,joinY,join),T.MathUtils.lerp(p.z+sweep,joinZ,join));uv.push(x*24,p.z*24);
-      if(xIndex<columns&&j<rows){const i=xIndex*(rows+1)+j;indices.push(i,i+rows+1,i+1,i+1,i+rows+1,i+rows+2);}
+      if(xIndex<columns&&j<rows){
+        const i=xIndex*(rows+1)+j;indices.push(i,i+rows+1,i+1,i+1,i+rows+1,i+rows+2);
+        const cx=x+(right-left)/columns/2,cy=(rowValues[j]+rowValues[j+1])/2;
+        const region=cx<-.18?(cy>=15.6&&cy<19?1:cy>=19.6?2:0):0;
+        faceClasses.push(region,region);
+      }
     }
     const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(vertices,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();dashParts.push(g);
   }
@@ -92,7 +123,18 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
     }
     put(mergeGeometries(slots),dark,[0,0,0],[0,0,0],`COBALT_DefrostGrille_${side}`);
   }
-  put(dashboard,mats.plastic,[0,0,0],[0,0,0],'COBALT_MouldedDashboard');
+  const supportDashboard=dashboard.clone();
+  const partition=(region)=>{
+    const p=dashboard.getAttribute('position'),attributes={position:[],normal:[],uv:[]};
+    for(let i=0;i<p.count;i+=3){
+      if(faceClasses[i/3]!==region)continue;
+      for(const [name,array]of Object.entries(attributes)){const a=dashboard.getAttribute(name);for(let j=0;j<3;j++)for(let c=0;c<a.itemSize;c++)array.push(a.array[(i+j)*a.itemSize+c]);}
+    }
+    const g=new T.BufferGeometry();for(const [name,array]of Object.entries(attributes))g.setAttribute(name,new T.Float32BufferAttribute(array,name==='uv'?2:3));return g;
+  };
+  put(partition(0),mats.plastic,[0,0,0],[0,0,0],'COBALT_MouldedDashboard');
+  put(partition(1),dark,[0,0,0],[0,0,0],'COBALT_PassengerShelfInterior');
+  put(partition(2),lower,[0,0,0],[0,0,0],'COBALT_PassengerKneePanel');
   // Shallow top storage tray seen above the centre vents in the period cabin.
   // Both contours follow the swept cowl rather than floating on a flat plate.
   const traySurface=scale=>{
@@ -104,7 +146,8 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   };
   put(traySurface(1),seam,[0,0,0],[0,0,0],'COBALT_DashboardTrayRim');
   put(traySurface(.95),lower,[0,0,0],[0,0,0],'COBALT_DashboardTray');
-  box(1.34,.14,.20,lower,[0,-.155,1.025],[0,0,0],.034);
+  box(.66,.14,.20,lower,[.34,-.155,1.025],[0,0,0],.034);
+  buildDashboardJoinery({dashboard:supportDashboard,put,mats,lower,seam,satin,shaped});
 
   // Exam car: paired vents, lock/hazard row, fitted monitor and manual HVAC.
   centreStack=true;
@@ -156,15 +199,8 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   // Deep passenger shelf with a curved lower lip and a glovebox integrated
   // into the knee bolster, matching the broad recess in the factory photograph.
   centreStack=false;
-  const shelf=new T.Shape();shelf.moveTo(-.224,.040);shelf.bezierCurveTo(-.12,.062,.12,.063,.231,.035);shelf.quadraticCurveTo(.247,.015,.224,-.027);shelf.bezierCurveTo(.08,-.061,-.10,-.066,-.225,-.037);shelf.quadraticCurveTo(-.247,.002,-.224,.040);shelf.closePath();
-  put(shaped(shelf,.021,.006),dark,[-.427,-.01,.835]);
-  const lipCurve=new T.CatmullRomCurve3([new T.Vector3(-.66,-.06,.802),new T.Vector3(-.48,-.069,.787),new T.Vector3(-.29,-.06,.789),new T.Vector3(-.196,-.031,.806)]);
-  put(new T.TubeGeometry(lipCurve,32,.007,8,false),lower);
-  const glove=new T.Shape();glove.moveTo(-.233,.072);glove.quadraticCurveTo(0,.061,.229,.081);glove.lineTo(.226,-.071);glove.quadraticCurveTo(0,-.104,-.221,-.077);glove.closePath();
-  put(shaped(glove,.028,.008),seam,[-.425,-.167,.85]);
-  put(shaped(glove,.028,.008).scale(.982,.96,1),lower,[-.425,-.167,.844]);
-  box(.086,.019,.007,dark,[-.42,-.116,.822],[0,0,0],.006);
-  const emboss=await textureMaterial('COBALT_AirbagEmboss',`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="96"><rect width="512" height="96" fill="#69665f"/><text x="256" y="63" font-family="Arial" font-size="36" letter-spacing="7" text-anchor="middle" fill="#77756e">AIRBAG</text></svg>`);
+  box(.073,.012,.007,dark,[-.423,-.144,.813],[0,0,0],.003);
+  const emboss=await textureMaterial('COBALT_AirbagEmboss',`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="96"><rect width="512" height="96" fill="#595a54"/><text x="256" y="63" font-family="Arial" font-size="36" letter-spacing="7" text-anchor="middle" fill="#676862">AIRBAG</text></svg>`);
   plane(.061,.011,emboss,[-.52,.087,.787]);
 
   // Arched instrument binnacle, recessed face, analogue tachometer and digital speed.
@@ -248,26 +284,9 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   put(new T.CircleGeometry(.0195,32),pattern,[0,-.0642,.482],[-Math.PI/2,0,0],'COBALT_ShiftPattern');
   box(.105,.055,.045,dark,[0,-.24,.675],[0,0,0],.012);
 
-  // Door inserts, recessed pulls, armrests, speaker grilles and switch packs.
-  const speaker=await textureMaterial('COBALT_DoorSpeaker',`<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><defs><pattern id="s" width="7" height="7" patternUnits="userSpaceOnUse"><rect width="7" height="7" fill="#373b35"/><circle cx="3" cy="3" r="1.6" fill="#151b17"/></pattern></defs><circle cx="128" cy="128" r="126" fill="url(#s)"/></svg>`);
+  // Compound-curved front door cards and factory moulding joints.
+  await buildCobaltFrontDoors({doc,mats,material,svgTexture,put});
   for(const side of [-1,1]){
-    const card=new T.Shape();card.moveTo(side*-.27,.305);card.lineTo(side*.90,.305);card.quadraticCurveTo(side*.95,.26,side*.95,.14);card.lineTo(side*.88,-.335);card.quadraticCurveTo(side*.46,-.385,side*-.21,-.369);card.lineTo(side*-.27,.305);card.closePath();
-    put(shaped(card,.027,.012),lower,[side*.710,0,0],[0,-side*Math.PI/2,0],`COBALT_DoorCard_${side}`);
-    box(.025,.018,.96,mats.rubber,[side*.704,.31,.215],[0,0,0],.006);
-    const insert=new T.Shape();insert.moveTo(side*-.21,.155);insert.quadraticCurveTo(side*.12,.215,side*.66,.205);insert.lineTo(side*.63,-.018);insert.quadraticCurveTo(side*.22,-.075,side*-.20,-.10);insert.closePath();
-    put(shaped(insert,.012,.012),mats.plastic,[side*.684,0,0],[0,-side*Math.PI/2,0]);
-    box(.023,.063,.15,dark,[side*.665,.145,.492],[0,0,0],.018);
-    const handle=new T.CatmullRomCurve3([new T.Vector3(side*.647,.14,.442),new T.Vector3(side*.641,.15,.492),new T.Vector3(side*.650,.158,.545)]);
-    put(new T.TubeGeometry(handle,12,.0045,7,false),mats.chrome);
-    const arm=new T.Shape();arm.moveTo(side*-.16,-.026);arm.quadraticCurveTo(side*.14,.017,side*.48,.026);arm.lineTo(side*.53,-.028);arm.quadraticCurveTo(side*.17,-.083,side*-.16,-.083);arm.closePath();
-    put(shaped(arm,.062,.012),lower,[side*.66,0,0],[0,-side*Math.PI/2,0]);
-    box(.043,.008,.126,dark,[side*.623,.025,.33],[0,0,0],.006);
-    for(let i=0;i<(side===1?4:1);i++)box(.026,.005,.021,mats.steering,[side*.622,.032,.285+i*.027],[0,0,0],.003);
-    const pocket=new T.Shape();pocket.moveTo(side*-.18,-.206);pocket.lineTo(side*.28,-.168);pocket.quadraticCurveTo(side*.39,-.21,side*.30,-.292);pocket.quadraticCurveTo(side*.10,-.34,side*-.16,-.32);pocket.closePath();
-    put(shaped(pocket,.012,.009),dark,[side*.683,0,0],[0,-side*Math.PI/2,0]);
-    box(.05,.045,.48,lower,[side*.664,-.318,.055],[0,0,0],.017);
-    put(new T.CircleGeometry(.091,48),speaker,[side*.673,-.221,.562],[0,-side*Math.PI/2,0]);
-    put(new T.TorusGeometry(.094,.004,8,48),lower,[side*.675,-.221,.562],[0,-side*Math.PI/2,0]);
     // Follow the rear door's wheel-arch cut instead of extending a rectangular
     // trim panel into the open wheel well.
     const rear=new T.Shape();rear.moveTo(side*-1.22,.29);rear.lineTo(side*-.31,.29);rear.lineTo(side*-.31,-.345);rear.lineTo(side*-.88,-.345);
@@ -293,7 +312,9 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   // swept windscreen mount, rather than a rectangular chrome-like plate.
   const mirror=material('COBALT_RearViewMirror',0xa6aeab,.9,.14);
   const mirrorShell=material('COBALT_CabinMirrorShell',0x222426,0,.91);
-  const mirrorRoot=doc.createNode('COBALT_CABIN_MIRROR').setTranslation([0,.580,.65]).setRotation(new T.Quaternion().setFromEuler(new T.Euler(-.06,-.16,0)).toArray());root.addChild(mirrorRoot);
+  // Place the glass above the driver's eye line, close to the upper centre of
+  // the windshield. Keep the mounting foot at its fitted point on the pane.
+  const mirrorRoot=doc.createNode('COBALT_CABIN_MIRROR').setTranslation([0,.630,.520]).setRotation(new T.Quaternion().setFromEuler(new T.Euler(-.06,-.16,0)).toArray());root.addChild(mirrorRoot);
   const mirrorPart=(g,mat,name,p=[0,0,0],r=[0,0,0])=>emit(g,mat,name,p,r,mirrorRoot);
   const outline=new T.Shape();outline.moveTo(-.108,.031);
   outline.quadraticCurveTo(0,.043,.108,.031);outline.quadraticCurveTo(.122,.028,.122,.012);
@@ -310,9 +331,9 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
     glassUv.setXY(i,(glassPosition.getX(i)-glassBounds.min.x)/(glassBounds.max.x-glassBounds.min.x),1-(glassPosition.getY(i)-glassBounds.min.y)/(glassBounds.max.y-glassBounds.min.y));
   }
   mirrorPart(glass,mirror,'COBALT_CabinMirrorGlass',[0,0,-.0144]);
-  const armCurve=new T.CatmullRomCurve3([new T.Vector3(0,.025,.010),new T.Vector3(0,.050,-.022),new T.Vector3(0,.072,-.050)]);
+  const armCurve=new T.CatmullRomCurve3([new T.Vector3(0,.025,.010),new T.Vector3(.010,.030,.040),new T.Vector3(.020196,.014295,.075149)]);
   mirrorPart(new T.TubeGeometry(armCurve,4,.0065,8,false),mirrorShell,'COBALT_CabinMirrorArm');
-  mirrorPart(new RoundedBoxGeometry(.026,.031,.010,1,.003),mirrorShell,'COBALT_CabinMirrorMount',[0,.080,-.063],[-1.08,0,0]);
+  mirrorPart(new RoundedBoxGeometry(.026,.031,.010,1,.003),mirrorShell,'COBALT_CabinMirrorMount',[.020196,.022295,.062149],[-1.08,0,0]);
   const mirrorTab=shape([[-.010,-.039],[.010,-.039],[.008,-.054],[-.008,-.054]]);
   mirrorPart(shaped(mirrorTab,.005,.001,{bevelSegments:1,curveSegments:1}),mirrorShell,'COBALT_CabinMirrorDayNight',[0,0,.003],[-.22,0,0]);
   for(const x of [-.34,.34])box(.294,.098,.024,mats.headliner,[x,.738,.22],[Math.PI/2,0,0],.015);

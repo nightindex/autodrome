@@ -1,5 +1,7 @@
 import './style.css';
 import './ui/hud.css';
+import './ui/brand.css';
+import './ui/cockpit-controls.css';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { course, itinerary } from './data/course';
 import { Vehicle } from './simulation/vehicle';
@@ -12,14 +14,18 @@ import { Interface } from './ui/interface';
 import { readSettings, saveSettings } from './ui/storage';
 import { ruleById } from './data/rules';
 import type { ExamResult, Mode } from './types';
-import { label } from './ui/i18n';
+import { label,mobilityCopy } from './ui/i18n';
 import {loadDirectionSignArtwork} from './render/road-signs';
 import {PracticeGuide} from './simulation/practice-guide';
+import {FreePracticeTracker} from './simulation/free-practice';
+import {MobilityAdvisor,type MobilityIssue} from './simulation/mobility-advisor';
 
 const settings=readSettings();document.documentElement.lang=settings.language;
 let vehicle:Vehicle,scene:GameScene,physics:RAPIER.World;
 let engine=new ExamEngine('practice'),tracker=new CourseTracker(false),mode:Mode='practice';
 let practiceGuide=new PracticeGuide(tracker.current);
+let freeTracker=new FreePracticeTracker();
+const mobilityAdvisor=new MobilityAdvisor();let mobilityIssue:MobilityIssue|null=null;
 let mirrorPreviewLook:number|undefined;
 let state:'menu'|'driving'|'paused'|'result'='menu';let selectedIndex:number|undefined;let guidedRoute=false;
 let accumulator=0,lastTime=performance.now(),uiAccumulator=0,eventCount=0,emergencyUntil=0;
@@ -27,12 +33,13 @@ const freePractice=()=>mode==='practice'&&selectedIndex===undefined&&!guidedRout
 const audio=new EngineAudio();audio.volume=settings.volume;
 const input=new Input(settings.bindings);
 const ui=new Interface(settings,{
+  seatCamera:()=>{if(state==='driving'||state==='paused')scene.cameraMode='cockpit';},
   mirrorCamera:()=>{if(state==='driving')scene.cameraMode='cockpit';},
   lights:action=>{if(state==='driving')switchLights(action);},
   mirrorsChanged:persist=>{scene?.setMirrorAdjustments(settings.mirrors);if(persist)saveSettings(settings);},
   mirrorSelect:side=>{mirrorPreviewLook=side==='left'?1:side==='right'?-1:undefined;},
   start,pause,resume,menu:goMenu,reset:()=>start(mode,selectedIndex,guidedRoute),retryStage,chooseExercise:()=>{if(state==='driving'&&mode==='practice'){pause();ui.showExercises(true);}},recover,camera:()=>scene?.cycleCamera(),
-  settingsChanged:()=>{saveSettings(settings);input.bindings=settings.bindings;audio.volume=settings.volume;scene?.setQuality(settings.quality);scene?.setCurbStyle(settings.curbStyle);scene?.setMirrorAdjustments(settings.mirrors);},
+  settingsChanged:()=>{saveSettings(settings);input.bindings=settings.bindings;audio.volume=settings.volume;scene?.setQuality(settings.quality);scene?.setCurbStyle(settings.curbStyle);scene?.setMirrorAdjustments(settings.mirrors);scene?.setCockpitView(settings.cockpit);},
 });
 input.onAction=action=>{
   if(action==='pause'){state==='driving'?pause():state==='paused'?resume():null;return;}
@@ -41,8 +48,14 @@ input.onAction=action=>{
   if(action==='camera'){scene.cycleCamera();return;}
   if(['positionLights','headlights','fogLights'].includes(action)){switchLights(action);return;}
   const assist=mode==='practice'&&settings.assist;
-  if((action.startsWith('gear')||action==='reverse')&&vehicle.drivetrain.clutch<=.65&&vehicle.drivetrain.engine&&!assist)ui.toast(ui.c.gearWarning);
-  vehicle.action(action,assist);
+  if(action.startsWith('gear')||action==='reverse'){
+    const gear=action==='reverse'?-1:Number(action.slice(-1)),t=vehicle.telemetry();
+    if(gear!==t.gear){
+      if(gear<0&&t.signedSpeed>.5||gear>0&&t.signedSpeed<-.5)ui.toast(mobilityCopy[settings.language].directionWarning);
+      else if(t.clutch<=.65&&t.engine&&!assist&&!input.down('clutch'))ui.toast(ui.c.gearWarning);
+    }
+  }
+  vehicle.action(action,assist,input.down('clutch'));
 };
 function switchLights(action:string){
   if(action==='fogLights'&&!vehicle.canUseFogLights){ui.toast(label('fogLightsRequirement',settings.language));return;}
@@ -54,12 +67,16 @@ function recover(){
   if(!vehicle.recover()){ui.toast(ui.c.recoveryBlocked);return;}
   // Teleporting is not a driven crossing of a stop/finish line.
   tracker.previous=null;tracker.goalTime=0;
-  ui.recovery(false);ui.toast(ui.c.recovered);
+  freeTracker.resetCrossings();
+  mobilityAdvisor.reset();mobilityIssue=null;
+  ui.recovery(null);ui.toast(ui.c.recovered);
 }
 function start(nextMode:Mode,index?:number,guided=false){
   if(!ui.ready)return;
   mode=nextMode;selectedIndex=index;guidedRoute=mode==='practice'&&index===undefined&&guided;engine=new ExamEngine(mode,settings.examMinutes*60,freePractice());
   tracker=new CourseTracker(index!==undefined,index!==undefined?[course.exercises[index]]:itinerary);
+  freeTracker=new FreePracticeTracker();
+  mobilityAdvisor.reset();mobilityIssue=null;
   const exercise=tracker.current;engine.setExercise(exercise.id);vehicle.reset(exercise.spawn,exercise.yaw);
   input.clear();input.enabled=true;state='driving';accumulator=0;eventCount=0;emergencyUntil=0;
   practiceGuide=new PracticeGuide(exercise,tracker.index,index!==undefined);
@@ -73,7 +90,7 @@ function retryStage(){
   ui.toast(settings.language==='ru'?'Текущий этап начат заново':'Joriy bosqich qayta boshlandi');
 }
 function pause(){if(state!=='driving'&&state!=='paused')return;state='paused';input.clear();input.enabled=false;accumulator=0;ui.showPause(mode);}
-function resume(){if(state!=='paused')return;state='driving';input.clear();input.enabled=true;ui.enter(mode,selectedIndex!==undefined,guidedRoute);accumulator=0;lastTime=performance.now();void audio.start().catch(()=>{});}
+function resume(){if(state!=='paused')return;state='driving';input.clear();input.enabled=true;ui.enter(mode,selectedIndex!==undefined,guidedRoute,true);accumulator=0;lastTime=performance.now();void audio.start().catch(()=>{});}
 function goMenu(){
   if(state==='paused'&&mode==='exam'){engine.update(vehicle.telemetry(),{abandoned:true},0);finish();return;}
   state='menu';input.clear();input.enabled=false;ui.showMenu();scene.setGoal(tracker.current.point,false);
@@ -87,8 +104,17 @@ function finish(){
 }
 function step(dt:number){
   vehicle.update(dt,input,mode==='practice'&&settings.assist,mode==='practice'&&settings.steeringAssist);
-  if(freePractice()){engine.update(vehicle.telemetry(),{},dt);announceErrors();return;}
-  const t=vehicle.telemetry(),evaluation=tracker.update(t,dt);
+  const t=vehicle.telemetry();
+  mobilityIssue=mobilityAdvisor.update(t,{throttle:input.down('throttle'),brake:input.down('brake'),clutch:input.down('clutch')},dt,vehicle.recoveryReason);
+  if(freePractice()){
+    const evaluation=freeTracker.update(t,dt);
+    if(evaluation.newVisit)engine.setExercise(evaluation.exercise);
+    engine.update(t,evaluation.observations,dt);
+    if(evaluation.emergency){audio.beep();emergencyUntil=engine.time+4;ui.emergency(true);}
+    if(engine.time>emergencyUntil)ui.emergency(false);
+    announceErrors();return;
+  }
+  const evaluation=tracker.update(t,dt);
   engine.update(t,mode==='practice'?{...evaluation.observations,finished:false}:evaluation.observations,dt);
   if(mode==='practice')practiceGuide.update(t,engine,evaluation.observations,dt);
   if(evaluation.emergency){audio.beep();emergencyUntil=engine.time+4;ui.emergency(true);}
@@ -125,7 +151,7 @@ function frame(now:number){
       events:state==='menu'?[]:engine.events.slice(-6).map(event=>({points:event.points,text:ruleById(event.ruleId).text[settings.language]}))});
     scene.render(vehicle,dt,now/1000,state==='menu',mirrorPreviewLook??(+input.down('lookRight')-+input.down('lookLeft')));
     const t=vehicle.telemetry();audio.update(t.rpm,t.throttle,t.engine,state!=='driving');
-    ui.recovery(state==='driving'&&mode==='practice'&&vehicle.canRecover);
+    ui.recovery(state==='driving'&&mode==='practice'?(vehicle.recoveryReason==='overturned'?'overturned':mobilityIssue):null,vehicle.canRecover);
     uiAccumulator+=dt;if(uiAccumulator>.08&&state!=='menu'){
       uiAccumulator=0;
       const hint=mode==='practice'&&!freePractice()&&state!=='result'?practiceGuide.view(t,engine,settings.language):undefined;
@@ -143,7 +169,7 @@ async function boot(){
     ui.loadingStage('course');await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
     physics=new RAPIER.World({x:0,y:-9.81,z:0});vehicle=new Vehicle(physics,new Set());
     vehicle.reset(course.exercises[0].spawn,course.exercises[0].yaw);
-    scene=new GameScene(ui.viewport,vehicle);scene.setQuality(settings.quality);scene.setCurbStyle(settings.curbStyle);scene.setMirrorAdjustments(settings.mirrors);
+    scene=new GameScene(ui.viewport,vehicle);scene.setQuality(settings.quality);scene.setCurbStyle(settings.curbStyle);scene.setMirrorAdjustments(settings.mirrors);scene.setCockpitView(settings.cockpit);
     scene.onCabinMirrorSwitch=()=>{if(state==='driving')ui.openMirrorControls();};
     ui.loadingStage('car');requestAnimationFrame(frame);await scene.loadCar(v=>ui.progress(v));
     ui.loadingStage('finishing');

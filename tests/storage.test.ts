@@ -7,6 +7,18 @@ function storage(raw:string|null){
   vi.stubGlobal('localStorage',{getItem:()=>value,setItem:(_key:string,next:string)=>{value=next;}});
 }
 describe('steering assistance preferences',()=>{
+  it('updates the old standard seat once without overwriting custom or newly selected positions',()=>{
+    storage('{"cockpit":{"height":8,"back":12,"fov":64}}');
+    const settings=readSettings();expect(settings.cockpit.back).toBe(18);expect(settings.cockpitVersion).toBe(4);
+    settings.cockpit.back=12;saveSettings(settings);expect(readSettings().cockpit.back).toBe(12);
+    storage('{"cockpitVersion":2,"cockpit":{"height":8,"back":14,"fov":64}}');expect(readSettings().cockpit.back).toBe(18);
+    storage('{"cockpit":{"height":4,"back":10,"fov":60}}');expect(readSettings().cockpit).toEqual({height:4,back:10,fov:60});
+  });
+  it('migrates seating preferences and persists a custom cockpit view',()=>{
+    storage('{}');const settings=readSettings();expect(settings.cockpit).toEqual({height:8,back:18,fov:64});
+    settings.cockpit={height:4,back:10,fov:60};saveSettings(settings);expect(readSettings().cockpit).toEqual(settings.cockpit);
+    storage('{"cockpit":{"height":999,"back":"bad","fov":20}}');expect(readSettings().cockpit).toEqual({height:12,back:18,fov:50});
+  });
   it.each([null,'{}','{"curbStyle":"invalid"}','{"curbStyle":null}'])('defaults to yellow/black curbs for new, legacy or invalid settings: %s',raw=>{
     storage(raw);expect(readSettings().curbStyle).toBe('yellow-black');
   });

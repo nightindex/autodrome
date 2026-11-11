@@ -27,7 +27,8 @@ export const laneLines:LaneLine[]=[
   line('south-junction',[stop('south'),[640,770]]),
   // 04:18: the B/CD divider ends straight beside the category labels,
   // leaving the turning area open.
-  line('finish-divider',[[145,775],[535,775]]),
+  // C/D parking approach: broken white separator in the supplied video/photo.
+  {...line('finish-divider',[[145,775],[535,775]]),dash:{length:1.6,gap:1.5}},
   {...line('parking-channel',[[87,543],[475,543]]),dash:{length:1.6,gap:1.5}},
   line('finish-line',[[145,736],[145,814]],.23),
   ...parkingControlLines.map(({id,points})=>line(id,points,parkingControlWidth)),

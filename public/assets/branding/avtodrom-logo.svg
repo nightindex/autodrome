@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 568 80" fill="none">
+  <title>AVTODROM</title>
+  <desc>A road-inspired A symbol and custom geometric outlined lettering.</desc>
+  <path d="M2 76 30 4h20l28 72H57L40 31 23 76Z" fill="#214c3d"/>
+  <path d="m38 46-3 11h10l-3-11Zm-5 17-4 13h22l-4-13Z" fill="#d9b970"/>
+  <g fill="#214c3d" fill-rule="evenodd" transform="translate(100 12)">
+    <path d="M0 56 20 0h12l20 56H38l-4-12H18l-4 12Zm22-24h8l-4-13Z"/>
+    <path transform="translate(53)" d="M0 0h15l11 37L37 0h15L33 56H19Z"/>
+    <path transform="translate(106)" d="M0 0h48v13H31v43H17V13H0Z"/>
+    <path transform="translate(158)" d="M28 0C10 0 0 10 0 28s10 28 28 28 28-10 28-28S46 0 28 0Zm0 13c-9 0-14 5-14 15s5 15 14 15 14-5 14-15-5-15-14-15Z"/>
+    <path transform="translate(219)" d="M0 0h23c20 0 31 10 31 28S43 56 23 56H0Zm14 13v30h9c11 0 17-5 17-15s-6-15-17-15Z"/>
+    <path transform="translate(278)" d="M0 0h27c16 0 24 8 24 20 0 8-4 14-11 17l14 19H37L25 39H14v17H0Zm14 12v15h12c7 0 11-2 11-7s-4-8-11-8Z"/>
+    <path transform="translate(337)" d="M28 0C10 0 0 10 0 28s10 28 28 28 28-10 28-28S46 0 28 0Zm0 13c-9 0-14 5-14 15s5 15 14 15 14-5 14-15-5-15-14-15Z"/>
+    <path transform="translate(398)" d="M0 56V0h15l17 26L49 0h15v56H50V23L32 49 14 23v33Z"/>
+  </g>
+</svg>

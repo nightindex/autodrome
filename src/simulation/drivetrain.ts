@@ -19,22 +19,29 @@ export function speedAtRpm(rpm:number,gear:number){const ratio=gearRatio(gear);r
 
 export class Drivetrain {
   rpm=0;engine=false;stalled=false;gear=0;throttle=0;brake=0;clutch=1;handbrake=true;
-  private stallTime=0;private speed=0;private pendingGear:number|null=null;private shiftTime=0;private limiter=false;
-  reset(){this.rpm=0;this.engine=false;this.stalled=false;this.gear=0;this.throttle=0;this.brake=0;this.clutch=1;this.handbrake=true;this.stallTime=0;this.speed=0;this.pendingGear=null;this.shiftTime=0;this.limiter=false;}
+  private stallTime=0;private speed=0;private pendingGear:number|null=null;private manualGear:number|null=null;private shiftTime=0;private limiter=false;
+  reset(){this.rpm=0;this.engine=false;this.stalled=false;this.gear=0;this.throttle=0;this.brake=0;this.clutch=1;this.handbrake=true;this.stallTime=0;this.speed=0;this.pendingGear=null;this.manualGear=null;this.shiftTime=0;this.limiter=false;}
   ignite(){if(this.engine){this.engine=false;return;}if(this.gear===0||this.clutch>.8){this.engine=true;this.stalled=false;this.rpm=c.idleRpm;this.stallTime=0;}}
-  shift(gear:number,assist=false){
+  shift(gear:number,assist=false,clutchHeld=false){
     if(!Number.isInteger(gear)||gear< -1||gear>5)return false;
+    this.manualGear=null;
     if(gear===this.gear){this.pendingGear=null;return true;}
     // The reverse interlock and over-rev protection also apply with the engine off.
     if(!this.safeGear(gear))return false;
     if(this.clutch>.65||!this.engine||gear===0){this.gear=gear;this.pendingGear=null;return true;}
-    if(!assist)return false;
+    // A keyboard chord reaches us before the physical pedal has finished
+    // moving. Keep the requested gear only while the driver holds the clutch.
+    if(!assist){if(clutchHeld){this.manualGear=gear;return true;}return false;}
     this.pendingGear=gear;this.shiftTime=0;return true;
   }
   private safeGear(gear:number){return !((gear<0&&this.speed>.5)||(gear>0&&this.speed<-.5)||Math.abs(rpmAtSpeed(this.speed,gear))>c.redlineRpm*1.05);}
   update(dt:number,signedSpeed:number,controls:{throttle:number;brake:number;clutch:number},assist:boolean){
     this.speed=signedSpeed;
     if(!assist)this.pendingGear=null;
+    if(this.manualGear!==null){
+      if(assist||controls.clutch<=.65||!this.safeGear(this.manualGear))this.manualGear=null;
+      else if(this.clutch>.65){this.gear=this.manualGear;this.manualGear=null;}
+    }
     this.throttle=approach(this.throttle,clamp(controls.throttle,0,1),dt*2.8);
     this.brake=approach(this.brake,clamp(controls.brake,0,1),dt*5);
     if(this.rpm>=c.redlineRpm)this.limiter=true;

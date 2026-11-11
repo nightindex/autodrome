@@ -7,11 +7,14 @@ import { clamp } from './math';
  * gear, such as rolling downhill before an uphill launch.
  */
 export function tyreForces(engineForce:number,resistance:number,gripLimit:number,speed:number,dt:number,powered=false){
+  const direction=Math.abs(speed)>.05?Math.sign(speed):Math.sign(engineForce);
+  // Resistance follows wheel motion, so it helps the motor arrest rollback.
+  // Keep live torque on the engine path so a ramp launch can pass through zero.
+  // Once nearly stopped, resistance opposes the intended launch direction.
   if(powered&&Math.abs(engineForce)>resistance){
-    const net=engineForce-Math.sign(engineForce)*resistance;
+    const net=engineForce-direction*resistance;
     return {engine:clamp(net,-gripLimit,gripLimit),brake:0};
   }
-  const direction=Math.abs(speed)>.05?Math.sign(speed):Math.sign(engineForce);
   const net=engineForce-direction*resistance;
   if(direction===0||net*direction<=0){
     return {engine:0,brake:clamp(resistance-engineForce*direction,0,gripLimit)*dt};

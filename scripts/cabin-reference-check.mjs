@@ -24,15 +24,20 @@ try {
   await page.addStyleTag({ content: '#hud,#menu-shell,#modal,.vignette,#toast{display:none!important}dialog::backdrop{display:none}' });
   await page.evaluate(async () => {
     const T = await import('/node_modules/three/build/three.module.js');
-    const scene = window.__avtodrom.scene, render = scene.render.bind(scene);
+    const scene = window.__avtodrom.scene, render = scene.render.bind(scene),playerNear=scene.camera.near;
     window.cabinReferencePose = { eye: [.31, .48, .2], target: [.31, .24, .80], fov: 55 };
     scene.render = (...args) => {
-      render(...args);
       const pose = window.cabinReferencePose;
-      scene.camera.clearViewOffset(); scene.camera.near = .025; scene.camera.fov = pose.fov; scene.camera.updateProjectionMatrix();
-      scene.camera.position.copy(scene.car.localToWorld(new T.Vector3(...pose.eye)));
-      scene.camera.up.set(0, 1, 0).applyQuaternion(scene.car.quaternion);
-      scene.camera.lookAt(scene.car.localToWorld(new T.Vector3(...pose.target)));
+      if(pose.player){scene.cameraMode='cockpit';scene.camera.near=playerNear;scene.camera.up.set(0,1,0);}
+      render(...args);
+      // The player view uses the fitted eye position and live projection.
+      // Photo/detail captures retain their deliberately matched cameras.
+      if(!pose.player){
+        scene.camera.clearViewOffset(); scene.camera.near = .025; scene.camera.fov = pose.fov; scene.camera.updateProjectionMatrix();
+        scene.camera.position.copy(scene.car.localToWorld(new T.Vector3(...pose.eye)));
+        scene.camera.up.set(0, 1, 0).applyQuaternion(scene.car.quaternion);
+        scene.camera.lookAt(scene.car.localToWorld(new T.Vector3(...pose.target)));
+      }
       const hidden = [], background = scene.scene.background;
       if (pose.isolate) {
         const rootName = pose.isolate === 'indicator' ? 'COBALT_INDICATOR_STALK' : 'COBALT_WIPER_STALK';
@@ -97,7 +102,10 @@ try {
     const path = `${directory}/${phase}-${name}.png`; await page.screenshot({ path }); captures.push(path);
   };
   await capture('driver', { eye: [.31, .48, .2], target: [.31, .24, .80], fov: 55 });
-  await capture('game-driver', { eye: [.31, .48, .2], target: [.31, .455, 1.20], fov: 70 });
+  await capture('game-driver', { player: true });
+  check('Game driver capture uses the live fitted eye position',await page.evaluate(()=>{
+    const s=window.__avtodrom.scene;return s.camera.position.distanceTo(s.car.localToWorld(s.cockpitEye))<.00001;
+  }));
   await capture('left-windscreen-joint', { eye: [.31, .48, .2], target: [.63, .39, .92], fov: 40 });
   await capture('right-windscreen-joint', { eye: [-.31, .48, .2], target: [-.63, .39, .92], fov: 40 });
   await capture('steering-detail', { eye: [.308, .32, .05], target: [.308, .113, .585], fov: 46 });

@@ -1,4 +1,36 @@
 import type { Language } from '../types';
+export const mobilityCopy={
+  ru:{
+    engine:{title:'Двигатель выключен',detail:'Выжмите Shift и нажмите I. Затем включите 1 или R и отпустите сцепление.'},
+    stalled:{title:'Двигатель заглох',detail:'Отпустите газ, выжмите Shift и нажмите I. Трогайтесь на 1 или R, плавно отпуская сцепление.'},
+    neutral:{title:'Включена нейтраль',detail:'Остановитесь, выжмите Shift и выберите 1 или R. Отпустите сцепление и нажмите W. Клавиша S — тормоз.'},
+    handbrake:{title:'Ручник включён',detail:'Нажмите Space, чтобы снять ручник. Для движения назад включите R со сцеплением и нажимайте W.'},
+    brake:{title:'Удерживается тормоз',detail:'Отпустите S. Для движения назад включите R и нажимайте W: клавиша S только тормозит.'},
+    clutch:{title:'Сцепление выжато',detail:'После включения 1 или R плавно отпустите Shift и нажимайте W.'},
+    stuck:{title:'Машина не может сдвинуться',detail:'Возможен упор в бордюр или препятствие. Попробуйте противоположную передачу. Если не помогает — верните машину на свободный участок дороги.'},
+    overturned:{title:'Автомобиль перевернулся',detail:'Поставьте машину на колёса, чтобы продолжить поездку.'},
+    helpTitle:'Если машина не едет',
+    reverseHelp:'Задний ход: остановитесь → Shift + R → отпустите сцепление → W. Снимите ручник (Space). S — тормоз.',
+    recoveryHelp:'При попытке тронуться подсказка покажет причину. Если машина застряла, появится кнопка «Вернуть на дорогу». Время и штрафы сохраняются.',
+    recoverRoad:'Вернуть на дорогу',
+    directionWarning:'Остановитесь перед сменой направления. Затем выжмите сцепление и включите нужную передачу.',
+  },
+  uz:{
+    engine:{title:'Dvigatel o‘chirilgan',detail:'Shift ni bosing va I bilan dvigatelni yoqing. Keyin 1 yoki R ni tanlab, ilashishni qo‘yib yuboring.'},
+    stalled:{title:'Dvigatel o‘chib qoldi',detail:'Gazni qo‘yib yuboring, Shift va I ni bosing. 1 yoki R da ilashishni asta qo‘yib, harakatni boshlang.'},
+    neutral:{title:'Neytral uzatma yoqilgan',detail:'To‘xtang, Shift ni bosib, 1 yoki R ni tanlang. Ilashishni qo‘yib yuboring va W ni bosing. S — tormoz.'},
+    handbrake:{title:'Qo‘l tormozi yoqilgan',detail:'Qo‘l tormozini tushirish uchun Space ni bosing. Orqaga yurish uchun ilashish bilan R ni tanlang va W ni bosing.'},
+    brake:{title:'Tormoz bosilgan',detail:'S ni qo‘yib yuboring. Orqaga yurish uchun R ni tanlang va W ni bosing: S faqat tormozlaydi.'},
+    clutch:{title:'Ilashish bosilgan',detail:'1 yoki R ni tanlagach, Shift ni asta qo‘yib yuboring va W ni bosing.'},
+    stuck:{title:'Mashina joyidan qo‘zg‘almayapti',detail:'Bordyur yoki to‘siq xalaqit berayotgan bo‘lishi mumkin. Qarama-qarshi uzatmani sinang. Yordam bermasa, mashinani yo‘lning bo‘sh joyiga qaytaring.'},
+    overturned:{title:'Avtomobil ag‘darilib ketdi',detail:'Haydashni davom ettirish uchun mashinani g‘ildiraklariga tiklang.'},
+    helpTitle:'Mashina yurmasa',
+    reverseHelp:'Orqaga yurish: to‘xtang → Shift + R → ilashishni qo‘yib yuboring → W. Qo‘l tormozini tushiring (Space). S — tormoz.',
+    recoveryHelp:'Harakatni boshlashga uringanda sabab ko‘rsatiladi. Mashina tiqilib qolsa, «Yo‘lga qaytarish» tugmasi chiqadi. Vaqt va jarimalar saqlanadi.',
+    recoverRoad:'Yo‘lga qaytarish',
+    directionWarning:'Yo‘nalishni o‘zgartirishdan oldin to‘xtang. Keyin ilashishni bosib, kerakli uzatmani tanlang.',
+  },
+};
 export const practiceCopy={
   ru:{free:'Свободная практика',description:'Ездите свободно: штрафы не завершают поездку.',choose:'Выбрать упражнение',history:'Ошибки за поездку',empty:'Ошибок пока нет.',selection:'Задание засчитывается после выполнения всех его условий. Можно повторить попытку или вернуться к свободному вождению.',map:'Схема автодрома'},
   uz:{free:'Erkin mashq',description:'Erkin yuring: jarimalar mashqni tugatmaydi.',choose:'Mashq tanlash',history:'Haydashdagi xatolar',empty:'Hozircha xatolar yo‘q.',selection:'Mashq barcha shartlari bajarilgach qabul qilinadi. Qayta urinishingiz yoki erkin haydashga qaytishingiz mumkin.',map:'Avtodrom sxemasi'},
@@ -8,7 +40,7 @@ const steeringCopy={
   ru:{steeringAssist:'Помощь рулению (только в практике)',steeringAssistHelp:'Ограничивает поворот колёс на скорости. Выключите для полного управления.',steeringAssistOn:'ПОМОЩЬ РУЛЕНИЮ'},
 };
 const recoveryCopy={
-  ru:{recoverCar:'Поставить на колёса',overturned:'Автомобиль перевернулся',recovered:'Машина на колёсах. Передача N, ручник включён.',recoveryBlocked:'Рядом нет свободного места. Можно начать упражнение заново через «Управление».'},
+  ru:{recoverCar:'Поставить на колёса',overturned:'Автомобиль перевернулся',recovered:'Машина восстановлена. Передача N, ручник включён.',recoveryBlocked:'Рядом нет свободного места. Можно начать упражнение заново через «Управление».'},
   uz:{recoverCar:'Mashinani tiklash',overturned:'Avtomobil ag‘darilib ketdi',recovered:'Mashina tiklandi. Uzatma N, qo‘l tormozi yoqilgan.',recoveryBlocked:'Yaqinda bo‘sh joy yo‘q. «Boshqaruv» orqali mashqni qayta boshlashingiz mumkin.'},
 };
 const curbCopy={

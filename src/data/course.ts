@@ -5,6 +5,12 @@ import { parkingControlLines,parkingControlWidth,parkingTargetPlan } from './par
 export const mapPoint = (x: number, y: number): Vec2 => ({ x: (x - 640) * 0.1, z: (y - 530) * 0.1 });
 export const startLinePoint=mapPoint(232,935);
 export const finishLinePoint=mapPoint(145,775);
+// Exercise 10 markers and yellow station pointer on the supplied plan.
+const emergencyStopPlan=[45,310] as const;
+export const emergencyStopStation={
+  point:mapPoint(...emergencyStopPlan),signal:mapPoint(45,265),
+  normal:{x:0,z:1},divider:mapPoint(65,310),laneHalfWidth:2,
+};
 const p = mapPoint;
 const path = (a: number[][]) => a.map(([x, y]) => p(x, y));
 const parkingControl=(id:string,wheels:readonly number[])=>({
@@ -54,7 +60,7 @@ export const course: CourseDefinition = {
     exercise('garage',...parkingTargetPlan.garage,205,380,Math.PI,{parking:{center:p(...parkingTargetPlan.garage),yaw:Math.PI/2,width:3.3,length:6,controlLine:parkingControl('garage-left-stop',[2,3])},radius:2}),
     exercise('railway',1235,255,1235,410,Math.PI,{stop:{point:p(1235,315),normal:{x:0,z:-1}}}),
     exercise('acceleration',600,100,1015,100,-Math.PI/2,{radius:4}),
-    exercise('emergency',45,410,45,220,0,{radius:4}),
+    exercise('emergency',...emergencyStopPlan,45,220,0,{radius:4}),
     exercise('parallel',...parkingTargetPlan.parallel,275,561,Math.PI/2,{parking:{center:p(...parkingTargetPlan.parallel),yaw:Math.PI/2,width:3.1,length:6.5,controlLine:parkingControl('parking-right-stop',[0,2])},radius:2}),
     exercise('finish',145,795,520,795,-Math.PI/2,{indicator:'right',radius:3}),
   ],
@@ -63,7 +69,7 @@ export const course: CourseDefinition = {
     [655,550],[655,410],[655,200],[655,140],[730,140],[760,165],[760,200],[760,230],[760,340],[785,390],[820,405],[855,395],[890,362],[920,370],[955,400],[960,425],[950,445],
     [960,470],[900,490],[635,490],[265,490],[205,440],[205,380],[205,225],[205,275],parkingTargetPlan.garage,
     [205,275],[205,400],[215,465],[265,490],[545,490],[545,525],[700,525],[1165,525],[1235,450],[1235,410],[1235,315],[1235,255],
-    [1200,150],[1100,100],[1015,100],[600,100],[200,100],[80,150],[45,240],[45,410],[45,505],
+    [1200,150],[1100,100],[1015,100],[600,100],[200,100],[80,150],[45,240],[...emergencyStopPlan],[45,410],[45,505],
     [100,561],[445,561],[425,575],[420,parkingTargetPlan.parallel[1]],parkingTargetPlan.parallel,[410,590],[425,570],[445,561],[490,561],[520,530],[540,530],
     ...planArc(540,610,80,-90,0).slice(1),[620,680],...planArc(545,680,75,0,90).slice(1),[520,795],[145,795],
   ]),

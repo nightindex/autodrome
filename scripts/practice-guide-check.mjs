@@ -45,8 +45,9 @@ try{
   assert.equal(await page.evaluate(()=>window.__avtodrom.scene.goal.visible||window.__avtodrom.scene.guide.visible),false);
   assert.equal(await page.evaluate(()=>window.__avtodrom.scene.goal.children.some(n=>n.geometry?.type==='RingGeometry')),false);
   await page.evaluate(async()=>{const a=window.__avtodrom,{course}=await import('/src/data/course.ts');for(const e of course.exercises){a.vehicle.reset(e.point,e.yaw);a.step(1/60);}});
-  const free=await page.evaluate(()=>window.__avtodrom.snapshot());assert(free.freePractice&&free.state==='driving'&&free.index===0&&free.score===0&&free.events.length===0);
+  const free=await page.evaluate(()=>window.__avtodrom.snapshot());assert(free.freePractice&&free.state==='driving'&&free.index===0);
   freeChecks.push('free driving has no assigned route, rings or auto-completion');
+  await page.evaluate(()=>window.__avtodrom.start('practice'));
   // Exercise the live step, toast, counter and persistent history together.
   await page.evaluate(()=>{
    const a=window.__avtodrom,v=a.vehicle,update=v.update,telemetry=v.telemetry;

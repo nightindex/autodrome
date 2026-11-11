@@ -28,7 +28,9 @@ export interface VehicleConfig {
   verification: Verification;
 }
 export interface VehicleTelemetry {
-  time: number; position: Vec2; yaw: number; speed: number; signedSpeed: number;
+  time: number; position: Vec2; yaw: number;
+  /** Speed along the supporting road plane, or horizontal speed when airborne, in m/s. */
+  speed: number; signedSpeed: number;
   rpm: number; gear: number; throttle: number; brake: number; clutch: number;
   /** Actual rack angle divided by its mechanical limit, including any aid. */
   steering: number; engine: boolean; stalled: boolean; belt: boolean; handbrake: boolean;
@@ -44,6 +46,8 @@ export interface RuleDefinition {
 export interface ExamEvent { ruleId: number; time: number; points: number; exercise: ExerciseId; key: string }
 export interface ExamResult { date: string; mode: Mode; guided?: boolean; elapsed: number; score: number; passed: boolean; completed: boolean; events: ExamEvent[] }
 export interface Settings {
+  cockpitVersion:4;
+  cockpit:import('./render/cockpit-view').CockpitView;
   curbStyle:'yellow-black'|'white';
   mirrors:import('./render/mirror-adjustment').MirrorAdjustments;
   language: Language; quality: 'low' | 'medium' | 'high'; volume: number;

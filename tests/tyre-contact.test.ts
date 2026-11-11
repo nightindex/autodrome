@@ -14,10 +14,30 @@ function flatTrack(){
   const held=new Set<string>(),input={down:(action:string)=>held.has(action)}as Input;
   const step=()=>car.update(1/60,input,true);
   for(let i=0;i<120;i++)step();
-  return {car,held,step,dispose(){car.dispose();world.free();}};
+  return {car,held,input,step,dispose(){car.dispose();world.free();}};
 }
 
 describe('tyre contact and braking',()=>{
+  it.each([1,-1])('increases rollback deceleration when the brake is pressed in gear direction %i',(direction)=>{
+    const deceleration=(brake:number)=>{
+      const run=flatTrack();
+      try{
+        const {car,held,input}=run;
+        car.drivetrain.clutch=1;car.action('ignition');car.action(direction>0?'gear1':'reverse');car.action('handbrake');
+        // The car has rolled back after selecting its intended launch gear.
+        // Compare the same partially engaged clutch during brake pedal travel.
+        car.drivetrain.clutch=.6;car.drivetrain.rpm=2000;car.drivetrain.throttle=1;car.drivetrain.brake=brake;
+        car.body.setLinvel({x:0,y:0,z:-direction*2},true);held.add('throttle');held.add('brake');
+        car.update(1/60,input,false);
+        return (car.telemetry().signedSpeed+direction*2)*direction;
+      }finally{run.dispose();}
+    };
+    const changes=[0,.2,.4,.6,.8].map(deceleration);
+    expect(changes[0]).toBeGreaterThan(0);
+    for(let i=1;i<changes.length;i++)expect(changes[i]).toBeGreaterThanOrEqual(changes[i-1]-.001);
+    expect(changes[2]).toBeGreaterThan(changes[0]+.02);
+  });
+
   it.each([
     {direction:'forward',speed:50/3.6,action:'gear2',gear:2},
     {direction:'reverse',speed:-30/3.6,action:'reverse',gear:-1},

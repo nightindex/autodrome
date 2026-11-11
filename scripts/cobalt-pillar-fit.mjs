@@ -60,7 +60,7 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
             // The cowl is curved, so locate the joint on its actual surface
             // instead of assuming a planar height between edge endpoints.
             let low=0,high=1;
-            for(let i=0;i<9;i++){const middle=(low+high)/2;if((distance(lerp(a,b,middle))>=0)===(da>=0))low=middle;else high=middle;}
+            for(let i=0;i<20;i++){const middle=(low+high)/2;if((distance(lerp(a,b,middle))>=0)===(da>=0))low=middle;else high=middle;}
             output.push(lerp(a,b,(low+high)/2));
           }
           if(db>=0)output.push(b);a=b;da=db;
@@ -137,12 +137,30 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
             const delta=rail.getPoint((low+high)/2).sub(b),blend=1-T.MathUtils.smoothstep(y,.405,.44);
             return line.getPoint(u).lerp(rounded.getPoint(u),blend).add(delta);
           };
+          // Put shared mesh rows exactly on both sides of the moulding joint.
+          // Clipping a uniform grid across the curved dashboard left long,
+          // differently simplified triangles along this very visible edge.
+          const fittedRows=new WeakMap();
+          const rowHeight=(pointAt,u,row)=>{
+            let cache=fittedRows.get(pointAt);if(!cache){cache=new Map();fittedRows.set(pointAt,cache);}
+            if(!cache.has(u)){
+              const roots=[.004,.0015].map(clearance=>{
+                let low=.24,high=level;
+                for(let i=0;i<24;i++){
+                  const y=(low+high)/2,p=pointAt(u,y);
+                  if(y-heightAt(p)>clearance)high=y;else low=y;
+                }
+                return (low+high)/2;
+              });cache.set(u,roots);
+            }
+            const [top,bottom]=cache.get(u);
+            return row<=rows-2?T.MathUtils.lerp(level,top,row/(rows-2)):row===rows-1?bottom:.24;
+          };
           const lengths=line.getCurveLengths(),total=line.getLength(),ni=attributes.findIndex(a=>a.semantic==='NORMAL'),normalToLocal=new T.Matrix3().getNormalMatrix(inverse);
           const rows=32,samples=[...new Set([...Array.from({length:25},(_,i)=>i/24),...lengths.map(length=>length/total)])].sort((a,b)=>a-b),columns=samples.length-1,grid=[];
           for(let row=0;row<=rows;row++){
-            const y=level-(level-.24)*row/rows,blend=1-T.MathUtils.smoothstep(y,.405,.44);
             for(let column=0;column<=columns;column++){
-              const u=samples[column],p=surfacePoint(u,y),length=u*total;
+              const u=samples[column],y=rowHeight(surfacePoint,u,row),blend=1-T.MathUtils.smoothstep(y,.405,.44),p=surfacePoint(u,y),length=u*total;
               let span=lengths.findIndex(end=>end>=length);if(span<0)span=lengths.length-1;
               const start=span?lengths[span-1]:0,v=lerp(points[span],points[span+1],(length-start)/Math.max(1e-12,lengths[span]-start));v.point=p;
               v.values[attributes.findIndex(a=>a.semantic==='POSITION')]=p.clone().applyMatrix4(inverse).toArray();grid.push(v);
@@ -167,7 +185,7 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
           const closeReturn=(pointAt,material,segments,edge=0)=>{
             const vertices=[];
             for(let row=0;row<=rows;row++)for(let column=0;column<=segments;column++){
-              const y=level-(level-.24)*row/rows,u=column/segments,p=pointAt(u,y);
+              const u=column/segments,y=rowHeight(pointAt,u,row),p=pointAt(u,y);
               const v={point:p,values:points[0].values.map(values=>[...values])};
               v.values[attributes.findIndex(a=>a.semantic==='POSITION')]=p.clone().applyMatrix4(inverse).toArray();
               if(ni>=0){
@@ -205,6 +223,25 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
             const end=start.clone().lerp(backing.getPoint((low+high)/2).add(new T.Vector3(side*.003,0,.002)),amount);
             return new T.CubicBezierCurve3(start,start.clone().add(new T.Vector3(0,0,.025*amount)),end.clone().sub(new T.Vector3(side*.012*amount,0,.020*amount)),end).getPoint(u);
           },lining,4,points.length-1);
+          // Close the narrow cowl pocket underneath the windscreen return.
+          // The dashboard ended at x=+/-.695 while the source frame continued
+          // farther out; the open corner exposed white exterior paint.
+          const cap=[];
+          for(let j=0;j<=12;j++)for(let i=0;i<=6;i++){
+            const p=new T.Vector3(side*(.675+.08*i/6),0,1.02+.31*j/12);
+            p.y=heightAt(p)-.0005;
+            const v={point:p,values:points[0].values.map(values=>[...values])};
+            v.values[attributes.findIndex(a=>a.semantic==='POSITION')]=p.clone().applyMatrix4(inverse).toArray();
+            if(ni>=0)v.values[ni]=new T.Vector3(0,1,0).applyMatrix3(normalToLocal).normalize().toArray();
+            cap.push(v);
+          }
+          for(let j=0;j<12;j++)for(let i=0;i<6;i++){
+            const k=j*7+i;
+            for(const face of [[k,k+7,k+1],[k+1,k+7,k+8]]){
+              if(side<0)[face[1],face[2]]=[face[2],face[1]];
+              add(face.map(k=>cap[k]),dashboard);
+            }
+          }
         }
       }
       const refine=(triangle,depth=0)=>{
@@ -256,7 +293,7 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
           const patch=part.clone().setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint32Array(local)).setBuffer(buffer));
           weldPrimitive(patch,{overwrite:true});
           const simplifier={simplify:(indices,positions,stride,target,error,flags)=>MeshoptSimplifier.simplifyWithAttributes(indices,positions,stride,patch.getAttribute('NORMAL').getArray(),3,[.25,.25,.25],null,target,error,flags)};
-          simplifyPrimitive(patch,{simplifier,ratio:.15,error:.003,lockBorder:true});node.getMesh().addPrimitive(patch);
+          simplifyPrimitive(patch,{simplifier,ratio:.35,error:.00015,lockBorder:true});node.getMesh().addPrimitive(patch);
         }
         if(rest.length){part.setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint32Array(rest)).setBuffer(buffer));node.getMesh().addPrimitive(part);}
         else part.dispose();

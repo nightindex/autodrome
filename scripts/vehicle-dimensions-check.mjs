@@ -32,9 +32,14 @@ try{
         for(let j=group.start;j<group.start+group.count;j++)visit(point.fromBufferAttribute(p,index?index.getX(j):j).applyMatrix4(matrix));}
     };
     s.car.traverse(node=>{if(!node.isMesh)return;const matrix=inverse.clone().multiply(node.matrixWorld);
-      vertices(node,matrix,p=>{paint.expandByPoint(p);if(!/^door_[lr]f|^COBALT_SideMirror/.test(node.name))shell.expandByPoint(p);},true);
+      vertices(node,matrix,p=>{paint.expandByPoint(p);if(!/^COBALT_SideMirror/.test(node.name))shell.expandByPoint(p);},true);
     });
     const frame=box=>({min:box.min.toArray(),max:box.max.toArray(),size:box.getSize(new T.Vector3()).toArray()});
+    const cushions=['COBALT_SeatBase_-1','COBALT_SeatBase_1','COBALT_RearSeatBase'].map(name=>{
+      const mesh=s.car.getObjectByName(name);if(!mesh)throw new Error(`Missing cushion: ${name}`);
+      const box=new T.Box3();vertices(mesh,inverse.clone().multiply(mesh.matrixWorld),p=>box.expandByPoint(p));
+      return {name,depth:box.max.z-box.min.z,target:name==='COBALT_RearSeatBase'?.490:.520,bounds:frame(box)};
+    });
     // Inspect the actual outer paint at each wheel opening rather than using
     // the overall body width (which says little about local fender clearance).
     const paintMeshes=[];s.car.traverse(n=>{if(n.isMesh&&(Array.isArray(n.material)?n.material:[n.material]).some(m=>m.name==='Realistic_Car_Paint'))paintMeshes.push(n);});
@@ -93,20 +98,21 @@ try{
     const distance=(a,b)=>new T.Vector3(...wheels[a].hub).distanceTo(new T.Vector3(...wheels[b].hub));
     const floorRay=new R.Ray({x:v.body.translation().x,y:-.5,z:v.body.translation().z},{x:0,y:1,z:0}),floorHit=v.collider.castRay(floorRay,3,true);
     const undertray=new T.Box3().setFromObject(s.car.getObjectByName('COBALT_Undertray'),true);
-    const eye=s.car.localToWorld(s.cabinEye.clone()),forward=s.camera.getWorldDirection(new T.Vector3());
+    const eye=s.car.localToWorld(s.cockpitEye),forward=s.camera.getWorldDirection(new T.Vector3());
     const rays=new T.Raycaster(eye,forward).intersectObject(s.car,true),first=rays[0];
     const firstMaterial=first?(Array.isArray(first.object.material)?first.object.material[first.face?.materialIndex??0]:first.object.material).name:null;
     const roofPoint=s.car.localToWorld(new T.Vector3(0,shell.max.y,0));
     return {config:c,body:{length:paint.getSize(new T.Vector3()).z,width:shell.getSize(new T.Vector3()).x,roofHeight:roofPoint.y,paint:frame(paint),shell:frame(shell)},
-      axles:{frontTrack:distance(0,1),rearTrack:distance(2,3),wheelbase:axleCenter([0,1]).distanceTo(axleCenter([2,3]))},wheels,resetWheels,
+      axles:{frontTrack:distance(0,1),rearTrack:distance(2,3),wheelbase:axleCenter([0,1]).distanceTo(axleCenter([2,3]))},wheels,resetWheels,cushions,
       clearance:{physical:floorHit<0?null:floorHit-.5,visible:undertray.min.y},
-      cockpit:{eye:eye.toArray(),localEye:s.cabinEye.toArray(),cameraError:s.camera.position.distanceTo(eye),firstMaterial,firstDistance:first?.distance??null,roofAboveEye:roofPoint.y-eye.y}};
+      cockpit:{eye:eye.toArray(),localEye:s.cockpitEye.toArray(),cameraError:s.camera.position.distanceTo(eye),firstMaterial,firstDistance:first?.distance??null,roofAboveEye:roofPoint.y-eye.y}};
   });
   const close=(value,target,tolerance=.002)=>Number.isFinite(value)&&Math.abs(value-target)<tolerance;
   check('Drawn body length 4479 mm',close(report.body.length,4.479));check('Body width excludes mirrors and equals 1735 mm',close(report.body.width,1.735));
   check('Roof height excludes antenna and equals 1514 mm',close(report.body.roofHeight,1.514));
   for(const [key,value]of Object.entries({frontTrack:1.504,rearTrack:1.509,wheelbase:2.620}))check(`${key} matches supplied diagram`,close(report.axles[key],value));
   check('Visible and physical floor clearance 160 mm',close(report.clearance.physical,.160,.005)&&close(report.clearance.visible,.160,.005));
+  for(const seat of report.cushions)check(`${seat.name}: ${seat.target*1000} mm cushion depth from the supplied diagram`,close(seat.depth,seat.target,.001));
   check('Reset immediately matches all physical hubs without stale steering or spin',report.resetWheels.every(w=>w.hubError<.001&&w.steering===0&&w.roll===0));
   for(const w of report.wheels){
     check(`Wheel ${w.index}: 634.5 mm diameter and 195 mm width`,close(w.bounds.size[1],.6345,.001)&&close(w.bounds.size[0],.195,.001));

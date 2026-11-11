@@ -5,6 +5,14 @@ import { vehicleConfig } from './vehicle';
 // The supplied plan shows about three pixels of white at 0.1 m/pixel;
 // uz_video.mp4 06:00 and 09:20 establish which wheels stop on each stripe.
 export const parkingControlWidth=.30;
+// uz_video.mp4 09:00-09:20: separate open mouths of three B pockets
+// and the longer C/D pocket on the opposite side of the same island.
+export const parkingMouths:{id:string;category:'B'|'CD';points:[PlanPoint,PlanPoint]}[]=[
+  {id:'b-left',category:'B',points:[[70,585],[165,585]]},
+  {id:'b-middle',category:'B',points:[[215,585],[312,585]]},
+  {id:'b-right',category:'B',points:[[350,585],[458,585]]},
+  {id:'cd',category:'CD',points:[[350,735],[510,735]]},
+];
 export const parkingControlLines:{id:string;points:[PlanPoint,PlanPoint]}[]=[
   {id:'garage-left-stop',points:[[139,252.1],[139,295.9]]},
   {id:'garage-middle-stop',points:[[333,272.1],[333,327.9]]},

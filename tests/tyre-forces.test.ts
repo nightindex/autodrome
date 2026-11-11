@@ -4,11 +4,26 @@ import { tyreForces } from '../src/simulation/tyre-forces';
 const dt=1/60;
 
 describe('powered and passive tyre forces',()=>{
-  it.each([1,-1])('keeps powered traction in direction %i across rest and opposing motion',(direction)=>{
-    for(const speed of [-2,-.051,-.049,0,.049,.051,2]){
+  it.each([1,-1])('keeps powered traction in direction %i at rest and in matching motion',(direction)=>{
+    for(const speed of [-.049,0,.049,direction*.051,direction*2]){
       expect(tyreForces(direction*2000,100,3000,speed,dt,true)).toEqual({engine:direction*1900,brake:0});
     }
+    expect(tyreForces(direction*2000,100,500,direction,dt,true)).toEqual({engine:direction*500,brake:0});
+  });
+
+  it.each([1,-1])('adds braking to powered torque while rolling against direction %i',(direction)=>{
+    let previousForce=0;
+    for(const resistance of [0,100,1000,1999,2000,2001,3000]){
+      const force=tyreForces(direction*2000,resistance,10000,-direction*2,dt,true);
+      const stoppingForce=direction*force.engine+force.brake/dt;
+      expect(stoppingForce).toBeCloseTo(2000+resistance);
+      expect(stoppingForce).toBeGreaterThanOrEqual(previousForce);
+      previousForce=stoppingForce;
+      if(resistance<2000){expect(force.engine*direction).toBeGreaterThan(0);expect(force.brake).toBe(0);}
+      else expect(force.engine).toBe(0);
+    }
     expect(tyreForces(direction*2000,100,500,-direction,dt,true)).toEqual({engine:direction*500,brake:0});
+    expect(tyreForces(direction*2000,100,3000,-direction*.049,dt,true)).toEqual({engine:direction*1900,brake:0});
   });
 
   it.each([1,-1])('lets sufficient braking stop powered motion in direction %i without propelling through zero',(direction)=>{

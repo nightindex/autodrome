@@ -9,6 +9,34 @@ const controls={throttle:0,brake:0,clutch:0,steering:0};
 beforeAll(async()=>{await RAPIER.init();});
 describe('manual drivetrain',()=>{
   it('requires clutch to shift while running',()=>{const d=new Drivetrain();d.ignite();d.clutch=0;d.shift(1);expect(d.gear).toBe(0);d.clutch=1;d.shift(1);expect(d.gear).toBe(1);});
+  it.each([1,-1])('retains a fast manual clutch chord until gear %i can engage',gear=>{
+    const d=new Drivetrain();d.ignite();d.clutch=0;
+    expect(d.shift(gear,false,true)).toBe(true);expect(d.gear).toBe(0);
+    for(let i=0;i<6;i++)d.update(1/60,0,{...controls,clutch:1},false);
+    expect(d.gear).toBe(0);
+    for(let i=0;i<12;i++)d.update(1/60,0,{...controls,clutch:1},false);
+    expect(d.gear).toBe(gear);expect(d.engine).toBe(true);
+  });
+  it('cancels a manual gear request when the clutch is released before opening',()=>{
+    const d=new Drivetrain();d.ignite();d.clutch=0;d.shift(-1,false,true);
+    d.update(1/60,0,controls,false);
+    for(let i=0;i<30;i++)d.update(1/60,0,{...controls,clutch:1},false);
+    expect(d.gear).toBe(0);
+  });
+  it('rechecks reverse safety while a manually held clutch opens',()=>{
+    const d=new Drivetrain();d.ignite();d.clutch=0;d.shift(-1,false,true);
+    d.update(1/60,1,{...controls,clutch:1},false);
+    for(let i=0;i<30;i++)d.update(1/60,0,{...controls,clutch:1},false);
+    expect(d.gear).toBe(0);
+  });
+  it('neutral and reset clear a pending manual shift',()=>{
+    const d=new Drivetrain();d.ignite();d.clutch=0;d.shift(-1,false,true);d.shift(0);
+    for(let i=0;i<30;i++)d.update(1/60,0,{...controls,clutch:1},false);
+    expect(d.gear).toBe(0);
+    d.clutch=0;d.shift(-1,false,true);d.reset();d.ignite();
+    for(let i=0;i<30;i++)d.update(1/60,0,{...controls,clutch:1},false);
+    expect(d.gear).toBe(0);
+  });
   it('stalls after dumping the clutch at rest',()=>{const d=new Drivetrain();d.ignite();d.shift(1);for(let i=0;i<240;i++)d.update(1/60,0,controls,false);expect(d.stalled).toBe(true);expect(d.engine).toBe(false);});
   it('can restart after a stall with clutch depressed',()=>{const d=new Drivetrain();d.gear=1;d.clutch=0;d.ignite();expect(d.engine).toBe(false);d.clutch=1;d.ignite();expect(d.engine).toBe(true);});
   it('produces negative wheel force in reverse',()=>{const d=new Drivetrain();d.ignite();d.shift(-1);let force=0;for(let i=0;i<90;i++)force=d.update(1/60,-1,{...controls,throttle:1},true).force;expect(force).toBeLessThan(0);});

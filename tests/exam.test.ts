@@ -10,9 +10,9 @@ const has=(e:ExamEngine,id:number)=>e.events.some(x=>x.ruleId===id);
 
 describe('educational free-driving scores',()=>{
   const free=()=>new ExamEngine('practice',60,true);
-  it('allows preparation, reversing, a chosen route and unlimited time',()=>{
+  it('allows preparation, a chosen route and unlimited time',()=>{
     const e=free();tick(e,{speed:0,signedSpeed:0},{},1000);
-    tick(e,{signedSpeed:-1},{offRoute:true,skippedExercise:true,abandoned:true,finished:true,startCrossed:true});
+    tick(e,{}, {skippedExercise:true,abandoned:true,finished:true});
     expect(e.score).toBe(0);expect(e.status).toBe('running');expect(e.time).toBeGreaterThan(1000);
   });
   it('scores each unbelted episode once, including after correction',()=>{
@@ -48,7 +48,7 @@ const cases:Scenario[]=[
   {id:4,exercise:'pedestrian',bad:e=>{tick(e,{}, {stopDistance:2});tick(e,{speed:0},{stopDistance:1.01});},good:e=>tick(e,{speed:0},{stopDistance:1})},
   {id:5,bad:e=>tick(e,{}, {turnRequired:'left',turnCrossed:true}),good:e=>tick(e,{indicator:'left'},{turnRequired:'left',turnCrossed:true})},
   {id:6,bad:e=>tick(e,{}, {signViolation:true}),good:e=>tick(e,{}, {signViolation:false})},
-  {id:7,exercise:'finish',bad:e=>tick(e,{}, {finished:true}),good:e=>tick(e,{indicator:'right'},{finished:true})},
+  {id:7,exercise:'finish',bad:e=>tick(e,{}, {finishCrossed:true}),good:e=>tick(e,{indicator:'right'},{finishCrossed:true})},
   {id:8,bad:e=>tick(e,{speed:6}, {},5),good:e=>tick(e,{speed:20/3.6},{},5)},
   {id:9,exercise:'intersection',bad:e=>tick(e,{}, {greenLight:true},30.01),good:e=>tick(e,{}, {greenLight:true},30)},
   {id:10,bad:e=>tick(e,{speed:0},{},30),good:e=>tick(e,{speed:0},{},29.99)},
@@ -78,6 +78,37 @@ const cases:Scenario[]=[
 describe('all 32 reference penalties',()=>{
   for(const test of cases){it(`rule ${test.id}: violation produces the reference points`,()=>{const e=make(test.exercise);test.bad(e);expect(has(e,test.id)).toBe(true);expect(e.events.find(x=>x.ruleId===test.id)?.points).toBe(rules[test.id-1].points);});
     it(`rule ${test.id}: compliant behavior does not trigger`,()=>{const e=make(test.exercise);test.good(e);expect(has(e,test.id)).toBe(false);});}
+});
+describe('free practice uses every applicable reference penalty',()=>{
+  // These five rules require an assigned exam start, itinerary or deadline.
+  const examOnly=new Set([10,23,26,27,32]);
+  for(const scenario of cases.filter(c=>!examOnly.has(c.id))){
+    it(`records rule ${scenario.id} without ending the trip`,()=>{
+      const e=new ExamEngine('practice',900,true);e.setExercise(scenario.exercise??'start');
+      scenario.bad(e);
+      expect(e.events.find(event=>event.ruleId===scenario.id)?.points).toBe(rules[scenario.id-1].points);
+      expect(e.status).toBe('running');
+    });
+    it(`does not record rule ${scenario.id} for compliant driving`,()=>{
+      const e=new ExamEngine('practice',900,true);e.setExercise(scenario.exercise??'start');
+      scenario.good(e);expect(has(e,scenario.id)).toBe(false);
+    });
+  }
+  it('counts distinct red-light crossings, line touches, off-road and reverse episodes',()=>{
+    const e=new ExamEngine('practice',900,true);e.setExercise('snake');
+    for(let episode=0;episode<2;episode++){
+      for(let frame=0;frame<10;frame++)tick(e,{signedSpeed:-1},{controlLine:true,offRoute:true,stopCrossed:frame===0,redLight:true});
+      tick(e);
+    }
+    for(const id of [15,24,28,29])expect(e.events.filter(event=>event.ruleId===id)).toHaveLength(2);
+  });
+  it('counts repeated start and finish signal mistakes',()=>{
+    const e=new ExamEngine('practice',900,true);
+    for(let lap=0;lap<2;lap++){
+      tick(e,{}, {startCrossed:true});tick(e);tick(e,{}, {finishCrossed:true});tick(e);
+    }
+    expect(e.events.map(event=>event.ruleId)).toEqual([2,7,2,7]);
+  });
 });
 describe('scoring invariants',()=>{
   it('does not penalise preparing a parked car at an exercise spawn',()=>{const e=make('pedestrian');for(let i=0;i<300;i++)tick(e,{speed:0,engine:false,gear:0,handbrake:true},{stopDistance:3});tick(e,{}, {stopDistance:3});expect(has(e,4)).toBe(false);expect(has(e,12)).toBe(false);});

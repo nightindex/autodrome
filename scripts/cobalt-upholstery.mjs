@@ -6,11 +6,15 @@ import { conformSurface } from './cobalt-surfaces.mjs';
 
 /** Factory grey cloth seats and the manual car's floor/tunnel, in metres. */
 export async function buildCobaltUpholstery({mats,material,svgTexture,put,emit,doc,root}){
-  const bolster=material('COBALT_SeatBolster',0x7c7d7b,0,.96),stitch=material('COBALT_SeatStitch',0x8c8d89,0,1);
+  const bolster=material('COBALT_SeatBolster',0x666865,0,.96),stitch=material('COBALT_SeatStitch',0x424440,0,1);
   // The factory insert has a fine, neutral grey knit. One repeat represents
   // 160 mm of fabric, so its 8-pixel stitch stays 2.5 mm wide on every seat.
   const fabric=await svgTexture('Cobalt factory fine grey woven cloth',`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><defs><pattern id="weave" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#747674"/><path d="M1 0v8M5 0v8" stroke="#626561" stroke-width="1"/><path d="M0 1h8M0 5h8" stroke="#858782" stroke-width=".65"/><path d="M1 1l2 2m2 2 2 2M5 1l2 2M1 5l2 2" stroke="#91928d" stroke-width=".7" opacity=".5"/></pattern></defs><rect width="512" height="512" fill="url(#weave)"/></svg>`);
   mats.cloth.setBaseColorTexture(fabric).setBaseColorFactor([.93,.93,.93,1]);
+  // The photographed front inserts are charcoal woven cloth against softer
+  // grey bolsters. Keep the rear bench's existing fabric and colour separate.
+  const frontFabric=await svgTexture('Cobalt front charcoal woven cloth',`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><defs><pattern id="weave" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="#4c4f4b"/><path d="M1 0v8M5 0v8" stroke="#373a36" stroke-width="1.1"/><path d="M0 1h8M0 5h8" stroke="#6a6d67" stroke-width=".8"/><path d="M1 1l2 2m2 2 2 2M5 1l2 2M1 5l2 2" stroke="#777a73" stroke-width=".8" opacity=".7"/></pattern></defs><rect width="512" height="512" fill="url(#weave)"/></svg>`);
+  const frontCloth=mats.cloth.clone().setBaseColorTexture(frontFabric);
   const weaveUV=(geometry,verticalAxis='z')=>{
     const position=geometry.getAttribute('position'),uv=geometry.getAttribute('uv');
     for(let i=0;i<uv.count;i++)uv.setXY(i,position.getX(i)/.16+.5,(verticalAxis==='z'?position.getZ(i):position.getY(i))/.16+.5);
@@ -32,14 +36,14 @@ export async function buildCobaltUpholstery({mats,material,svgTexture,put,emit,d
   const lumbar=y=>.011*Math.exp(-(((y+.13)/.15)**2));
   const frontAt=(x,y)=>{const [w,d]=sampleBack(y);return (d+lumbar(y))*Math.pow(Math.max(0,1-Math.pow(Math.abs(x)/w,4)),.25);};
   const insertHalfWidth=y=>{
-    const width=.139-.020*Math.max(0,(y-.07)/.13),radius=.03;
+    const width=.154-.022*Math.max(0,(y-.07)/.13),radius=.035;
     const corner=Math.max(0,Math.abs(y+.035)-(.23-radius));
     return width-radius+Math.sqrt(Math.max(0,radius*radius-corner*corner));
   };
   const cushionHalfWidth=z=>{
-    const along=z-.012,radius=along>0?.06:.035;
+    const along=z-.012,radius=along>0?.048:.038;
     const corner=Math.max(0,Math.abs(along)-(.215-radius));
-    return .15-radius+Math.sqrt(Math.max(0,radius*radius-corner*corner));
+    return .169-radius+Math.sqrt(Math.max(0,radius*radius-corner*corner));
   };
   const seatShell=()=>{
     const vertices=[],uv=[],indices=[],segments=32;
@@ -67,43 +71,53 @@ export async function buildCobaltUpholstery({mats,material,svgTexture,put,emit,d
     const x=side*.325;
     // Support rails, shaped cushion, separate raised side bolsters and centre cloth.
     for(const dx of [-.16,.16])box(.025,.045,.44,mats.rubber,[x+dx,-.365,.235],[0,0,0],.006);
-    const cushionShape=new RoundedBoxGeometry(.465,.14,.53,3,.05),cp=cushionShape.getAttribute('position');
+    // Compensate the imported asset's longitudinal fit for a 520 mm cushion.
+    const cushionShape=new RoundedBoxGeometry(.465,.14,.53904,4,.05),cp=cushionShape.getAttribute('position');
     for(let i=0;i<cp.count;i++)if(cp.getY(i)>0)cp.setY(i,cp.getY(i)+.027*(Math.abs(cp.getX(i))/.2325)**4);
     const cushion=smoothBodyGeometry(cushionShape);cushionShape.dispose();
-    const pad=new T.PlaneGeometry(.30,.43,14,16).rotateX(-Math.PI/2).translate(0,0,.012),pp=pad.getAttribute('position');
-    for(let i=0;i<pp.count;i++)pp.setX(i,pp.getX(i)/.15*cushionHalfWidth(pp.getZ(i)));
+    const pad=new T.PlaneGeometry(1,.43,16,24).rotateX(-Math.PI/2).translate(0,0,.012),pp=pad.getAttribute('position');
+    for(let i=0;i<pp.count;i++)pp.setX(i,pp.getX(i)*2*cushionHalfWidth(pp.getZ(i)));
     weaveUV(conformSurface(pad,cushion));
     const cushionSeams=[-1,1].map(side=>{
-      const seam=new T.PlaneGeometry(.0018,.38,1,16).rotateX(-Math.PI/2).translate(0,0,.012),p=seam.getAttribute('position');
-      for(let i=0;i<p.count;i++)p.setX(i,p.getX(i)+side*(cushionHalfWidth(p.getZ(i))+.001));
-      return conformSurface(seam,cushion,{clearance:.0022});
+      const seam=new T.PlaneGeometry(.0009,.43,1,24).rotateX(-Math.PI/2).translate(0,0,.012),p=seam.getAttribute('position');
+      for(let i=0;i<p.count;i++)p.setX(i,p.getX(i)+side*(cushionHalfWidth(p.getZ(i))+.00045));
+      return conformSurface(seam,cushion,{clearance:.0018});
     });
+    // Only the construction join between the insert and its rounded front
+    // bolster crosses the cushion; dark thread avoids a contrasting piping.
+    const frontJoin=new T.PlaneGeometry(cushionHalfWidth(.227)*2,.0009,16,1).rotateX(-Math.PI/2).translate(0,0,.22745);
+    cushionSeams.push(conformSurface(frontJoin,cushion,{clearance:.0018}));
     put(cushion,bolster,[x,-.277,.245],[0,0,0],`COBALT_SeatBase_${side}`);
-    put(pad,mats.cloth,[x,-.277,.245],[0,0,0],`COBALT_${side}_SeatCushion`);
+    put(pad,frontCloth,[x,-.277,.245],[0,0,0],`COBALT_${side}_SeatCushion`);
     for(const seam of cushionSeams)put(seam,stitch,[x,-.277,.245]);
     // Tapered shoulders, lumbar crown and an inset cloth panel follow the same
     // rearward recline. Head restraint rods are almost entirely inside padding.
     const back=new T.Object3D();back.position.set(x,.073,-.13);back.rotation.x=-.17;back.updateMatrix();
     const backPut=(g,mat,name)=>put(g.applyMatrix4(back.matrix),mat,[0,0,0],[0,0,0],name);
     const shell=seatShell();
-    const insert=new T.PlaneGeometry(1,.46,16,18),ip=insert.getAttribute('position');
+    const insert=new T.PlaneGeometry(1,.46,14,24),ip=insert.getAttribute('position');
     for(let i=0;i<ip.count;i++){
       const y=ip.getY(i)-.035,u=ip.getX(i)*2,px=u*insertHalfWidth(y);
       ip.setXYZ(i,px,y,frontAt(px,y)+.0015);
     }
     weaveUV(conformSurface(insert,shell,{axis:'z'}),'y');
-    backPut(shell,bolster,`COBALT_SeatBack_${side}`);backPut(insert,mats.cloth,`COBALT_SeatInsert_${side}`);
+    // Fit these narrow construction joins to the same support as the cloth,
+    // so they cannot float above the mesh along the lumbar curve.
+    const backSeams=[-1,1].map(sign=>{
+      const seam=new T.PlaneGeometry(.0009,.46,1,24),p=seam.getAttribute('position');
+      for(let i=0;i<p.count;i++){
+        const y=p.getY(i)-.035;
+        p.setXYZ(i,p.getX(i)+sign*(insertHalfWidth(y)+.00045),y,0);
+      }
+      return conformSurface(seam,shell,{axis:'z',clearance:.0018});
+    });
+    backPut(shell,bolster,`COBALT_SeatBack_${side}`);backPut(insert,frontCloth,`COBALT_SeatInsert_${side}`);
+    backSeams.forEach(seam=>backPut(seam,stitch));
     for(const dx of [-.066,.066]){
       const rod=new T.CylinderGeometry(.004,.004,.052,12).translate(dx,.333,0);
       backPut(rod,mats.chrome,`COBALT_HeadrestPost_${side}_${dx}`);
     }
     backPut(new RoundedBoxGeometry(.235,.205,.12,3,.043).translate(0,.443,-.004),bolster,`COBALT_Headrest_${side}`);
-    for(const sign of [-1,1]){
-      const points=Array.from({length:20},(_,i)=>{
-        const y=-.265+i/19*.46,px=sign*insertHalfWidth(y);
-        return new T.Vector3(px,y,frontAt(px,y)+.002).applyMatrix4(back.matrix).toArray();
-      });tube(points,.0009,stitch);
-    }
     // Buckle is on the tunnel side; parked belt follows the outer B-pillar.
     box(.029,.05,.035,mats.rubber,[x-side*.256,-.225,-.17],[0,0,side*-.13],.005);
     const red=material(`COBALT_BeltRelease_${side}`,0xa12722,0,.8);box(.022,.008,.027,red,[x-side*.256,-.196,-.17],[0,0,0],.003);
@@ -114,7 +128,8 @@ export async function buildCobaltUpholstery({mats,material,svgTexture,put,emit,d
     .setBaseColorTexture(fabric).setBaseColorFactor([.78,.80,.78,1])
     .setExtension('KHR_materials_specular',doc.createExtension(KHRMaterialsSpecular).createSpecular().setSpecularFactor(.12));
   const smoothRounded=(...args)=>{const source=new RoundedBoxGeometry(...args),smooth=smoothBodyGeometry(source);source.dispose();return smooth;};
-  const rearBase=smoothRounded(1.22,.15,.49,2,.055);
+  // The same longitudinal fit leaves this rear cushion 490 mm deep.
+  const rearBase=smoothRounded(1.22,.15,.50794,2,.055);
   const rearPad=new T.PlaneGeometry(1.13,.39,20,8).rotateX(-Math.PI/2).translate(0,0,.005);
   weaveUV(conformSurface(rearPad,rearBase));
   weaveUV(rearBase);put(rearBase,rearBolster,[0,-.27,-1.04],[0,0,0],'COBALT_RearSeatBase');

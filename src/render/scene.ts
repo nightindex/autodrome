@@ -19,6 +19,7 @@ import {CabinExamDisplay,type CabinExamDisplayState} from './cabin-exam-display'
 import type {PracticeHint} from '../simulation/practice-guide';
 import type {Exercise} from '../types';
 import { moveMirrorAngle,readMirrorAdjustments,sideMirrorDirection,sideMirrorView,type MirrorAdjustments } from './mirror-adjustment';
+import {readCockpitView,cockpitEyePosition,cockpitVerticalFov,type CockpitView} from './cockpit-view';
 
 export class GameScene {
   onCabinMirrorSwitch:()=>void=()=>{};
@@ -29,6 +30,9 @@ export class GameScene {
   private sun=new T.DirectionalLight(0xfff1d4,2.4);
   private wheels:CarWheel[]=[];private bodyLift=0;
   private cabinEye=new T.Vector3(.31,.48,.2);
+  private cockpitView=readCockpitView(null);
+  get cockpitEye(){return cockpitEyePosition(this.cabinEye,this.cockpitView);}
+  setCockpitView(value:CockpitView){this.cockpitView=readCockpitView(value);}
   private steering:T.Object3D|undefined;private steeringBase=new T.Quaternion();
   private cobalt:CobaltVisuals|undefined;
   private examDisplay:CabinExamDisplay|undefined;
@@ -146,7 +150,7 @@ export class GameScene {
   setGoal(point:Vec2,visible:boolean){this.goal.position.set(point.x,hillHeight(point.x,point.z)+.06,point.z);this.goal.visible=visible;this.guide.visible=visible;}
   setCurbStyle(style:Settings['curbStyle']){this.world.setCurbStyle(style);}
   setQuality(q:Settings['quality']){if(this.quality===q)return;this.quality=q;this.world.setTreeQuality(q);const mirrorScale=q==='low'?.5:q==='medium'?.75:1;this.mirrorTarget.setSize(512*mirrorScale,160*mirrorScale);for(const target of this.sideTargets)target.setSize(512*mirrorScale,288*mirrorScale);this.renderer.setPixelRatio(Math.min(devicePixelRatio,q==='high'?1.75:q==='medium'?1.25:1));this.renderer.shadowMap.enabled=q!=='low';this.sun.shadow.mapSize.set(2048,2048);this.sun.shadow.map?.dispose();this.sun.shadow.map=null;this.resize();}
-  resize(){const w=window.innerWidth,h=window.innerHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();}
+  resize(){const w=window.innerWidth,h=window.innerHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;if(this.cameraMode==='cockpit')this.camera.fov=cockpitVerticalFov(this.cockpitView.fov,this.camera.aspect);this.camera.updateProjectionMatrix();}
   cycleCamera(){this.cameraMode=this.cameraMode==='chase'?'cockpit':this.cameraMode==='cockpit'?'overview':'chase';}
   setMirrorAdjustments(value:MirrorAdjustments){this.mirrorAdjustments=readMirrorAdjustments(value);}
   setExamDisplay(value:CabinExamDisplayState){this.examDisplay?.update(value);}
@@ -167,8 +171,8 @@ export class GameScene {
     this.camera.clearViewOffset();
     if(menu){const a=.75+Math.sin(time*.025)*.25;const desired=new T.Vector3(p.x+Math.sin(a)*8,p.y+2.6,p.z+Math.cos(a)*8);this.camera.position.lerp(desired,1-Math.exp(-dt*2));this.camera.lookAt(p.x,p.y+.1,p.z);this.camera.fov=48;this.camera.setViewOffset(window.innerWidth,window.innerHeight,-window.innerWidth*.14,0,window.innerWidth,window.innerHeight);}
     else if(this.cameraMode==='cockpit'){
-      this.camera.position.copy(this.cabinEye.clone().applyQuaternion(this.car.quaternion).add(pos));
-      const target=new T.Vector3(Math.sin(look*.85),-.025,Math.cos(look*.85)).applyQuaternion(this.car.quaternion).multiplyScalar(10).add(this.camera.position);this.camera.lookAt(target);this.camera.fov=70;
+      this.camera.position.copy(this.cockpitEye.applyQuaternion(this.car.quaternion).add(pos));
+      const target=new T.Vector3(Math.sin(look*.85),-.025,Math.cos(look*.85)).applyQuaternion(this.car.quaternion).multiplyScalar(10).add(this.camera.position);this.camera.lookAt(target);this.camera.fov=cockpitVerticalFov(this.cockpitView.fov,this.camera.aspect);
     }else if(this.cameraMode==='overview'){
       this.camera.position.lerp(new T.Vector3(p.x,p.y+32,p.z-8),1-Math.exp(-dt*5));this.camera.lookAt(p.x,p.y,p.z);this.camera.fov=52;
     }else{
@@ -224,6 +228,13 @@ export class GameScene {
     // All three feeds are drawn directly on their physical mirror surfaces.
     renderer.setScissorTest(false);renderer.setViewport(0,0,window.innerWidth,window.innerHeight);renderer.render(this.scene,this.camera);
     this.renderStats={calls:renderer.info.render.calls,triangles:renderer.info.render.triangles};
-    this.frameCount++;this.fpsTime+=dt;if(this.fpsTime>=1){this.fps=Math.round(this.frameCount/this.fpsTime);this.frameCount=0;this.fpsTime=0;}
+    // Rendering receives a capped simulation delta; measure FPS against real
+    // elapsed time so slow frames are not reported as at least 10 FPS.
+    const frameTime=performance.now();
+    if(this.fpsTime===0){this.fpsTime=frameTime;this.frameCount=0;}
+    else{
+      this.frameCount++;const elapsed=frameTime-this.fpsTime;
+      if(elapsed>=1000){this.fps=Math.round(this.frameCount*1000/elapsed);this.frameCount=0;this.fpsTime=frameTime;}
+    }
   }
 }

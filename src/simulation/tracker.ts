@@ -1,6 +1,6 @@
 import type { Exercise, VehicleTelemetry, Vec2 } from '../types';
 import type { Observations } from './exam';
-import { course, itinerary, mapPoint,startLinePoint,finishLinePoint } from '../data/course';
+import { course, itinerary, mapPoint,startLinePoint,finishLinePoint,emergencyStopStation } from '../data/course';
 import { roadDistance } from '../render/course-world';
 import { signalAxis,signalState } from '../data/traffic-signals';
 import { crossedLine, distance, lineDistance, segmentDistance } from './math';
@@ -40,7 +40,12 @@ export class CourseTracker {
     let atGoal=dist<e.radius;
     let emergency=false;
     if(e.id==='emergency'){
-      if(dist<10 && !this.emergencyTriggered){this.emergencyTriggered=true;emergency=true;}
+      const {signal,normal,laneHalfWidth}=emergencyStopStation;
+      const facing=Math.sin(t.yaw)*normal.x+Math.cos(t.yaw)*normal.z;
+      const lateral=Math.abs((t.position.x-e.point.x)*normal.z-(t.position.z-e.point.z)*normal.x);
+      const reached=lineDistance(t.bumper,signal,normal)<=0&&lineDistance(t.position,e.point,normal)>=-e.radius;
+      const crossed=crossedLine(prev.bumper,t.bumper,signal,normal,laneHalfWidth);
+      if(!this.emergencyTriggered&&facing>.5&&lateral<laneHalfWidth&&(reached||crossed)){this.emergencyTriggered=true;emergency=true;}
       o.emergencySignal=emergency;
       atGoal=this.emergencyTriggered && t.speed<.12;
     }

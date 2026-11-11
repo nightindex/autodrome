@@ -44,6 +44,33 @@ try{
   const braking=await page.evaluate(()=>({telemetry:window.__avtodrom.snapshot().telemetry,...window.__physicsBrake}));
   check('Keyboard brake stops against full throttle within 25 m',braking.distance<25&&!braking.collision&&braking.telemetry.engine&&braking.telemetry.speed<.15);
   await page.keyboard.up('KeyW');await page.keyboard.up('KeyS');await page.keyboard.press('Escape');
+  const rollbackBraking=await page.evaluate(()=>{
+    const a=window.__avtodrom,v=a.vehicle;a.start('practice');a.pause();const rows=[];
+    for(const direction of [1,-1])for(const brake of [0,.2,.4,.6]){
+      v.reset({x:-44,z:42},Math.PI/2);for(let i=0;i<120;i++)v.update(1/60,{down:()=>false},true);
+      const d=v.drivetrain;d.clutch=1;d.ignite();d.shift(direction);
+      d.rpm=2000;d.clutch=.6;d.throttle=1;d.brake=brake;d.handbrake=false;
+      v.body.setLinvel({x:-direction*2,y:0,z:0},true);
+      v.update(1/60,{down:action=>action==='throttle'?1:action==='brake'?brake:0},true);
+      rows.push({direction,brake,deceleration:v.telemetry().signedSpeed*direction+2,collision:v.collision});
+    }
+    return rows;
+  });
+  for(const direction of [1,-1]){
+    const rows=rollbackBraking.filter(row=>row.direction===direction);
+    check(`Partial braking increasingly slows motion opposite gear ${direction}`,rows.every((row,i)=>!row.collision&&row.deceleration>0&&(i===0||row.deceleration>rows[i-1].deceleration)));
+  }
+  const parkedHill=await page.evaluate(()=>{
+    const a=window.__avtodrom,v=a.vehicle;a.start('practice');a.pause();
+    v.reset({x:8,z:42},Math.PI/2);const idle={down:()=>false};
+    for(let i=0;i<300;i++)v.update(1/60,idle,true);
+    const initial={...v.body.translation()};
+    for(let i=0;i<600;i++)v.update(1/60,idle,true);
+    const final={...v.body.translation()};
+    return {initial,final,drift:Math.hypot(final.x-initial.x,final.z-initial.z),speed:v.telemetry().speed};
+  });
+  await writeFile('test-results/physics-browser/hold-and-rollback.json',JSON.stringify({rollbackBraking,parkedHill},null,2));
+  check('The handbrake holds the actual ascent for ten seconds without uphill creep',parkedHill.drift<.01&&parkedHill.speed<.001);
   await page.evaluate(()=>window.__avtodrom.start('exam'));
   await page.waitForFunction(()=>window.__avtodrom.snapshot().telemetry.time>.35,null,{timeout:15000});await page.keyboard.press('KeyI');await page.keyboard.press('Digit1');
   check('Exam retains manual clutch interlock',(await snap()).telemetry.gear===0);
@@ -83,6 +110,6 @@ try{
   });
   await page.waitForTimeout(250);await page.screenshot({path:'test-results/physics-browser/curb-approach.png'});
   check('No browser errors',errors.length===0);
-  const report={date:new Date().toISOString(),checks,errors,physicsTiming,launch:launch.telemetry,upshift:shift.telemetry,brakingStart,braking,curbs};
-  await writeFile('test-results/physics-browser/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({checks,errors,physicsTiming,braking,curbs},null,2));
+  const report={date:new Date().toISOString(),checks,errors,physicsTiming,launch:launch.telemetry,upshift:shift.telemetry,brakingStart,braking,rollbackBraking,parkedHill,curbs};
+  await writeFile('test-results/physics-browser/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({checks,errors,physicsTiming,braking,rollbackBraking,parkedHill,curbs},null,2));
 }finally{await browser.close();}

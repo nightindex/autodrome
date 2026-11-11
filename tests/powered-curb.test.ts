@@ -9,11 +9,11 @@ import type {Input} from '../src/simulation/input';
 
 beforeAll(async()=>{await RAPIER.init();});
 
-function touchingCurb({height=.1,yaw=0,friction=.65,wall=false}={}){
+function touchingCurb({height=.1,yaw=0,friction=.65,wall=false,reverse=false}={}){
   const world=new RAPIER.World({x:0,y:-9.81,z:0});
   world.createCollider(RAPIER.ColliderDesc.cuboid(100,.2,100).setTranslation(0,-.2,0));
   const car=new Vehicle(world,new Set()),held=new Set<string>(),input={down:(action:string)=>held.has(action)}as Input;
-  car.reset({x:0,z:3-config.wheelbase/2*Math.cos(yaw)-config.frontTrack/2*Math.sin(yaw)-config.wheelRadius-.003},yaw);
+  car.reset({x:0,z:3-config.wheelbase/2*Math.cos(yaw)-config.frontTrack/2*Math.sin(yaw)-config.wheelRadius-.003},yaw+(reverse?Math.PI:0));
   let curb:RAPIER.Collider;
   if(wall)curb=world.createCollider(RAPIER.ColliderDesc.cuboid(20,.5,.12).setTranslation(0,.5,3.12));
   else{
@@ -31,7 +31,7 @@ function touchingCurb({height=.1,yaw=0,friction=.65,wall=false}={}){
   }
   car.body.setLinvel({x:0,y:0,z:0},true);car.drivetrain.handbrake=true;step(60);
   const initial={...car.body.translation()};
-  car.action('ignition');car.action('gear1',true);car.drivetrain.handbrake=false;
+  car.action('ignition');car.action(reverse?'reverse':'gear1',true);car.drivetrain.handbrake=false;
   let peak=initial.y,cleared=false,clearSpeed=0;
   const drive=(frames=600)=>{
     for(let i=0;i<frames;i++){
@@ -49,8 +49,8 @@ function touchingCurb({height=.1,yaw=0,friction=.65,wall=false}={}){
 }
 
 describe('powered rolling against a curb edge',()=>{
-  it.each([0,Math.PI/6])('can climb a 10 cm curb from touching rest at yaw=%s',yaw=>{
-    const run=touchingCurb({yaw});
+  it.each([false,true].flatMap(reverse=>[0,Math.PI/6,Math.PI/3].map(yaw=>({reverse,yaw}))))('can climb a 10 cm curb from touching rest at yaw=$yaw, reverse=$reverse',options=>{
+    const run=touchingCurb(options);
     try{
       expect(run.car.telemetry().speed).toBeLessThan(.05);
       run.held.add('throttle');const result=run.drive();

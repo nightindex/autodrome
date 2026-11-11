@@ -50,6 +50,7 @@ try{
     ['pedestrian',{eye:[-22,12,49],target:[-14,0,40.5],fov:48}],
     ['departure',{eye:[42,17,43],target:[56,0,26],fov:48}],
     ['arrows',{eye:[-28,10,48],target:[-26.5,0,40.5],fov:46}],
+    ['emergency-stop',{eye:[-54,7,-33],target:[-59.5,0,-22],fov:48}],
   ]){await page.evaluate(p=>window.markingStandardsPose=p,pose);await page.waitForTimeout(250);await page.screenshot({path:`${directory}/${name}.png`});}
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.markingStandardsPose={eye:[10,23,19],target:[-.5,0,-2.5],fov:55});await page.waitForTimeout(250);await page.screenshot({path:`${directory}/mobile.png`});
   assert.deepEqual(errors,[]);await writeFile(`${directory}/report.json`,JSON.stringify({geometry,errors},null,2));
