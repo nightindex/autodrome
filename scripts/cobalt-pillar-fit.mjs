@@ -6,13 +6,21 @@ import { MeshoptSimplifier } from 'meshoptimizer';
  * close-up: a tapered pale return with a fine dark joint, not a flat colour cut. */
 export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard,seam,weatherstrip=dashboard}){
   const dash=doc.getRoot().listNodes().find(n=>n.getName()==='COBALT_MouldedDashboard');
-  const supportMaterial=new T.MeshBasicMaterial({side:T.DoubleSide}),supports=[];
+  const supportMaterial=new T.MeshBasicMaterial({side:T.DoubleSide}),supports=[],outerPanels=[];
   for(const primitive of dash.getMesh().listPrimitives()){
     const position=primitive.getAttribute('POSITION'),values=[];
     for(let i=0;i<position.getCount();i++)values.push(...worldPoint(dash,position,i).toArray());
     const geometry=new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(values,3));
     if(primitive.getIndices())geometry.setIndex(Array.from(primitive.getIndices().getArray()));
     const mesh=new T.Mesh(geometry,supportMaterial);mesh.updateMatrixWorld();supports.push(mesh);
+  }
+  for(const node of nodes)if(/^(chassis_primary|bonnet_ok)/.test(node.getName()))for(const primitive of node.getMesh()?.listPrimitives()??[]){
+    if(primitive.getMaterial()?.getName()!=='Realistic_Car_Paint')continue;
+    const position=primitive.getAttribute('POSITION'),values=[];
+    for(let i=0;i<position.getCount();i++)values.push(...worldPoint(node,position,i).toArray());
+    const geometry=new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(values,3));
+    if(primitive.getIndices())geometry.setIndex(Array.from(primitive.getIndices().getArray()));
+    const mesh=new T.Mesh(geometry,supportMaterial);mesh.updateMatrixWorld();outerPanels.push(mesh);
   }
   const ray=new T.Raycaster(new T.Vector3(),new T.Vector3(0,-1,0),0,1),heights=new Map();
   const heightAt=point=>{
@@ -209,7 +217,7 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
             const inner=surfacePoint(0,y),amount=1-T.MathUtils.smoothstep(y,.36,.44);
             const outer=inner.clone().lerp(new T.Vector3(side*.721,y,inner.z+.002),amount);
             return outer.lerp(inner,u);
-          },dashboard,1);
+          },weatherstrip,1);
           const backing=new T.CatmullRomCurve3([
             [.65734,.44,.89810],[.66237,.42,.93528],[.66722,.40,.97313],
             [.67817,.38,1.00791],[.67890,.36,1.03671],[.67982,.34,1.06813],
@@ -230,6 +238,12 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
           for(let j=0;j<=12;j++)for(let i=0;i<=6;i++){
             const p=new T.Vector3(side*(.675+.08*i/6),0,1.02+.31*j/12);
             p.y=heightAt(p)-.0005;
+            // Close the interior corner below the actual fender/bonnet skin.
+            // The dashboard-height cap used to cross the sloping sheet metal,
+            // exposing a dark triangular "scratch" on both front wings.
+            ray.ray.origin.set(p.x,.7,p.z);
+            const panel=ray.intersectObjects(outerPanels).find(hit=>hit.point.y>.20);
+            if(panel)p.y=Math.min(p.y,panel.point.y-.004);
             const v={point:p,values:points[0].values.map(values=>[...values])};
             v.values[attributes.findIndex(a=>a.semantic==='POSITION')]=p.clone().applyMatrix4(inverse).toArray();
             if(ni>=0)v.values[ni]=new T.Vector3(0,1,0).applyMatrix3(normalToLocal).normalize().toArray();
@@ -300,5 +314,5 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
       }
       node.getMesh().removePrimitive(primitive);primitive.dispose();
     }
-  }finally{supports.forEach(mesh=>mesh.geometry.dispose());supportMaterial.dispose();}
+  }finally{[...supports,...outerPanels].forEach(mesh=>mesh.geometry.dispose());supportMaterial.dispose();}
 }

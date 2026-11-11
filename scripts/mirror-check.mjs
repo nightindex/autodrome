@@ -25,6 +25,14 @@ try{
   await page.screenshot({path:`${directory}/${phase}-normal-cockpit.png`});
   captures.push(`${directory}/${phase}-normal-cockpit.png`);
   if(phase==='after'){
+    const framing=await page.evaluate(async()=>{
+      const T=await import('/node_modules/three/build/three.module.js'),s=window.__avtodrom.scene;
+      const bounds=new T.Box3().setFromObject(s.car.getObjectByName('COBALT_CabinMirrorHousing')),points=[];
+      for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])points.push(new T.Vector3(x,y,z).project(s.camera));
+      return {left:Math.min(...points.map(p=>p.x)),right:Math.max(...points.map(p=>p.x)),top:Math.max(...points.map(p=>p.y)),bottom:Math.min(...points.map(p=>p.y))};
+    });
+    check('The complete cabin mirror fits inside the normal driver view',framing.left> -1&&framing.right<1&&framing.top<.84&&framing.bottom> -1,framing);
+    check('The cabin mirror sits in the upper part of the windscreen like the cabin photograph',framing.top>.5&&(framing.top+framing.bottom)/2>.35,framing);
     const expectedVersion=createHash('sha256').update(await readFile('public/assets/cobalt.glb')).digest('hex').slice(0,16);
     check('Model URL changes with the asset contents instead of reusing stale mirror geometry',new URL(loadedModelUrl).searchParams.get('v')===expectedVersion,{loadedModelUrl});
     const physical=await page.evaluate(()=>{
@@ -68,9 +76,12 @@ try{
     const path=`${directory}/${phase}-${name}.png`;await page.screenshot({path});captures.push(path);
   };
   await capture('driver',{eye:[.31,.48,.2],target:[.31,.455,1.2],fov:70});
-  await capture('mirror-front',{eye:[.04,.60,.19],target:[0,.602,.56],fov:34},{width:1200,height:700});
-  await capture('mirror-oblique',{eye:[.22,.64,.27],target:[0,.61,.56],fov:44},{width:1200,height:700});
+  const mirrorCenter=await page.evaluate(async()=>{const T=await import('/node_modules/three/build/three.module.js'),s=window.__avtodrom.scene;return s.car.worldToLocal(new T.Box3().setFromObject(s.car.getObjectByName('COBALT_CabinMirrorGlass')).getCenter(new T.Vector3())).toArray();});
+  const mirrorFront={eye:[mirrorCenter[0]+.02,mirrorCenter[1]-.02,mirrorCenter[2]-.34],target:mirrorCenter,fov:34};
+  await capture('mirror-front',mirrorFront,{width:1200,height:700});
+  await capture('mirror-oblique',{eye:[mirrorCenter[0]+.22,mirrorCenter[1]+.04,mirrorCenter[2]-.28],target:mirrorCenter,fov:44},{width:1200,height:700});
   await capture('driver-wide',{eye:[.31,.48,.2],target:[.31,.455,1.2],fov:70},{width:1920,height:1080});
+  await capture('photo-front',{eye:[0,.68,-.30],target:[0,.28,1.0],fov:70});
   for(const [side,name]of [[1,'left'],[-1,'right']])await capture(`side-${name}`,{eye:[side*.55,.46,.23],target:[side*.87,.39,.66],fov:38},{width:1200,height:700});
   for(const [side,name]of [[1,'left'],[-1,'right']])await capture(`driver-side-${name}`,{eye:[.31,.48,.2],target:[side*.87,.39,.66],fov:38},{width:1200,height:800});
   for(const [side,name]of [[1,'left'],[-1,'right']])for(const [yaw,pitch]of [[8,-6],[-8,6]]){
@@ -135,7 +146,7 @@ try{
       return {green:green.length,magenta:magenta.length,greenX:green.reduce((a,b)=>a+b,0)/green.length,magentaX:magenta.reduce((a,b)=>a+b,0)/magenta.length};
     });
     check('Both rear markers appear in the rear recorder camera texture',pixels.green>5&&pixels.magenta>5,pixels);
-    await capture('reflection-witness',{eye:[.04,.60,.19],target:[0,.602,.56],fov:34},{width:1200,height:700});
+    await capture('reflection-witness',mirrorFront,{width:1200,height:700});
     const rect=await page.evaluate(async()=>{
       const T=await import('/node_modules/three/build/three.module.js'),s=window.__avtodrom.scene,box=new T.Box3().setFromObject(s.car.getObjectByName('COBALT_CabinMirrorGlass')),points=[];
       for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z])points.push(new T.Vector3(x,y,z).project(s.camera));

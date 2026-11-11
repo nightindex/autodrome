@@ -89,7 +89,9 @@ export async function buildCobaltFrontDoors({doc,mats,material,svgTexture,put:wr
       lp.setY(i,lp.getY(i)*lerp(1,.018/.034,t)+lerp(.321,.31,t));lp.setZ(i,z);
     }
     ledge.computeVertexNormals();put(ledge,mats.rubber,[0,0,0],[0,0,0],`COBALT_DoorWindowLedge_${side}`);
-    box(.052,.002,1.01,mats.rubber,[side*.730,.339,-.10],`COBALT_DoorOuterFlange_${side}`,.001);
+    // The return overlaps the inner ledge, but ends before the painted outer
+    // shoulder. Its former outboard edge cut through that curve in a long tip.
+    box(.028,.002,1.01,mats.rubber,[side*.730,.339,-.10],`COBALT_DoorOuterFlange_${side}`,.001);
 
     // The photographed diagonal division reaches almost to the sail panel.
     // The seam is a 1.4 mm ribbon following the curved moulding, not a tube.

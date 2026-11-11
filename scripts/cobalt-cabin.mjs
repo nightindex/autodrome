@@ -147,7 +147,7 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   put(traySurface(1),seam,[0,0,0],[0,0,0],'COBALT_DashboardTrayRim');
   put(traySurface(.95),lower,[0,0,0],[0,0,0],'COBALT_DashboardTray');
   box(.66,.14,.20,lower,[.34,-.155,1.025],[0,0,0],.034);
-  buildDashboardJoinery({dashboard:supportDashboard,put,mats,lower,seam,satin,shaped});
+  buildDashboardJoinery({dashboard:supportDashboard,put,seam,satin});
 
   // Exam car: paired vents, lock/hazard row, fitted monitor and manual HVAC.
   centreStack=true;
@@ -312,9 +312,11 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   // swept windscreen mount, rather than a rectangular chrome-like plate.
   const mirror=material('COBALT_RearViewMirror',0xa6aeab,.9,.14);
   const mirrorShell=material('COBALT_CabinMirrorShell',0x222426,0,.91);
-  // Place the glass above the driver's eye line, close to the upper centre of
-  // the windshield. Keep the mounting foot at its fitted point on the pane.
-  const mirrorRoot=doc.createNode('COBALT_CABIN_MIRROR').setTranslation([0,.630,.520]).setRotation(new T.Quaternion().setFromEuler(new T.Euler(-.06,-.16,0)).toArray());root.addChild(mirrorRoot);
+  // The housing hangs below the windscreen mounting pad. Moving its centre
+  // toward the pane keeps the complete mirror in the normal driver's view.
+  const mirrorRotation=new T.Quaternion().setFromEuler(new T.Euler(-.06,-.16,0));
+  const mirrorPosition=new T.Vector3(.060,.645,.495);
+  const mirrorRoot=doc.createNode('COBALT_CABIN_MIRROR').setTranslation(mirrorPosition.toArray()).setRotation(mirrorRotation.toArray());root.addChild(mirrorRoot);
   const mirrorPart=(g,mat,name,p=[0,0,0],r=[0,0,0])=>emit(g,mat,name,p,r,mirrorRoot);
   const outline=new T.Shape();outline.moveTo(-.108,.031);
   outline.quadraticCurveTo(0,.043,.108,.031);outline.quadraticCurveTo(.122,.028,.122,.012);
@@ -331,11 +333,14 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
     glassUv.setXY(i,(glassPosition.getX(i)-glassBounds.min.x)/(glassBounds.max.x-glassBounds.min.x),1-(glassPosition.getY(i)-glassBounds.min.y)/(glassBounds.max.y-glassBounds.min.y));
   }
   mirrorPart(glass,mirror,'COBALT_CabinMirrorGlass',[0,0,-.0144]);
-  const armCurve=new T.CatmullRomCurve3([new T.Vector3(0,.025,.010),new T.Vector3(.010,.030,.040),new T.Vector3(.020196,.014295,.075149)]);
+  const mount=new T.Vector3(0,.697,.492).sub(mirrorPosition).applyQuaternion(mirrorRotation.clone().invert());
+  const armCurve=new T.CatmullRomCurve3([new T.Vector3(0,.025,.010),mount.clone().lerp(new T.Vector3(0,.025,.010),.45),mount]);
   mirrorPart(new T.TubeGeometry(armCurve,4,.0065,8,false),mirrorShell,'COBALT_CabinMirrorArm');
-  mirrorPart(new RoundedBoxGeometry(.026,.031,.010,1,.003),mirrorShell,'COBALT_CabinMirrorMount',[.020196,.022295,.062149],[-1.08,0,0]);
+  mirrorPart(new RoundedBoxGeometry(.026,.031,.010,1,.003),mirrorShell,'COBALT_CabinMirrorMount',mount.toArray(),[-1.08,0,0]);
   const mirrorTab=shape([[-.010,-.039],[.010,-.039],[.008,-.054],[-.008,-.054]]);
   mirrorPart(shaped(mirrorTab,.005,.001,{bevelSegments:1,curveSegments:1}),mirrorShell,'COBALT_CabinMirrorDayNight',[0,0,.003],[-.22,0,0]);
-  for(const x of [-.34,.34])box(.294,.098,.024,mats.headliner,[x,.738,.22],[Math.PI/2,0,0],.015);
+  // Visors use the cabin frame, bypassing the centre-stack proportions.
+  // Their upper faces sit beneath the headliner instead of inside its mesh.
+  for(const x of [-.34,.34])add(new RoundedBoxGeometry(.330,.105,.018,1,.008),mats.headliner,[x,.710,.20],[Math.PI/2,0,0],`COBALT_SunVisor_${x>0?'Left':'Right'}`);
   await buildCobaltUpholstery({doc,root,mats,material,svgTexture,put,emit});
 }

@@ -9,6 +9,7 @@ import { frontGrilleMaterials,interiorTrimMaterials,fitRoofLining,buildRoofSeals
 import { trimSourceInterior,lineRearWheelWells,refineRearCabinTrim } from './cobalt-interior.mjs';
 import { fitFrontPillarFeet } from './cobalt-pillar-fit.mjs';
 import { buildMirrorSwitch } from './cobalt-mirror-switch.mjs';
+import { buildUpperCabinTrim } from './cobalt-upper-trim.mjs';
 import { extractRearGlassExterior,extractSideMirror } from './cobalt-glass.mjs';
 import {buildSideMirrorMounts,rebuildSideMirrorShells} from './cobalt-mirror-mount.mjs';
 
@@ -65,7 +66,9 @@ export async function refineCar(doc){
         correctedMeshes++;continue;
       }
       if(source?.getName()==='Realistic_Car_Paint'){
-        source.setBaseColorFactor([...color(0xeeefeb),1]).setMetallicFactor(.025).setRoughnessFactor(.28);
+        // The painted shell faces outwards. Rendering its back faces inside
+        // the cabin exposed white metal flaps through the fitted roof lining.
+        source.setBaseColorFactor([...color(0xeeefeb),1]).setMetallicFactor(.025).setRoughnessFactor(.28).setDoubleSided(false);
         source.getExtension('KHR_materials_clearcoat')?.setClearcoatFactor(.85).setClearcoatRoughnessFactor(.16);
         interiorTrimMaterials({doc,buffer,node,primitive,worldPoint,trim:mats.headliner,belt:mats.rubber});
         correctedMeshes++;continue;
@@ -198,6 +201,7 @@ export async function refineCar(doc){
   for(const [mat,geometries]of batches){const indexed=geometries.map(g=>g.index?g.toNonIndexed():g);const merged=mergeGeometries(indexed);if(!merged)throw new Error(`Could not batch ${mat.getName()}`);emit(merged,mat,`COBALT_Detail_${mat.getName()}`);}
   refineCabinRailMaterials({doc,buffer,nodes:originalNodes,worldPoint,lining:mats.headliner});
   const fittedRoofVertices=fitRoofLining(doc,buffer,normalize);
+  buildUpperCabinTrim({doc,buffer,nodes:originalNodes,worldPoint,lining:mats.headliner,seam:material('COBALT_HeadlinerJoint',0x292b28,0,1),weatherstrip:material('COBALT_CabinWindowSeals',0x1b1c1a,0,1).setDoubleSided(true),put});
   const specular=doc.createExtension(KHRMaterialsSpecular);
   const matte=(name,hex)=>material(name,hex,0,1).setExtension('KHR_materials_specular',specular.createSpecular().setSpecularFactor(.12));
   const rearTrim=refineRearCabinTrim({doc,buffer,nodes:originalNodes,worldPoint,shelf:matte('COBALT_ParcelShelf',0x575b58),lining:matte('COBALT_RearPillarTrim',0xb1b2aa)});

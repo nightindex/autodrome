@@ -66,10 +66,14 @@
 .startup-hint{position:absolute;left:var(--hud-gap);bottom:24px;max-width:340px;padding:8px 8px 8px 16px;display:flex;align-items:center;gap:8px;background:#214c3df5;color:#fffdf2;font-size:12px;line-height:1.7;border-radius:6px}
 .startup-hint>span{min-width:0}
 #quick-controls-button{pointer-events:auto;flex:none;display:grid;place-items:center;width:44px;height:44px;padding:0;border:1px solid #ffffff66;border-radius:5px;background:#ffffff14;color:inherit}
+#quick-controls-button svg{display:block;width:24px;height:24px}
 #quick-controls-button:hover{background:#ffffff30}
-.startup-hint.collapsed{padding:0;max-width:none;background:transparent}
-.startup-hint.collapsed #quick-controls-button{background:#214c3df5}
-.startup-hint.collapsed #quick-controls-button:hover{background:#163c2d}
+.startup-hint.collapsed,
+#hud[data-practice=true][data-free=false] .startup-hint{padding:0;max-width:none;background:transparent}
+.startup-hint.collapsed #quick-controls-button,
+#hud[data-practice=true][data-free=false] #quick-controls-button{background:#214c3df5}
+.startup-hint.collapsed #quick-controls-button:hover,
+#hud[data-practice=true][data-free=false] #quick-controls-button:hover{background:#163c2d}
 #hud[data-controls-open=true] .startup-hint{display:none}
 #hud[data-controls-open=true] .exercise-card{display:none}
 #recovery-prompt{position:absolute;left:50%;bottom:32px;transform:translateX(-50%);width:320px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 128px);overflow:auto;padding:14px 16px;background:var(--hud-paper);border:1px solid #cbd5c1;border-radius:8px;z-index:11;pointer-events:auto;color:var(--hud-ink)}

@@ -32,5 +32,19 @@ try{
   await page.evaluate(p=>window.seamPose=p,{target,fov,side});await page.waitForTimeout(350);
   const key=`${side===1?'left':'right'}-${name}`;await page.screenshot({path:`${directory}/${key}.png`});probes[key]=await page.evaluate(()=>window.seamProbes());
  }
- assert.deepEqual(errors,[]);await writeFile(`${directory}/report.json`,JSON.stringify({probes,errors},null,2));console.log(JSON.stringify({directory,errors}));
+ const sealChecks=await page.evaluate(async()=>{
+  const T=await import('/node_modules/three/build/three.module.js'),s=window.__avtodrom.scene,checks=[];
+  for(const side of [-1,1])for(const prefix of ['COBALT_WindscreenPillarSeal','COBALT_DoorPillarSeal','COBALT_UpperPillarJoint','COBALT_WindscreenHeaderSeal']){
+   const name=prefix==='COBALT_WindscreenHeaderSeal'?prefix:`${prefix}_${side}`,mesh=s.car.getObjectByName(name),p=mesh.geometry.getAttribute('position'),ix=mesh.geometry.index;
+   const eye=s.cockpitEye.clone();eye.x=Math.abs(eye.x)*side;s.car.localToWorld(eye);let visible=0,total=0;
+   for(let i=0;i<(ix?.count??p.count);i+=3){
+    const target=new T.Vector3();for(let j=0;j<3;j++)target.add(new T.Vector3().fromBufferAttribute(p,ix?ix.getX(i+j):i+j));target.multiplyScalar(1/3).applyMatrix4(mesh.matrixWorld);
+    const ray=new T.Raycaster(eye,target.sub(eye).normalize()),hit=ray.intersectObject(s.car,true).find(h=>h.object.material.opacity>.9);
+    if(hit?.object===mesh)visible++;total++;
+   }
+   checks.push({name,visible,total,dark:Math.max(...mesh.material.color.toArray())<.04});
+  }return checks;
+ });
+ for(const check of sealChecks){assert(check.dark,`Dark rubber and panel joint: ${JSON.stringify(check)}`);assert(check.visible/check.total>=.5,`Visible trim line from the seat: ${JSON.stringify(check)}`);}
+ assert.deepEqual(errors,[]);await writeFile(`${directory}/report.json`,JSON.stringify({probes,sealChecks,errors},null,2));console.log(JSON.stringify({directory,sealChecks,errors}));
 }finally{await browser.close();}

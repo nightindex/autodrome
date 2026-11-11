@@ -3,7 +3,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import * as T from 'three';
 
-const surfaces:T.Mesh[]=[],material=new T.MeshBasicMaterial({side:T.DoubleSide});
+const surfaces:T.Mesh[]=[],glazing:T.Mesh[]=[],material=new T.MeshBasicMaterial({side:T.DoubleSide});
 const mirrorSwitchFrame=new T.Matrix4();
 beforeAll(async()=>{
   const doc=await new NodeIO().registerExtensions(ALL_EXTENSIONS).read('public/assets/cobalt.glb');
@@ -13,15 +13,15 @@ beforeAll(async()=>{
   expect(mirrorSwitch,'physical mirror-switch assembly').toBeDefined();
   mirrorSwitchFrame.copy(normalize).multiply(new T.Matrix4().fromArray(mirrorSwitch!.getWorldMatrix()));
   for(const node of doc.getRoot().listNodes())for(const p of node.getMesh()?.listPrimitives()??[]){
-    const source=p.getMaterial();if(!source||source.getAlphaMode()==='BLEND')continue;
+    const source=p.getMaterial();if(!source||source.getAlphaMode()==='BLEND'&&source.getName()!=='COBALT_Windshield')continue;
     const geometry=new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(p.getAttribute('POSITION')!.getArray()!,3));
     if(p.getAttribute('NORMAL'))geometry.setAttribute('normal',new T.Float32BufferAttribute(p.getAttribute('NORMAL')!.getArray()!,3));
     if(p.getIndices())geometry.setIndex(Array.from(p.getIndices()!.getArray()!));
     geometry.applyMatrix4(normalize.clone().multiply(new T.Matrix4().fromArray(node.getWorldMatrix())));
-    const mesh=new T.Mesh(geometry,material);mesh.name=node.getName();mesh.userData.material=source.getName();mesh.userData.doubleSided=source.getDoubleSided();mesh.updateMatrixWorld();surfaces.push(mesh);
+    const mesh=new T.Mesh(geometry,material);mesh.name=node.getName();mesh.userData.material=source.getName();mesh.userData.doubleSided=source.getDoubleSided();mesh.updateMatrixWorld();(source.getAlphaMode()==='BLEND'?glazing:surfaces).push(mesh);
   }
 });
-afterAll(()=>{surfaces.forEach(mesh=>mesh.geometry.dispose());material.dispose();});
+afterAll(()=>{[...surfaces,...glazing].forEach(mesh=>mesh.geometry.dispose());material.dispose();});
 const cast=(origin:T.Vector3,direction:T.Vector3,targets=surfaces)=>new T.Raycaster(origin,direction,0,3).intersectObjects(targets,false).find(hit=>hit.object.userData.doubleSided||hit.face!.normal.dot(direction)<0);
 // Match the close-up reference camera and mirror its probes for the other side.
 const castPillarPhotoPixel=(side:number,x:number,y:number)=>{
@@ -33,6 +33,65 @@ const castPillarPhotoPixel=(side:number,x:number,y:number)=>{
 };
 
 describe('cabin surfaces fit their supports',()=>{
+  it('covers the mirror-sail corner with continuous dark trim below the pale pillar',()=>{
+    for(const side of [-1,1])for(const [y,z]of [[.415,.740],[.440,.770]]){
+      const x=.6851625-(.272/.960)*(y-.3489)-(.066/.960)*(z-.8355)-.0008;
+      const eye=new T.Vector3(side*.31,.552,.016),target=new T.Vector3(side*x,y,z);
+      const hit=cast(eye,target.sub(eye).normalize());expect(['COBALT_Rubber','COBALT_SideMirrorHousing'],`dark sail corner ${side},${y},${z},${hit?.object.name}`).toContain(hit?.object.userData.material);
+    }
+  });
+  it('shows cabin lining instead of the back of the painted shell at the upper windscreen corners',()=>{
+    for(const side of [-1,1])for(const [x,y,z]of [[.56737,.69639,.35525],[.56616,.71256,.34150],[.531,.706,.400]]){
+      const eye=new T.Vector3(side*.31,.552,.016),target=new T.Vector3(side*x,y,z);
+      const direction=target.sub(eye).normalize(),hit=cast(eye,direction);
+      if(hit)expect(['COBALT_Headliner','COBALT_HeadlinerJoint','COBALT_CabinWindowSeals'],`clean upper corner ${side},${x},${y},${z}`).toContain(hit.object.userData.material);
+      else expect(cast(eye,direction,glazing),`glazed upper corner ${side},${x},${y},${z}`).toBeDefined();
+    }
+  });
+  it('keeps the cowl pocket caps below the exterior front wings and bonnet',()=>{
+    const paint=surfaces.filter(mesh=>mesh.userData.material==='Realistic_Car_Paint'&&/^(chassis_primary|bonnet_ok)/.test(mesh.name));
+    let checked=0;
+    for(const side of [-1,1])for(const x of [.735,.745,.750])for(const z of [1.10,1.18,1.26,1.30]){
+      const origin=new T.Vector3(side*x,.7,z),down=new T.Vector3(0,-1,0);
+      if(!cast(origin,down,paint))continue;
+      expect(cast(origin,down)?.object.userData.material,`clean outer cowl ${side*x},${z}`).toBe('Realistic_Car_Paint');checked++;
+    }
+    expect(checked).toBeGreaterThan(12);
+  });
+  it('keeps the exposed front-door B-pillar frames uniformly dark below the roof rail',()=>{
+    let checked=0;
+    for(const mesh of surfaces.filter(mesh=>/^door_[lr]f_ok_door_rr/.test(mesh.name))){
+      const p=mesh.geometry.getAttribute('position'),ix=mesh.geometry.index?.array??Uint32Array.from({length:p.count},(_,i)=>i);
+      for(let i=0;i<ix.length;i+=3){
+        const center=new T.Vector3();for(let j=0;j<3;j++)center.add(new T.Vector3().fromBufferAttribute(p,ix[i+j]));center.divideScalar(3);
+        if(center.z<-.35||center.z>.28||center.y<.43||center.y>.63)continue;
+        expect(mesh.userData.material,`dark B-pillar frame ${center.toArray()}`).not.toBe('COBALT_Headliner');checked++;
+      }
+    }
+    expect(checked).toBeGreaterThan(10);
+  });
+  it('keeps the upper dashboard free of broken trim arcs and stray dark panel lines',()=>{
+    const expected=['COBALT_MouldedDashboard','COBALT_InstrumentHood','COBALT_DashboardTray','COBALT_DashboardTrayRim','COBALT_UpperTraySurround'];
+    for(const x of [-.14,-.07,0,.07,.14])for(const z of [.984,.998,1.020]){
+      const hit=cast(new T.Vector3(x,.7,z),new T.Vector3(0,-1,0));
+      expect(expected,`clean upper panel at ${x},${z}: ${hit?.object.name}`).toContain(hit?.object.name);
+    }
+  });
+  it('closes the upper pillar seams against the headliner and pillar on both sides',()=>{
+    const roof=surfaces.find(mesh=>mesh.name==='COBALT_FrontHeadliner')!;
+    expect(roof).toBeDefined();
+    for(const side of [-1,1]){
+      const pillar=surfaces.find(mesh=>mesh.name===`COBALT_UpperPillar_${side}`)!;
+      const joint=surfaces.find(mesh=>mesh.name===`COBALT_UpperPillarJoint_${side}`)!;
+      expect(pillar).toBeDefined();expect(joint).toBeDefined();
+      const neighbours=[roof,pillar].flatMap(mesh=>{const p=mesh.geometry.getAttribute('position');return Array.from({length:p.count},(_,i)=>new T.Vector3().fromBufferAttribute(p,i));});
+      const position=joint.geometry.getAttribute('position');
+      for(let i=0;i<position.count;i++){
+        const point=new T.Vector3().fromBufferAttribute(position,i);
+        expect(Math.min(...neighbours.map(p=>p.distanceTo(point))),`closed upper joint ${side},${i}`).toBeLessThan(.000002);
+      }
+    }
+  });
   it('forms a passenger shelf with real depth behind its rolled upper edge',()=>{
     for(const x of [-.54,-.42,-.30]){
       const back=cast(new T.Vector3(x,0,.50),new T.Vector3(0,0,1));
@@ -127,10 +186,10 @@ describe('cabin surfaces fit their supports',()=>{
       expect(['COBALT_LowerDash','COBALT_Dashboard','COBALT_Rubber','COBALT_SideMirrorHousing'],`dark bezel clearance ${eye.toArray()},${x},${y}`).toContain(backdrop?.object.userData.material);
     }
   });
-  it('matches both door-side pillar returns to the surrounding grey trim',()=>{
+  it('matches both door-side pillar returns to the surrounding dark sail trim',()=>{
     for(const side of [-1,1]){
       const eye=new T.Vector3(side*.31,.48,.2),target=new T.Vector3(side*.66148,.38562,.82670);
-      expect(cast(eye,target.sub(eye).normalize())?.object.userData.material,`grey door-side pillar return ${side}`).toBe('COBALT_Dashboard');
+      expect(cast(eye,target.sub(eye).normalize())?.object.userData.material,`dark door-side pillar return ${side}`).toBe('COBALT_Rubber');
     }
   });
   it('keeps exposed painted shards out of the dark window ledges below both mirrors',()=>{

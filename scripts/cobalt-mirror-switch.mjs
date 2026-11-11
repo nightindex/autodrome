@@ -3,6 +3,22 @@ import * as T from 'three';
 /** Electric mirror switch on the driver's triangular sail trim, as photographed. */
 export async function buildMirrorSwitch({doc,root,mats,material,svgTexture,emit}){
   const mountingNormal=new T.Vector3(-.960,-.272,-.066).normalize();
+  // One continuous, rounded sail moulding replaces the exposed overlapping
+  // source returns. Its plane is the actual switch mounting support, keeping
+  // the rear of the control flush while the pillar overlaps its front edge.
+  for(const side of [-1,1]){
+    const shape=new T.Shape();shape.moveTo(.705,.302);shape.lineTo(.708,.388);
+    shape.quadraticCurveTo(.713,.407,.750,.433);shape.quadraticCurveTo(.780,.439,.812,.431);
+    shape.quadraticCurveTo(.850,.415,.875,.397);shape.lineTo(.951,.320);
+    shape.quadraticCurveTo(.963,.301,.947,.292);shape.lineTo(.735,.292);shape.quadraticCurveTo(.711,.292,.705,.302);shape.closePath();
+    const geometry=new T.ShapeGeometry(shape,6),p=geometry.getAttribute('position');
+    for(let i=0;i<p.count;i++){
+      const z=p.getX(i),y=p.getY(i),x=.6851625-(.272/.960)*(y-.3489)-(.066/.960)*(z-.8355)-.0008;
+      p.setXYZ(i,side*x,y,z);
+    }
+    if(side<0){const ix=geometry.index;for(let i=0;i<ix.count;i+=3){const a=ix.getX(i);ix.setX(i,ix.getX(i+1));ix.setX(i+1,a);}}
+    geometry.computeVertexNormals();emit(geometry,mats.rubber,`COBALT_INNER_MirrorSailTrim_${side}`);
+  }
   // The factory control sits on an inward-facing pad. A switch coplanar with
   // the door becomes edge-on from the driver's eye and hides its markings.
   const normal=new T.Vector3(-.65,.05,-.758).normalize();

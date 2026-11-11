@@ -204,7 +204,7 @@ export function refineCabinRailMaterials({doc,buffer,nodes,worldPoint,lining}){
       if(!['COBALT_SideMirrorHousing','bump_front_ok.014'].includes(primitive.getMaterial()?.getName()))continue;
       const position=primitive.getAttribute('POSITION'),indices=primitive.getIndices()?.getArray()??Uint32Array.from({length:position.getCount()},(_,i)=>i);
       const attributes=primitive.listSemantics().map(semantic=>({semantic,accessor:primitive.getAttribute(semantic)})),groups=new Map();
-      const planes=[p=>p.y-.42,p=>.82-p.y,p=>.705-p.x,p=>.705+p.x,p=>p.z+.95,p=>1.12-p.z];
+      const planes=[p=>p.y-.45,p=>.82-p.y,p=>.705-p.x,p=>.705+p.x,p=>p.z+.95,p=>1.12-p.z];
       const vertex=i=>({point:worldPoint(node,position,i),values:attributes.map(({accessor:a})=>Array.from(a.getArray().slice(i*a.getElementSize(),(i+1)*a.getElementSize())))});
       const clip=(polygon,field,inside)=>{
         if(!polygon.length)return [];const out=[],sign=inside?1:-1;let a=polygon.at(-1),da=field(a.point)*sign;
@@ -221,10 +221,18 @@ export function refineCabinRailMaterials({doc,buffer,nodes,worldPoint,lining}){
       };
       for(let i=0;i<indices.length;i+=3){
         let polygon=[0,1,2].map(j=>vertex(indices[i+j]));
-        // Split at the actual trim boundary, never at triangle centroids.
-        // Adjacent triangles then share an exact edge instead of saw teeth.
-        for(const plane of planes){add(clip(polygon,plane,false),primitive.getMaterial());polygon=clip(polygon,plane,true);}
-        add(polygon,lining);
+        // Pale trim belongs to the A-pillar and the inboard ceiling rail.
+        // The source front-door mesh also contains the exposed B-pillar;
+        // clipping its broad faces at x=+/- .705 left pale polygon patches
+        // visible from outside the side windows.
+        let rear=clip(polygon,p=>p.z-.30,false);
+        add(clip(rear,p=>p.y-.64,false),primitive.getMaterial());rear=clip(rear,p=>p.y-.64,true);
+        for(const field of [p=>.64-p.x,p=>.64+p.x]){add(clip(rear,field,false),primitive.getMaterial());rear=clip(rear,field,true);}
+        for(let fragment of [clip(polygon,p=>p.z-.30,true),rear]){
+          // Split at exact boundaries so adjacent triangles share an edge.
+          for(const plane of planes){add(clip(fragment,plane,false),primitive.getMaterial());fragment=clip(fragment,plane,true);}
+          add(fragment,lining);
+        }
       }
       if(!groups.has(lining))continue;
       for(const [material,arrays]of groups){
