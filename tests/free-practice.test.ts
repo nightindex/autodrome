@@ -85,6 +85,15 @@ describe('free practice observes the actual roads without an assigned itinerary'
     run.tick(approach(point,normal,-1.1,{signedSpeed:-1}));
     expect(run.engine.events.map(e=>e.ruleId)).toEqual([13,14]);
   });
+  it('keeps a completed hill hold during a small rollback, re-stop and forward launch',()=>{
+    const run=trip(),{point,normal}=course.exercises[2].stop!,edge=stopLineApproachEdge(point,normal);
+    run.tick(approach(edge,normal,-.5,{speed:0,signedSpeed:0}),3);
+    expect(run.engine.exercise).toBe('hill');expect(run.engine.stoppedCorrectly).toBe(true);
+    for(const [along,speed,signedSpeed]of [[-.52,.16,-.16],[-.53,0,0],[-.55,.18,-.18],[-.56,0,0],[-.54,.2,.2]]){
+      expect(run.tick(approach(edge,normal,along,{speed,signedSpeed})).newVisit).toBe(false);
+    }
+    expect(run.engine.events).toEqual([]);expect(run.engine.stoppedCorrectly).toBe(true);
+  });
   for(const id of ['rightAngle','snake']as const)it(`checks control lines and the time spent inside ${id}`,()=>{
     const run=trip(),e=course.exercises.find(e=>e.id===id)!;
     run.tick(sample(e.spawn,e.yaw,{wheels:[{x:200,z:200}]}),121);

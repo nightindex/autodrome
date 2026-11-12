@@ -16,6 +16,7 @@ export function addRailwayColliders(world:RAPIER.World,surfaces:Set<number>){
     const collider=world.createCollider(shape.setTranslation(c.center.x,0,c.center.z).setFriction(friction).setRestitution(0));
     surfaces.add(collider.handle);colliders.push(collider);
   };
+  // The video crossing ends at the road edges; the verges keep normal terrain.
   railwayRailCenters.forEach(offset=>add(railwayRailHeadProfile,offset,.6));
   railwayDeckProfiles.forEach(({profile})=>add(profile,0,.9));
   return colliders;

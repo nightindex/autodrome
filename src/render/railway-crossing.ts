@@ -20,13 +20,13 @@ function concreteGrain(){
 
 export function createRailwayCrossing(){
   const c=railwayCrossing,group=new T.Group();group.name='railway-crossing';group.position.set(c.center.x,0,c.center.z);
-  group.userData={gauge:c.gauge,railTop:c.railTop,deckTop:c.deckTop,sleepers:railwaySleeperCenters.length,referenceVideo:'uz_video.mp4',referenceFrames:[428,450,451,452]};
+  group.userData={gauge:c.gauge,railTop:c.railTop,deckTop:c.deckTop,sleepers:railwaySleeperCenters.length,totalSleepers:railwaySleeperCenters.length,trackLength:c.length,deckPanels:6,referenceVideo:'uz_video.mp4',referenceFrames:[428,450,451,452]};
   const rust=new T.MeshStandardMaterial({color:0x604632,metalness:.65,roughness:.76});
   const polished=new T.MeshStandardMaterial({color:0xb3b7b3,metalness:.85,roughness:.34});
   const dark=new T.MeshStandardMaterial({color:0x242927,roughness:.98});
   const grain=concreteGrain();
   const board=new T.MeshStandardMaterial({color:0xffffff,vertexColors:true,map:grain,bumpMap:grain,bumpScale:.002,roughness:.97});
-  const infill=new T.MeshStandardMaterial({color:0x696c65,map:grain,bumpMap:grain,bumpScale:.0025,roughness:1});
+  const infill=new T.MeshStandardMaterial({color:0x41443e,map:grain,bumpMap:grain,bumpScale:.0025,roughness:1});
   const timber=new T.MeshStandardMaterial({color:0x544638,roughness:.95});
   const fastener=new T.MeshStandardMaterial({color:0x41433f,metalness:.65,roughness:.65});
   const add=(name:string,geometry:T.BufferGeometry,material:T.Material|T.Material[])=>{
@@ -39,7 +39,7 @@ export function createRailwayCrossing(){
   // Full sleepers, baseplates, bolts and spring clips support the I-section
   // below the embedded road deck. They are not raised obstacles for cars.
   for(const [index,x]of railwaySleeperCenters.entries()){
-    box(`railway-sleeper-${index}`,c.sleeperWidth,.14,2.5,x,railBottom-.084,0,timber);
+    box(`railway-sleeper-${index}`,c.sleeperWidth,.14,2.6,x,railBottom-.084,0,timber);
     for(const z of railwayRailCenters){
       box('railway-baseplate',.24,.014,.22,x,railBottom-.007,z,fastener);
       for(const side of [-1,1]){
@@ -62,28 +62,28 @@ export function createRailwayCrossing(){
       const materialIndex=top?1:0,last=head.groups.at(-1);
       if(last?.materialIndex===materialIndex)last.count+=3;else head.addGroup(i,3,materialIndex);
     }
-    add(`railway-rail-head-${index}`,head,[rust,polished]).position.z=z;
-    add(`railway-rail-web-${index}`,railwaySectionGeometry(railwayRailBodyProfile,c.length),rust).position.z=z;
+    add(`railway-rail-head-${index}`,head,[rust,polished]).position.set(0,0,z);
+    add(`railway-rail-web-${index}`,railwaySectionGeometry(railwayRailBodyProfile,c.length),rust).position.set(0,0,z);
     const innerFace=z-Math.sign(z)*c.headWidth/2;
     const groove=add(`railway-flangeway-${index}`,new T.BoxGeometry(c.length,.002,c.grooveWidth),dark);
     groove.position.set(0,.021,innerFace-Math.sign(z)*c.grooveWidth/2);
   }
   for(const [index,{profile}]of railwayDeckProfiles.entries()){
-    // Separate weathered deck boards and packed infill retain the transverse
-    // rhythm in the video without turning it into painted pedestrian stripes.
-    const from=Math.min(...profile.map(p=>p[0])),to=Math.max(...profile.map(p=>p[0])),bevel=.006;
+    // Six precast panels form a continuous crossing deck. Narrow construction
+    // joints replace the old alternating pale boards and dark zebra-like gaps.
+    const from=Math.min(...profile.map(p=>p[0])),to=Math.max(...profile.map(p=>p[0])),bevel=.003;
     const boardProfile:RailwaySection=[[from,-.07],[to,-.07],[to,c.deckTop-bevel],[to-bevel,c.deckTop],[from+bevel,c.deckTop],[from,c.deckTop-bevel]];
-    let end=-c.length/2;
-    for(const [i,x]of railwaySleeperCenters.entries()){
-      const a=x-c.sleeperWidth/2,b=x+c.sleeperWidth/2;
-      const fill=add(`railway-infill-${index}-${i}`,railwaySectionGeometry(profile,a-end),infill);fill.position.x=(a+end)/2;
-      const geometry=railwaySectionGeometry(boardProfile,c.sleeperWidth),position=geometry.getAttribute('position'),normal=geometry.getAttribute('normal');
-      const color=new T.Color(0xbab6a8).multiplyScalar(1-(i%3)*.025),colors=[];
+    const base=profile.map(([z,y])=>[z,y>0?y-.006:y]as const);
+    add(`railway-infill-${index}`,railwaySectionGeometry(base,c.length),infill);
+    const panels=6,pitch=c.length/panels;
+    for(let i=0;i<panels;i++){
+      const x=-c.length/2+(i+.5)*pitch;
+      const geometry=railwaySectionGeometry(boardProfile,pitch-.008),position=geometry.getAttribute('position'),normal=geometry.getAttribute('normal');
+      const color=new T.Color(0x87877b).multiplyScalar(1-(i%3)*.008),colors=[];
       for(let j=0;j<position.count;j++){const shade=normal.getY(j)>.5?1:.76;colors.push(color.r*shade,color.g*shade,color.b*shade);}
       geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));
-      add(`railway-board-${index}-${i}`,geometry,board).position.x=x;end=b;
+      add(`railway-board-${index}-${i}`,geometry,board).position.x=x;
     }
-    const fill=add(`railway-infill-${index}-end`,railwaySectionGeometry(profile,c.length/2-end),infill);fill.position.x=(c.length/2+end)/2;
   }
   // Batch repetitive boards and buried fasteners; only the two railheads
   // retain separate crown/side materials for their running highlights.

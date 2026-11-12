@@ -84,11 +84,75 @@ describe('cabin surfaces fit their supports',()=>{
       const pillar=surfaces.find(mesh=>mesh.name===`COBALT_UpperPillar_${side}`)!;
       const joint=surfaces.find(mesh=>mesh.name===`COBALT_UpperPillarJoint_${side}`)!;
       expect(pillar).toBeDefined();expect(joint).toBeDefined();
-      const neighbours=[roof,pillar].flatMap(mesh=>{const p=mesh.geometry.getAttribute('position');return Array.from({length:p.count},(_,i)=>new T.Vector3().fromBufferAttribute(p,i));});
+      const seals=surfaces.filter(mesh=>mesh.name===`COBALT_DoorPillarSeal_${side}`||mesh.name===`COBALT_WindscreenPillarSeal_${side}`);
+      const neighbours=[roof,pillar,...seals].flatMap(mesh=>{const p=mesh.geometry.getAttribute('position');return Array.from({length:p.count},(_,i)=>new T.Vector3().fromBufferAttribute(p,i));});
       const position=joint.geometry.getAttribute('position');
       for(let i=0;i<position.count;i++){
         const point=new T.Vector3().fromBufferAttribute(position,i);
         expect(Math.min(...neighbours.map(p=>p.distanceTo(point))),`closed upper joint ${side},${i}`).toBeLessThan(.000002);
+      }
+    }
+  });
+  it('replaces the overlapping middle pillar sheets and gives the rubber its own faces',()=>{
+    for(const side of [-1,1]){
+      const pillar=surfaces.find(mesh=>mesh.name===`COBALT_UpperPillar_${side}`)!;
+      const box=new T.Box3().setFromObject(pillar);
+      expect(box.min.y).toBeCloseTo(.4399,5);
+      const source=surfaces.filter(mesh=>mesh.userData.material==='COBALT_Headliner'&&!mesh.name.startsWith('COBALT_'));
+      for(const mesh of source){
+        const p=mesh.geometry.getAttribute('position'),ix=mesh.geometry.index?.array??Uint32Array.from({length:p.count},(_,i)=>i);
+        for(let i=0;i<ix.length;i+=3){
+          const center=new T.Vector3();for(let j=0;j<3;j++)center.add(new T.Vector3().fromBufferAttribute(p,ix[i+j]));center.divideScalar(3);
+          expect(center.y>.44001&&center.y<.55&&center.z>.3&&side*center.x>.5,`removed duplicate middle trim ${mesh.name}`).toBe(false);
+        }
+      }
+      for(const name of ['Door','Windscreen']){
+        const seal=surfaces.find(mesh=>mesh.name===`COBALT_${name}PillarSeal_${side}`)!;
+        const p=seal.geometry.getAttribute('position'),ix=seal.geometry.index!.array;
+        for(let i=0;i<ix.length;i+=30){
+          const [a,b,c]=[0,1,2].map(j=>new T.Vector3().fromBufferAttribute(p,ix[i+j]));
+          const center=a.clone().add(b).add(c).divideScalar(3),normal=b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+          const hits=new T.Raycaster(center.clone().addScaledVector(normal,.0001),normal.negate(),0,.0002).intersectObject(pillar);
+          expect(hits.length,`rubber must not overlay pale trim: ${seal.name},${i}`).toBe(0);
+        }
+      }
+    }
+  });
+  it('keeps the pillar silhouette and shading smooth across the lower loft join',()=>{
+    const skin=surfaces.filter(mesh=>mesh.userData.material==='COBALT_Headliner'&&/^(COBALT_UpperPillar_|interior_interior)/.test(mesh.name));
+    for(const side of [-1,1])for(const z of [.76,.78,.80,.82]){
+      const hits=[.4359,.4399,.4439].map(y=>cast(new T.Vector3(0,y,z),new T.Vector3(side,0,0),skin));
+      expect(hits.every(Boolean),`continuous pillar skin ${side},${z}`).toBe(true);
+      const x=hits.map(hit=>Math.abs(hit!.point.x));
+      const lowerSlope=(x[1]-x[0])/.004,upperSlope=(x[2]-x[1])/.004;
+      // The final sample crosses the rounded windscreen lip rather than the
+      // broad face: allow its curvature, while rejecting the old .21+ kink.
+      expect(Math.abs(upperSlope-lowerSlope),`no silhouette kink ${side},${z}`).toBeLessThan(z<.82?.04:.08);
+      // Allow the moulding's gentle curvature over this 8 mm strip.
+      if(z<.82)expect(hits[0]!.normal!.dot(hits[2]!.normal!),`continuous broad-face shading ${side},${z}`).toBeGreaterThan(Math.cos(4*Math.PI/180));
+    }
+  });
+  it('keeps both windscreen-side pillar edges free of a bulging middle section',()=>{
+    for(const side of [-1,1]){
+      const skin=surfaces.filter(mesh=>mesh.name===`COBALT_UpperPillar_${side}`||mesh.name===`COBALT_WindscreenPillarSeal_${side}`);
+      const frontAt=(y:number)=>{
+        let front=-Infinity;
+        for(const mesh of skin){
+          const p=mesh.geometry.getAttribute('position'),ix=mesh.geometry.index!.array;
+          for(let i=0;i<ix.length;i+=3)for(let j=0;j<3;j++){
+            const a=new T.Vector3().fromBufferAttribute(p,ix[i+j]),b=new T.Vector3().fromBufferAttribute(p,ix[i+(j+1)%3]);
+            if((a.y>=y)===(b.y>=y))continue;
+            front=Math.max(front,T.MathUtils.lerp(a.z,b.z,(y-a.y)/(b.y-a.y)));
+          }
+        }
+        expect(Number.isFinite(front),`pillar section ${side},${y}`).toBe(true);return front;
+      };
+      const bottom=frontAt(.46),top=frontAt(.64);
+      for(const y of [.48,.50,.52,.54,.56,.58,.60,.62]){
+        const chord=T.MathUtils.lerp(bottom,top,(y-.46)/.18);
+        // A gentle taper is allowed; the former pinned donor section bulged
+        // over 60 mm beyond this line despite having smooth local tangents.
+        expect(Math.abs(frontAt(y)-chord),`straight pillar edge ${side},${y}`).toBeLessThan(.015);
       }
     }
   });
@@ -375,14 +439,33 @@ describe('cabin surfaces fit their supports',()=>{
     }
   });
   it('exposes the defrost slots above the dashboard crown',()=>{
-    const dashboard=surfaces.find(mesh=>mesh.name==='COBALT_MouldedDashboard')!;
+    const dashboard=surfaces.filter(mesh=>/^COBALT_MouldedDashboard(?:Cowl)?$/.test(mesh.name));
     for(const side of [-1,1])for(const z of [1.055,1.079,1.103]){
-      const origin=new T.Vector3(side*.43,.6,z),direction=new T.Vector3(0,-1,0),visible=cast(origin,direction),support=cast(origin,direction,[dashboard]);
+      const origin=new T.Vector3(side*.43,.6,z),direction=new T.Vector3(0,-1,0),visible=cast(origin,direction),support=cast(origin,direction,dashboard);
       expect(visible?.object.name,`defrost slot ${side},${z}`).toBe(`COBALT_DefrostGrille_${side}`);
       expect(support).toBeDefined();
       const gap=visible!.point.y-support!.point.y;
       expect(gap).toBeGreaterThan(.0003);expect(gap).toBeLessThan(.0015);
     }
+  });
+  it('joins the front cowl to the dashboard and keeps its narrow seal against the glass',()=>{
+    const cowl=surfaces.find(mesh=>mesh.name==='COBALT_MouldedDashboardCowl')!,seal=surfaces.find(mesh=>mesh.name==='COBALT_WindscreenLowerSeal')!;
+    expect(cowl).toBeDefined();expect(seal).toBeDefined();
+    const dashboard=surfaces.filter(mesh=>mesh.name==='COBALT_MouldedDashboard'),p=cowl.geometry.getAttribute('position');
+    let rear=0,front=0;
+    for(let i=0;i<p.count;i++){
+      const point=new T.Vector3().fromBufferAttribute(p,i);
+      if(Math.abs(point.x)>.68)continue;
+      if(Math.abs(point.y-.345)<1e-6){
+        const hit=cast(point.clone().add(new T.Vector3(0,0,-.01)),new T.Vector3(0,0,1),glazing);
+        expect(hit,`glazed cowl edge ${point.toArray()}`).toBeDefined();
+        expect(hit!.point.z-point.z).toBeGreaterThan(.0005);expect(hit!.point.z-point.z).toBeLessThan(.003);front++;
+      }
+      const hit=cast(new T.Vector3(point.x,.6,point.z),new T.Vector3(0,-1,0),dashboard);
+      if(hit&&Math.abs(point.y-hit.point.y)<.0003)rear++;
+    }
+    expect(front).toBeGreaterThan(40);expect(rear).toBeGreaterThan(40);
+    expect(new T.Box3().setFromObject(seal).getSize(new T.Vector3()).y).toBeLessThan(.005);
   });
   it('lays the shift-pattern plate above its knob cap without sinking or floating',()=>{
     const knob=surfaces.find(mesh=>mesh.name==='COBALT_ShiftKnob');

@@ -3,6 +3,40 @@ import { smoothPaintPrimitive } from './cobalt-body.mjs';
 
 const rearOutward=new T.Vector3(0,.88,-.48).normalize();
 
+/** Carry the front pane's upper corners underneath the fitted pillar/roof
+ * returns. The donor outline otherwise leaves an unglazed triangular slit.
+ * Move both shell faces together so their tint remains uniform at the edge. */
+export function fitFrontGlassFrame({doc,buffer,node,primitive,worldPoint}){
+  const position=primitive.getAttribute('POSITION'),values=new Float32Array(position.getArray());
+  const zero={getArray:()=>new Float32Array(3)},origin=worldPoint(node,zero,0);
+  const basis=[0,1,2].map(axis=>{const a=new Float32Array(3);a[axis]=1;return worldPoint(node,{getArray:()=>a},0).sub(origin);});
+  const transform=new T.Matrix4().makeBasis(...basis).setPosition(origin),inverse=transform.clone().invert();
+  const toCarNormal=new T.Matrix3().getNormalMatrix(transform),toSourceNormal=new T.Matrix3().setFromMatrix4(transform).transpose();
+  const normals=primitive.getAttribute('NORMAL'),normalValues=normals?new Float32Array(normals.getArray()):null;
+  const warp=p=>{
+    const amount=T.MathUtils.smoothstep(Math.abs(p.x),.45,.60)*T.MathUtils.smoothstep(p.y,.55,.73);
+    return p.clone().add(new T.Vector3(Math.sign(p.x)*.035,.018,-.036).multiplyScalar(amount));
+  };
+  const indices=primitive.getIndices()?.getArray()??Uint32Array.from({length:position.getCount()},(_,i)=>i);
+  let moved=0;
+  for(const i of new Set(indices)){
+    const p=worldPoint(node,position,i),q=warp(p);if(p.distanceToSquared(q)<1e-18)continue;
+    q.applyMatrix4(inverse).toArray(values,i*3);moved++;
+    if(normalValues){
+      const epsilon=.00001,columns=[0,1,2].map(axis=>{
+        const delta=new T.Vector3();delta.setComponent(axis,epsilon);
+        return warp(p.clone().add(delta)).sub(warp(p.clone().sub(delta))).multiplyScalar(.5/epsilon);
+      });
+      const jacobian=new T.Matrix4().makeBasis(...columns),normalWarp=new T.Matrix3().getNormalMatrix(jacobian);
+      new T.Vector3().fromArray(normalValues,i*3).applyMatrix3(toCarNormal).applyMatrix3(normalWarp).applyMatrix3(toSourceNormal).normalize().toArray(normalValues,i*3);
+    }
+  }
+  primitive.setAttribute('POSITION',position.clone().setArray(values).setBuffer(buffer));
+  if(normalValues)primitive.setAttribute('NORMAL',normals.clone().setArray(normalValues).setBuffer(buffer));
+  primitive.setAttribute('TANGENT',null);
+  return {movedVertices:moved};
+}
+
 /** Fit one continuous glass sheet over the source mirror's triangulated insert.
  * The shell contains overlapping rear faces; a single sheet prevents plastic
  * slivers from occluding individual triangles of the live image. */

@@ -6,6 +6,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { refineCar } from './refine-car.mjs';
 import { smoothPaintPrimitive } from './cobalt-body.mjs';
+import { fairRearDoorPrimitive,sourceCarFrame } from './cobalt-door-skin.mjs';
 await mkdir('public/assets', { recursive: true });
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const doc = await io.read('chevrolet_cobalt_ltz_2014.glb');
@@ -22,16 +23,22 @@ for(const node of doc.getRoot().listNodes()){
 }
 await MeshoptSimplifier.ready;
 await doc.transform(dedup(), weld());
+const sourceFrame=sourceCarFrame(doc);
 const simplified=new Set();
 for(const node of doc.getRoot().listNodes()){
   if(/^(steering_ok|painel_|bancos_)/.test(node.getName())){node.setMesh(null);continue;}
   for(const primitive of node.getMesh()?.listPrimitives()??[]){
     if(simplified.has(primitive))continue;simplified.add(primitive);
     const paint=primitive.getMaterial()?.getName()==='Realistic_Car_Paint';
+    const rearDoor=paint&&/^door_[lr]r.*primary/.test(node.getName()),targetIndices=(primitive.getIndices()?.getCount()??primitive.getAttribute('POSITION').getCount())*.36;
     const internalOptics=/^(lanterna1_|ascende_)/.test(node.getName());
     // Compute the normal field on the dense source surface. Rebuilding it after
     // decimation lets long roof/door triangles spread bevel shading into panels.
-    if(paint){smoothPaintPrimitive(doc,doc.getRoot().listBuffers()[0],primitive);weldPrimitive(primitive);}
+    if(paint){
+      smoothPaintPrimitive(doc,doc.getRoot().listBuffers()[0],primitive);
+      if(rearDoor)fairRearDoorPrimitive(doc,doc.getRoot().listBuffers()[0],node,primitive,sourceFrame);
+      weldPrimitive(primitive);
+    }
     // Preserve the broad body curves and panel borders. Hidden lamp reflectors
     // receive a smaller budget so the complete car stays suitable for gameplay.
     // Include shading error so the narrow bevel support rows survive even
@@ -39,7 +46,8 @@ for(const node of doc.getRoot().listNodes()){
     const simplifier=paint?{simplify:(indices,positions,stride,target,error,flags)=>MeshoptSimplifier.simplifyWithAttributes(
       indices,positions,stride,primitive.getAttribute('NORMAL').getArray(),3,[.25,.25,.25],null,target,error,flags,
     )}:MeshoptSimplifier;
-    simplifyPrimitive(primitive,{simplifier,ratio:paint?.36:internalOptics?.09:.22,error:paint?.00035:.001,lockBorder:paint});
+    const ratio=rearDoor?Math.min(1,targetIndices/primitive.getIndices().getCount()):paint?.36:internalOptics?.09:.22;
+    simplifyPrimitive(primitive,{simplifier,ratio,error:paint?.00035:.001,lockBorder:paint});
   }
 }
 await doc.transform(prune());
@@ -55,7 +63,7 @@ await writeFile('public/assets/car-credit.json',JSON.stringify({
   depiction:'Chevrolet Cobalt 2026 examination-centre car, 5-speed manual, cabin reconstructed from the supplied photograph',
   source:'https://sketchfab.com/3d-models/chevrolet-cobalt-ltz-2014-f91cbef731444f939e263041400216ca',
   license:'CC-BY-4.0',licenseUrl:'https://creativecommons.org/licenses/by/4.0/',
-  modifications:'Body panels retain locked borders and edge-connected angle-weighted normals calculated on the dense source and preserved through simplification. White clearcoat, gold badging, independently switched headlamp/fog optics and amber front indicator sections with fitted fog-lamp faces. Fitted roof lining; duplicate tubular A-pillar covers removed, preserving the source frame and interior trim; rear door cards cut clear of wheel wells, mesh-conformed cloth upholstery with closed seat seams and short headrest supports. Removed duplicate ceiling and rear-seat sheets; fitted light pillar trim, two-sided rear wheel-well cladding, defrost slots and a flush shift-pattern cap. Photo-reconstructed 2026 examination-centre manual cabin with a flush 16:9 examination-system monitor, lock/hazard/airbag row, etched manual HVAC labels, manual lever, belts, mats, handbrake, mirrors and visors. Period-photo refinements include a joined cowl/instrument hood, shallow top tray, recessed louvers and dark vent pod, continuous silver steering trim and rounded upholstery inserts with fine neutral grey weave. Matte rear parcel shelf and C-pillar trim, connected rear upholstery normals and low-specular woven rear padding; a single smooth double-sided rear windshield preserving the combined tint opacity. Photo-fitted plain-spoke charcoal wheel with a smaller bowtie and slimmer satin V, blue instruments, neutral climate markings and a runtime monitor with localized live exercise, time, penalties and result, and Cobalt/Ravon R4 component-photo switches with long moulded grips, broad flat shanks, a raised left MENU button, SET/CLR end, knurled selector rings and white wiper legends; telemetry-driven signal movement. Continuous light front-pillar returns with clipped material boundaries, a dashboard joined along the instrument-hood walls and a tapered plain steering hub with supported rounded satin V. Photo-fitted GM-style interior mirror with bowed narrow black housing, swept mount and lower tab; runtime live rear cabin/window view. Independent rear signals, white reverse lights and a working high stop lens behind the rear glass; dark inner window ledges and a driver-facing photo-fitted clickable mirror switch on the left sail trim; runtime wheel/gauge/lamp animation; body ride height matches the loaded suspension.',
+  modifications:'Body panels retain locked borders and edge-connected angle-weighted normals calculated on the dense source and preserved through simplification. White clearcoat, gold badging, independently switched headlamp/fog optics and amber front indicator sections with fitted fog-lamp faces. Fitted roof lining; duplicate tubular A-pillar covers removed, preserving the source frame and interior trim; rear door cards cut clear of wheel wells, mesh-conformed cloth upholstery with closed seat seams and short headrest supports. Removed duplicate ceiling and rear-seat sheets; fitted light pillar trim, two-sided rear wheel-well cladding, defrost slots and a flush shift-pattern cap. Photo-reconstructed 2026 examination-centre manual cabin with a flush 16:9 examination-system monitor, lock/hazard/airbag row, etched manual HVAC labels, manual lever, belts, mats, handbrake, mirrors and visors. Period-photo refinements include a joined cowl/instrument hood, shallow top tray, recessed louvers and dark vent pod, continuous silver steering trim and rounded upholstery inserts with fine neutral grey weave. Matte rear parcel shelf and C-pillar trim, connected rear upholstery normals and low-specular woven rear padding; a single smooth double-sided rear windshield preserving the combined tint opacity; front-glass upper corners fitted underneath the existing pillar seals to remove unglazed slits. Photo-fitted plain-spoke charcoal wheel with a smaller bowtie and slimmer satin V, blue instruments, neutral climate markings and a runtime monitor with localized live exercise, time, penalties and result, and Cobalt/Ravon R4 component-photo switches with long moulded grips, broad flat shanks, a raised left MENU button, SET/CLR end, knurled selector rings and white wiper legends; telemetry-driven signal movement. Continuous light front-pillar returns with a shared rounded lower section, a continuous foot-to-roof loft and clipped material boundaries; obsolete inner windscreen-frame returns cleared, lower glass fitted beneath the pillar and a pane-conformed dashboard cowl with a narrow seal and refitted demister slots, a dashboard joined along the instrument-hood walls and a tapered plain steering hub with supported rounded satin V. Photo-fitted GM-style interior mirror with bowed narrow black housing, swept mount and lower tab; runtime live rear cabin/window view. Independent rear signals, white reverse lights and a working high stop lens behind the rear glass; dark inner window ledges and a driver-facing photo-fitted clickable mirror switch on the left sail trim; runtime wheel/gauge/lamp animation; body ride height matches the loaded suspension.',
   refinement,
   trianglesBefore:before,trianglesAfter:after,removedWheelGroups,
 },null,2));

@@ -13,7 +13,9 @@ export function buildUpperCabinTrim({doc,buffer,nodes,worldPoint:sourceWorldPoin
     if(!points.has(index))points.set(index,sourceWorldPoint(node,accessor,index));
     return points.get(index);
   };
-  const level=.55,back=-.15,sections=[];
+  // Sample just inside the rebuilt foot so both lofts share its rounded
+  // section, rather than the donor sheet immediately above the old join.
+  const level=.55,lowerLevel=.4399,back=-.15,sections=[];
   const key=p=>p.toArray().map(n=>Math.round(n*1e6)).join(',');
   // Read the real upper edge of the cabin-facing windscreen sheet. The roof's
   // straight front edge needs a fitted return at its curved outer corners.
@@ -40,7 +42,7 @@ export function buildUpperCabinTrim({doc,buffer,nodes,worldPoint:sourceWorldPoin
   const ceilingGeometry=new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(ceilingTriangles,3)),ceilingMaterial=new T.MeshBasicMaterial({side:T.DoubleSide}),ceiling=new T.Mesh(ceilingGeometry,ceilingMaterial);ceiling.updateMatrixWorld();
   const rearLevels=Array.from({length:25},(_,i)=>{const x=-.62+1.24*i/24,ray=new T.Raycaster(new T.Vector3(x,.60,back-.000001),new T.Vector3(0,1,0),0,.20);return ray.intersectObject(ceiling).find(hit=>hit.point.y>.66)?.point.y;});
   ceilingGeometry.dispose();ceilingMaterial.dispose();
-  for(const side of [-1,1]){
+  const readSection=(side,cut)=>{
     const points=new Map(),edges=new Map();
     for(const node of nodes.filter(n=>/^interior_interior/.test(n.getName())))for(const primitive of node.getMesh()?.listPrimitives()??[]){
       if(primitive.getMaterial()!==lining)continue;
@@ -48,10 +50,10 @@ export function buildUpperCabinTrim({doc,buffer,nodes,worldPoint:sourceWorldPoin
       for(let i=0;i<ix.length;i+=3){
         const triangle=[0,1,2].map(j=>worldPoint(node,position,ix[i+j])),hits=[];
         for(let j=0;j<3;j++){
-          const a=triangle[j],b=triangle[(j+1)%3];if((a.y>=level)===(b.y>=level))continue;
-          const t=(level-a.y)/(b.y-a.y),p=a.clone().lerp(b,t);
+          const a=triangle[j],b=triangle[(j+1)%3];if((a.y>=cut)===(b.y>=cut))continue;
+          const t=(cut-a.y)/(b.y-a.y),p=a.clone().lerp(b,t);
           if(normals){const n=new T.Vector3().fromArray(normals.getArray(),ix[i+j]*3).lerp(new T.Vector3().fromArray(normals.getArray(),ix[i+(j+1)%3]*3),t).applyMatrix3(normalMatrix).normalize();n.x*=-1;n.z*=-1;p.sourceNormal=n;}
-          if(side*p.x>.5&&p.z>.3&&p.z<.8)hits.push(p);
+          if(side*p.x>.5&&p.z>.3&&p.z<1.1)hits.push(p);
         }
         if(hits.length!==2)continue;
         const keys=hits.map(key);if(keys[0]===keys[1])continue;
@@ -61,8 +63,11 @@ export function buildUpperCabinTrim({doc,buffer,nodes,worldPoint:sourceWorldPoin
     const ends=[...edges.keys()].filter(k=>edges.get(k).size===1).sort((a,b)=>side*(points.get(b).x-points.get(a).x));
     let next=ends[0];const section=[],seen=new Set();
     while(next&&!seen.has(next)){seen.add(next);section.push(points.get(next));next=[...edges.get(next)].find(k=>!seen.has(k));}
-    if(section.length<4)throw new Error(`Missing upper pillar section ${side}`);
-    sections.push({side,section});
+    if(section.length<4)throw new Error(`Missing upper pillar section ${side} at ${cut}`);
+    return section;
+  };
+  for(const side of [-1,1]){
+    sections.push({side,section:readSection(side,level),lower:readSection(side,lowerLevel),below:readSection(side,lowerLevel-.001)});
   }
   // Clip all layers against identical planes; selecting whole triangles leaves
   // the diagonal shards visible in the original roof-to-pillar joint.
@@ -80,14 +85,19 @@ export function buildUpperCabinTrim({doc,buffer,nodes,worldPoint:sourceWorldPoin
     const add=polygon=>{for(let j=1;j<polygon.length-1;j++)for(const v of [polygon[0],polygon[j],polygon[j+1]])v.values.forEach((a,k)=>arrays[k].push(...a));};
     for(let i=0;i<ix.length;i+=3){
       const triangle=[0,1,2].map(j=>{const index=ix[i+j];return {p:worldPoint(node,position,index),values:attributes.map(({a})=>Array.from(a.getArray().slice(index*a.getElementSize(),(index+1)*a.getElementSize())))};});
-      add(clip(triangle,p=>p.y-level,false));add(clip(clip(triangle,p=>p.y-level,true),p=>p.z-back,false));
+      add(clip(triangle,p=>p.y-lowerLevel,false));add(clip(clip(triangle,p=>p.y-lowerLevel,true),p=>p.z-back,false));
     }
     if(arrays[0].length){const part=doc.createPrimitive().setMaterial(lining);attributes.forEach(({semantic,a},i)=>part.setAttribute(semantic,doc.createAccessor().setType(a.getType()).setArray(new Float32Array(arrays[i])).setBuffer(buffer)));node.getMesh().addPrimitive(part);}
     node.getMesh().removePrimitive(primitive);primitive.dispose();
   }
   const roofY=(x,z)=>.748-.038*(x/.60)**2-.016*T.MathUtils.clamp((z-back)/.60,0,1);
+  const simplifySection=points=>{
+    const edge=new T.Line3(points[0],points.at(-1)),closest=new T.Vector3();let split=0,error=.00005;
+    for(let i=1;i<points.length-1;i++){const distance=points[i].distanceTo(edge.closestPointToPoint(points[i],true,closest));if(distance>error){split=i;error=distance;}}
+    return split?[...simplifySection(points.slice(0,split+1)).slice(0,-1),...simplifySection(points.slice(split))]:[points[0],points.at(-1)];
+  };
   const topSections=[],cornerSections=[];
-  for(const {side,section}of sections){
+  for(const {side,section,lower:lowerSection,below:belowSection}of sections){
     const a=section[0],b=section.reduce((p,q)=>side*q.x<side*p.x?q:p,a),d=section.at(-1),c=d.clone().add(new T.Vector3(0,0,-.018));
     const outsideDoor=new T.Vector3(side*.645,level,.485),outsideGlass=new T.Vector3(side*.625,level,.715);
     const curve=new T.CurvePath();
@@ -102,47 +112,72 @@ export function buildUpperCabinTrim({doc,buffer,nodes,worldPoint:sourceWorldPoin
     const original=new T.CurvePath(),originalPoints=[outsideDoor,...section,outsideGlass];
     outsideDoor.sourceNormal=a.sourceNormal;outsideGlass.sourceNormal=d.sourceNormal;
     for(let i=1;i<originalPoints.length;i++)original.add(new T.LineCurve3(originalPoints[i-1],originalPoints[i]));
-    const lengths=curve.getCurveLengths(),total=curve.getLength();
-    const samples=[...new Set([...Array.from({length:9},(_,i)=>i/8),...lengths.map(n=>n/total),...original.getCurveLengths().map(n=>n/original.getLength())])].sort((a,b)=>a-b);
-    const surface=(u,v)=>{const p=original.getPoint(u).lerp(curve.getPoint(u),T.MathUtils.smoothstep(v,0,.4)),x=p.x-side*.034*v,z=p.z-.34*v;return new T.Vector3(x,T.MathUtils.lerp(level,roofY(x,z),v),z);};
+    const lowerPath=new T.CurvePath(),lowerPoints=simplifySection(lowerSection);
+    for(let i=1;i<lowerPoints.length;i++)lowerPath.add(new T.LineCurve3(lowerPoints[i-1],lowerPoints[i]));
+    const belowPath=new T.CurvePath(),belowPoints=simplifySection(belowSection);
+    for(let i=1;i<belowPoints.length;i++)belowPath.add(new T.LineCurve3(belowPoints[i-1],belowPoints[i]));
+    const lengths=curve.getCurveLengths(),total=curve.getLength(),sealWidth=.006/total;
+    const samples=[...new Set([sealWidth,1-sealWidth,...Array.from({length:13},(_,i)=>i/12),...lengths.map(n=>n/total),...original.getCurveLengths().map(n=>n/original.getLength()),...lowerPath.getCurveLengths().map(n=>n/lowerPath.getLength())])].sort((a,b)=>a-b);
+    const upperSurface=(u,v)=>{const p=original.getPoint(u).lerp(curve.getPoint(u),T.MathUtils.smoothstep(v,0,.4)),x=p.x-side*.034*v,z=p.z-.34*v;return new T.Vector3(x,T.MathUtils.lerp(level,roofY(x,z),v),z);};
+    // Use one longitudinal loft from the fitted foot to the roof. Pinning the
+    // donor section at .55 forced an expanded waist between two short lofts:
+    // matching only their tangents kept the visible S-shaped silhouette.
+    const surface=(u,v)=>{
+      const a=lowerPath.getPoint(u),b=upperSurface(u,1),height=b.y-a.y;
+      const y=v<0?T.MathUtils.lerp(lowerLevel,level,v+1):upperSurface(u,v).y,t=(y-a.y)/height;
+      const topDelta=b.clone().sub(upperSurface(u,.9999));
+      const topTangent=topDelta.multiplyScalar(height/topDelta.y);
+      const bottomTangent=a.clone().sub(belowPath.getPoint(u)).multiplyScalar(height/.001);
+      const straight=a.clone().multiplyScalar(2*t**3-3*t*t+1).addScaledVector(bottomTangent,t**3-2*t*t+t).addScaledVector(b,-2*t**3+3*t*t).addScaledVector(topTangent,t**3-t*t);
+      // Retain the fitted door rail on the outer lip. Its roof/frame coverage
+      // is independent of the cabin-facing windscreen edge being straightened.
+      // Keep a short contact band at the rounded foot's sampled section so
+      // its tessellated lip and the loft retain the same local tangent.
+      const blend=T.MathUtils.smoothstep(u,.08,.45)*T.MathUtils.smoothstep(v,-1,-.85);if(blend===1)return straight;
+      if(v>=0)return upperSurface(u,v).lerp(straight,blend);
+      const middle=upperSurface(u,0),s=v+1;
+      const tangent=upperSurface(u,.0001).sub(middle).multiplyScalar((level-lowerLevel)/(roofY(middle.x,middle.z)-level)/.0001);
+      const lowerTangent=bottomTangent.clone().multiplyScalar((level-lowerLevel)/height);
+      return a.multiplyScalar(2*s**3-3*s*s+1).addScaledVector(lowerTangent,s**3-2*s*s+s).addScaledVector(middle,-2*s**3+3*s*s).addScaledVector(tangent,s**3-s*s).lerp(straight,blend);
+    };
     const top=samples.map(u=>surface(u,1));topSections.push(top);
     cornerSections.push({side,surface,total});
     const mesh=(start,end,material,name,rows)=>{
-      const positions=[],indices=[],columns=samples.length;
-      for(let row=0;row<=rows;row++)for(const u of samples)positions.push(...surface(u,T.MathUtils.lerp(start,end,row/rows)).toArray());
-      for(let row=0;row<rows;row++)for(let c=0;c<columns-1;c++){const a=row*columns+c;for(const face of [[a,a+columns,a+1],[a+1,a+columns,a+columns+1]]){if(side>0)face.reverse();indices.push(...face);}}
-      const g=new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(positions,3)).setIndex(indices);g.computeVertexNormals();
-      const normals=g.getAttribute('normal'),spans=original.getCurveLengths();
-      for(let row=0;row<=rows;row++)for(let column=0;column<columns;column++){
-        const v=T.MathUtils.lerp(start,end,row/rows),blend=1-T.MathUtils.smoothstep(v,0,.30);if(!blend)continue;
-        const length=samples[column]*original.getLength(),span=Math.max(0,spans.findIndex(end=>end>=length)),from=span?spans[span-1]:0;
-        const a=originalPoints[span].sourceNormal,b=originalPoints[span+1].sourceNormal;if(!a||!b)continue;
+      const positions=[],indices=[],doorSeal=[],glassSeal=[],columns=samples.length;
+      const levels=[...new Set([...Array.from({length:rows+1},(_,row)=>T.MathUtils.lerp(start,end,row/rows)),...[-1,-.98,-.96,0,.82].filter(v=>v>start&&v<end)])].sort((a,b)=>a-b);
+      for(const v of levels)for(const u of samples)positions.push(...surface(u,v).toArray());
+      for(let row=0;row<levels.length-1;row++)for(let c=0;c<columns-1;c++){
+        const output=material!==lining?indices:samples[c+1]<=sealWidth+1e-9?doorSeal:samples[c]>=1-sealWidth-1e-9&&levels[row+1]<=.82+1e-9?glassSeal:indices;
+        const a=row*columns+c;for(const face of [[a,a+columns,a+1],[a+1,a+columns,a+columns+1]]){if(side>0)face.reverse();output.push(...face);}
+      }
+      const g=new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(positions,3)).setIndex([...indices,...doorSeal,...glassSeal]);g.computeVertexNormals();g.setIndex(indices);
+      const normals=g.getAttribute('normal');
+      for(let row=0;row<levels.length;row++)for(let column=0;column<columns;column++){
+        const v=levels[row],blend=1-T.MathUtils.smoothstep(v,-1,-.70);if(!blend)continue;
+        const spans=lowerPath.getCurveLengths(),length=samples[column]*lowerPath.getLength(),span=Math.max(0,spans.findIndex(end=>end>=length)),from=span?spans[span-1]:0;
+        const a=lowerPoints[span].sourceNormal,b=lowerPoints[span+1].sourceNormal;if(!a||!b)continue;
         const source=a.clone().lerp(b,(length-from)/Math.max(1e-12,spans[span]-from)).normalize(),index=row*columns+column;
         const n=new T.Vector3().fromBufferAttribute(normals,index).lerp(source,blend).normalize();normals.setXYZ(index,n.x,n.y,n.z);
       }
       put(g,material,[0,0,0],[0,0,0],name);
+      // Rubber shares the trim's actual boundary vertices. Offset ribbons on
+      // the same surface fought the pale triangles and made a speckled edge.
+      for(const [faces,prefix]of [[doorSeal,'Door'],[glassSeal,'Windscreen']])if(faces.length){
+        const seal=g.clone().setIndex(faces);put(seal,weatherstrip,[0,0,0],[0,0,0],`COBALT_${prefix}PillarSeal_${side}`);seal.dispose();
+      }
       if(rows>1){
         const primitive=doc.getRoot().listNodes().find(node=>node.getName()===name).getMesh().listPrimitives()[0];weldPrimitive(primitive,{overwrite:true});
-        const simplifier={simplify:(indices,positions,stride,target,error,flags)=>MeshoptSimplifier.simplifyWithAttributes(indices,positions,stride,primitive.getAttribute('NORMAL').getArray(),3,[.10,.10,.10],null,target,error,flags)};
+        const simplifier={simplify:(indices,positions,stride,target,error,flags)=>{
+          // Preserve the contact rows: ordinary decimation could remove them
+          // and replace the matching tangent with one long sloping triangle.
+          const locked=Uint8Array.from({length:positions.length/stride},(_,i)=>positions[i*stride+1]<.457?1:0);
+          return MeshoptSimplifier.simplifyWithAttributes(indices,positions,stride,primitive.getAttribute('NORMAL').getArray(),3,[.10,.10,.10],locked,target,error,flags);
+        }};
         simplifyPrimitive(primitive,{simplifier,ratio:.5,error:.0005,lockBorder:true});
       }
     };
-    mesh(0,.991,lining,`COBALT_UpperPillar_${side}`,6);
+    mesh(-1,.991,lining,`COBALT_UpperPillar_${side}`,12);
     mesh(.991,1,seam,`COBALT_UpperPillarJoint_${side}`,1);
-    // Narrow black rubber reveals run along the glazing edges in the cabin
-    // photographs. Keep these on the fitted surface rather than recolouring
-    // entire frame triangles, which makes their borders visibly jagged.
-    const ribbon=(rows,name)=>{
-      const values=[];
-      for(let i=1;i<rows.length;i++)for(const face of [[rows[i-1][0],rows[i][0],rows[i-1][1]],[rows[i-1][1],rows[i][0],rows[i][1]]]){
-        if(side>0)face.reverse();for(const p of face)values.push(...p.toArray());
-      }
-      const g=new T.BufferGeometry().setAttribute('position',new T.Float32BufferAttribute(values,3));g.computeVertexNormals();put(g,weatherstrip,[0,0,0],[0,0,0],name);
-    };
-    for(const edge of [0,1]){
-      const rows=Array.from({length:9},(_,i)=>[edge===0?0:1-.006/total,edge===0?.006/total:1].map(u=>surface(u,i/8*(edge===1?.82:1)).add(new T.Vector3(-side*.001,0,-.001))));
-      ribbon(rows,`COBALT_${edge===1?'Windscreen':'Door'}PillarSeal_${side}`);
-    }
     // A returned edge covers the inner door rail below the roof. Without it
     // the outer painted window frame remains visible through a thin slit.
     const rear=new T.Vector3(side*.62,roofY(side*.62,back),back),front=top[0],lower=surface(0,.80),rearLower=new T.Vector3(side*.646,.66,back);

@@ -1,5 +1,15 @@
 # Validation
 
+## Physics after steering calibration - 12 November 2026
+
+The additional review found no regression requiring a runtime physics change. `npm run test:steering-physics` passes **204 checks** across **112 steering manoeuvres and 24 handbrake runs**, comparing the former 0.56 rad virtual lock with the calibrated limit. Actual keyboard steering remains active throughout. The matrix covers forward 5/30/50/60/100 km/h and reverse 5/20 km/h, left/right, asphalt/grass, assistance on/off, countersteering, release and subsequent braking. All states remain finite and upright, steering returns to centre, braking stops the car, and mirrored inputs produce mirrored trajectories. The braking phase allows up to ten seconds: a fixed two-second stopping requirement would incorrectly reject high-speed and grass runs under both calibrations.
+
+At 50 km/h, the actual new-lock keyboard handbrake run produces peak yaw rate 0.852 rad/s and body sideslip 1.445 m/s versus 0.619 rad/s and 0.730 m/s while coasting. The previous-lock run measured 0.885 rad/s and 1.647 m/s with the handbrake. The new setting still produces the intended moving handbrake response; a constant multiplicative threshold tied to the old full-lock trajectory is not a calibration-independent tyre specification. At 20 km/h the handbrake instead mainly reduces speed, so that case checks deceleration rather than demanding increased yaw.
+
+The existing physical review passes acceleration, all gears, braking, curb impacts and a powered hill start. Stopping distances are **12.12 m from 50 km/h on asphalt**, **22.03 m on grass**, and **45.68 m from 100 km/h on asphalt**. Browser suites pass **93 checks without errors**: steering 42, real keyboard/physics 14, course-curb steering 27, powered curb 10. Both slow turning circles measure **10.870 m**; all five parallel verge starts clear the actual 20 cm curb upright, and reverse remains available after a powered crossing. **94 focused tests in nine files** also pass, including steering, vehicle dynamics, tyre forces/contact, powered/steering curb cases, hill starts, railway traversal and unloaded wheel rotation. The earlier complete suite of 717 tests remains the full-suite baseline; this review changes only the repeatable audit script, its npm command and documentation. These checks establish simulator behaviour, not manufacturer validation of a measured vehicle.
+
+Reports: `test-results/steering-physics/report.json`, `test-results/physics/report.json`, `test-results/physics-browser/report.json`, `test-results/steering/report.json`, `test-results/curb-steering/report.json` and `test-results/powered-curb/report.json`.
+
 ## 2026 manual examination-car cabin - 9 November 2026
 
 All **436 tests in 45 files** and the production build pass. Asset tests require the new examination display, removal of the old CD material, upright UVs on both digital screens, intact manual controls and a derivative below 220,000 unique triangles. The regenerated model has **217,207 triangles** and a matching content hash. Cabin-fit, painted-panel normals, wheel alignment and physics regressions remain passing.

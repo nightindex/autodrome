@@ -18,6 +18,7 @@
     "test:powered-curb": "node scripts/powered-curb-check.mjs",
     "test:curb-steering": "node scripts/curb-steering-check.mjs",
     "test:steering": "node scripts/steering-check.mjs",
+    "test:steering-physics": "node scripts/steering-physics-review.mjs",
     "test:play": "node scripts/play-review.mjs",
     "test:markings": "node scripts/road-markings-check.mjs",
     "test:marking-standards": "node scripts/marking-standards-check.mjs",

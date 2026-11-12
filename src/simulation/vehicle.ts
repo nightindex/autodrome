@@ -8,6 +8,7 @@ import { Input } from './input';
 import { clamp,localPoint } from './math';
 import { tyreForces } from './tyre-forces';
 import { Steering } from './steering';
+import { WheelSpin } from './wheel-spin';
 const tyreHalfWidth=config.tyreWidth/2,tyreShoulder=.03,tyreClearance=.017;
 const nominalBodyHeight=config.wheelRadius+dynamics.loadedSuspensionLength-.02;
 export class Vehicle {
@@ -16,6 +17,8 @@ export class Vehicle {
   positionLights=false;headlights=false;fogLights=false;private ignitionOn=false;
   get canUseFogLights(){return (this.ignitionOn||this.drivetrain.engine)&&(this.positionLights||this.headlights);}
   readonly steering=new Steering();
+  private readonly wheelSpin=new WheelSpin();
+  wheelRotation(index:number){return this.wheelSpin.rotation(index);}
   surfaceAt:(point:Vec2)=>'asphalt'|'grass'=()=> 'asphalt';
   time=0;collision=false;private queue=new RAPIER.EventQueue(true);
   private tyres:RAPIER.Collider[]=[];private tyreHandles=new Set<number>();
@@ -72,6 +75,7 @@ export class Vehicle {
     this.body.setLinvel({x:0,y:0,z:0},true);this.body.setAngvel({x:0,y:0,z:0},true);this.body.resetForces(true);this.body.resetTorques(true);
     this.drivetrain.reset();this.steering.reset();this.belt=false;this.indicator='off';this.hazards=false;this.ignitionOn=false;this.positionLights=false;this.headlights=false;this.fogLights=false;this.time=0;this.collision=false;this.collisionHold=0;this.contactPairs.clear();this.impactPatches.clear();this.tyreContactForces.clear();this.queue.clear();
     this.failedLaunchTime=0;this.failedLaunchOrigin=undefined;this.stuckOrigin=undefined;
+    this.wheelSpin.reset(this.controller);
     this.tyres.forEach((tyre,i)=>{
       const {x,z}=wheelCenter(i);
       this.controller.setWheelSteering(i,0);
@@ -151,7 +155,8 @@ export class Vehicle {
     this.time+=dt;const q=this.body.rotation(),rotation=new T.Quaternion(q.x,q.y,q.z,q.w);
     const forward=new T.Vector3(0,0,1).applyQuaternion(rotation),position=this.body.translation();
     const vel=this.body.linvel(),speed=vel.x*forward.x+vel.y*forward.y+vel.z*forward.z;
-    const drive=this.drivetrain.update(dt,speed,{throttle:+input.down('throttle'),brake:+input.down('brake'),clutch:+input.down('clutch')},assist);
+    const airborneDrive=!this.controller.wheelIsInContact(0)&&!this.controller.wheelIsInContact(1);
+    const drive=this.drivetrain.update(dt,airborneDrive?this.wheelSpin.drivenSpeed:speed,{throttle:+input.down('throttle'),brake:+input.down('brake'),clutch:+input.down('clutch')},assist,airborneDrive?2*dynamics.wheelInertia:undefined);
     const horizontalSpeed=Math.hypot(vel.x,vel.z);
     const steeringGrip=steeringAssist?Math.min(...[0,1].map(i=>{
       const contact=this.controller.wheelIsInContact(i)?this.controller.wheelContactPoint(i):null;
@@ -205,6 +210,7 @@ export class Vehicle {
       brakes.push(Math.min(brakingForce,Math.max(0,force.brake/dt-rollingForce)));
     }
     this.controller.updateVehicle(dt,RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,undefined,c=>c.handle!==this.collider.handle&&!this.tyreHandles.has(c.handle));
+    this.wheelSpin.update(this.controller,drive,dt);
     // Update the solid tyre poses after the new suspension rays, before contact
     // resolution. A curb impact must not use last frame's wheel height.
     for(let i=0;i<4;i++){

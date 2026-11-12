@@ -108,8 +108,12 @@ describe('tyre contact and braking',()=>{
     const turn=(handbrake:boolean)=>{
       const run=flatTrack();
       try{
-        const {car,held,step}=run;car.action('handbrake');
-        car.body.setLinvel({x:0,y:0,z:50/3.6},true);held.add('left');
+        const {car,step}=run;car.action('handbrake');
+        // Compare rear-tyre behaviour at the same moderate road-wheel angle.
+        // Holding a key to full lock also varies the front-tyre understeer with
+        // the car's steering calibration and obscures the parking-brake effect.
+        car.steering.angle=.25;car.steering.update=()=>car.steering.angle;
+        car.body.setLinvel({x:0,y:0,z:50/3.6},true);
         for(let i=0;i<36;i++)step();
         if(handbrake)car.action('handbrake');
         let sideSpeed=0,yawRate=0;

@@ -12,7 +12,8 @@ const lerp=(a:Vertex,b:Vertex,t:number):Vertex=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a
 /** A continuous swept cross-section. Every surface shares the same perimeter
  * station; colour boundaries cannot jump between independently projected caps,
  * bevels and walls. Region names partition faces without adding internal ends. */
-export function curbRibbonGeometries(sections:BoundarySection[],cutout?:CurbCutout){
+export function curbRibbonGeometries(sections:BoundarySection[],cutout?:CurbCutout|readonly CurbCutout[]){
+  const cutouts:readonly CurbCutout[]=cutout?(Array.isArray(cutout)?cutout:[cutout as CurbCutout]):[];
   const buffers=names.map(()=>({position:[] as number[],color:[] as number[],uv:[] as number[],index:[] as number[]}));
   const topColor=new T.Color(0xe4e2d6),sideColor=new T.Color(0xa9ada5),lengths=new Map<number,number>(),travel=new Map<number,number>();
   for(const s of sections)lengths.set(s.loop,(lengths.get(s.loop)??0)+s.length);
@@ -27,14 +28,14 @@ export function curbRibbonGeometries(sections:BoundarySection[],cutout?:CurbCuto
       if(normal&&cross.dot(normal)<0)buffer.index.push(base,base+i+1,base+i);else buffer.index.push(base,base+i,base+i+1);
     }
   };
-  const planes=cutout?[
+  const planes=cutouts.flatMap(cutout=>[
     {axis:'x' as const,value:cutout.minX,normal:new T.Vector3(1,0,0)},
     {axis:'x' as const,value:cutout.maxX,normal:new T.Vector3(-1,0,0)},
     {axis:'z' as const,value:cutout.minZ,normal:new T.Vector3(0,0,1)},
     {axis:'z' as const,value:cutout.maxZ,normal:new T.Vector3(0,0,-1)},
-  ]:[];
+  ]).filter((plane,index,list)=>list.findIndex(p=>p.axis===plane.axis&&p.value===plane.value&&p.normal.equals(plane.normal))===index);
   const capEdges=planes.map(()=>new Map<string,[Vertex,Vertex]>());
-  const inside=(p:{x:number;z:number},margin=0)=>!!cutout&&p.x>=cutout.minX-margin&&p.x<=cutout.maxX+margin&&p.z>=cutout.minZ-margin&&p.z<=cutout.maxZ+margin;
+  const inside=(p:{x:number;z:number},margin=0)=>cutouts.some(cutout=>p.x>=cutout.minX-margin&&p.x<=cutout.maxX+margin&&p.z>=cutout.minZ-margin&&p.z<=cutout.maxZ+margin);
   const split=(polygon:Vertex[],axis:'x'|'z',value:number)=>{
     if(polygon.every(p=>p[axis]<=value+1e-9)||polygon.every(p=>p[axis]>=value-1e-9))return [polygon];
     const halves:[Vertex[],Vertex[]]=[[],[]];
@@ -46,7 +47,7 @@ export function curbRibbonGeometries(sections:BoundarySection[],cutout?:CurbCuto
   };
   const face=(polygon:Vertex[],color:T.Color)=>{
     let pieces=[polygon];
-    if(cutout&&!(polygon.every(p=>p.x<cutout.minX)||polygon.every(p=>p.x>cutout.maxX)||polygon.every(p=>p.z<cutout.minZ)||polygon.every(p=>p.z>cutout.maxZ))){
+    if(cutouts.some(cutout=>!(polygon.every(p=>p.x<cutout.minX)||polygon.every(p=>p.x>cutout.maxX)||polygon.every(p=>p.z<cutout.minZ)||polygon.every(p=>p.z>cutout.maxZ)))){
       for(const plane of planes)pieces=pieces.flatMap(p=>split(p,plane.axis,plane.value));
     }
     for(const piece of pieces){

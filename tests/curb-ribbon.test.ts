@@ -42,6 +42,18 @@ describe('continuous curb ribbon',()=>{
       }
     }finally{dispose(objects);}
   });
+  it('closes multiple independent openings without duplicate end caps',()=>{
+    const objects=meshes(curbRibbonGeometries(sections(),[{minX:-1,maxX:1,minZ:-4,maxZ:-2},{minX:-1,maxX:1,minZ:2,maxZ:4}]));
+    try{
+      for(const z of [-3.145,3.145]){
+        expect(new T.Raycaster(new T.Vector3(0,1,z),new T.Vector3(0,-1,0)).intersectObjects(objects)).toHaveLength(0);
+        for(const side of [-1,1]){
+          const hits=new T.Raycaster(new T.Vector3(0,.12,z),new T.Vector3(side,0,0),0,1.5).intersectObjects(objects);
+          expect(hits).toHaveLength(1);expect(hits[0].point.x).toBeCloseTo(side,5);
+        }
+      }
+    }finally{dispose(objects);}
+  });
   it('does not shear straight paint boundaries towards a mitered corner',()=>{
     const objects=meshes(curbRibbonGeometries(sections()));
     try{

@@ -91,7 +91,16 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
         // Only the real dashboard should close the inboard side of the foot;
         // recolouring a floating source blade leaves the same pointed bulge.
         add(clip(clip(polygon,0,false,outboard),.0015,false),dashboard);polygon=clip(polygon,0,true,outboard);
-        add(clip(polygon,.004,true),lining);
+        const upper=clip(polygon,.004,true);
+        if(!authored&&!sourceShell&&/^chassis_primary/.test(node.getName())){
+          // This forward frame return belongs to the black windscreen seal.
+          // Pale body lining here left a separate triangular tooth below it.
+          const z=v=>v.point.z,y=v=>v.point.y;
+          add(clip(upper,1.02,false,z,true),lining);
+          const forward=clip(upper,1.02,true,z,true);
+          add(clip(forward,.40,true,y,true),lining);
+          add(clip(forward,.40,false,y,true),weatherstrip);
+        }else add(upper,lining);
         // The authored cowl already closes the horizontal return. Its old
         // upward/downward-facing shell layers would leave isolated dark
         // slivers and z-fighting just above that surface.
@@ -128,7 +137,7 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
           if(points.length<4)throw new Error(`Missing source A-pillar section on side ${side}`);
           const a=points[0].point,b=points.reduce((min,v)=>side*v.point.x<side*min.x?v.point:min,a),d=points.at(-1).point,c=d.clone().add(new T.Vector3(0,0,-.01831));
           const line=new T.CurvePath();for(let i=1;i<points.length;i++)line.add(new T.LineCurve3(points[i-1].point,points[i].point));
-          const main=c.clone().sub(b).normalize(),lip=a.clone().sub(b).normalize(),r=.006,rounded=new T.CurvePath();
+          const main=c.clone().sub(b).normalize(),lip=a.clone().sub(b).normalize(),r=.010,rounded=new T.CurvePath();
           rounded.add(new T.LineCurve3(a,b.clone().addScaledVector(lip,r)));
           rounded.add(new T.QuadraticBezierCurve3(b.clone().addScaledVector(lip,r),b,b.clone().addScaledVector(main,r)));
           rounded.add(new T.LineCurve3(b.clone().addScaledVector(main,r),c.clone().addScaledVector(main,-r)));
@@ -142,8 +151,10 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
           const surfacePoint=(u,y)=>{
             let low=0,high=1;
             for(let j=0;j<20;j++){const t=(low+high)/2;if(rail.getPoint(t).y>y)low=t;else high=t;}
-            const delta=rail.getPoint((low+high)/2).sub(b),blend=1-T.MathUtils.smoothstep(y,.405,.44);
-            return line.getPoint(u).lerp(rounded.getPoint(u),blend).add(delta);
+            const delta=rail.getPoint((low+high)/2).sub(b);
+            // Use one rounded section through the join. Morphing from the
+            // donor's angular cut over only 35 mm left a pinched waist here.
+            return rounded.getPoint(u).add(delta);
           };
           // Put shared mesh rows exactly on both sides of the moulding joint.
           // Clipping a uniform grid across the curved dashboard left long,
@@ -165,10 +176,10 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
             return row<=rows-2?T.MathUtils.lerp(level,top,row/(rows-2)):row===rows-1?bottom:.24;
           };
           const lengths=line.getCurveLengths(),total=line.getLength(),ni=attributes.findIndex(a=>a.semantic==='NORMAL'),normalToLocal=new T.Matrix3().getNormalMatrix(inverse);
-          const rows=32,samples=[...new Set([...Array.from({length:25},(_,i)=>i/24),...lengths.map(length=>length/total)])].sort((a,b)=>a-b),columns=samples.length-1,grid=[];
+          const rows=28,samples=[...new Set([...Array.from({length:25},(_,i)=>i/24),...lengths.map(length=>length/total)])].sort((a,b)=>a-b),columns=samples.length-1,grid=[];
           for(let row=0;row<=rows;row++){
             for(let column=0;column<=columns;column++){
-              const u=samples[column],y=rowHeight(surfacePoint,u,row),blend=1-T.MathUtils.smoothstep(y,.405,.44),p=surfacePoint(u,y),length=u*total;
+              const u=samples[column],y=rowHeight(surfacePoint,u,row),p=surfacePoint(u,y),length=u*total;
               let span=lengths.findIndex(end=>end>=length);if(span<0)span=lengths.length-1;
               const start=span?lengths[span-1]:0,v=lerp(points[span],points[span+1],(length-start)/Math.max(1e-12,lengths[span]-start));v.point=p;
               v.values[attributes.findIndex(a=>a.semantic==='POSITION')]=p.clone().applyMatrix4(inverse).toArray();grid.push(v);
@@ -176,9 +187,7 @@ export function fitFrontPillarFeet({doc,buffer,nodes,worldPoint,lining,dashboard
                 const across=surfacePoint(Math.min(1,u+.001),y).sub(surfacePoint(Math.max(0,u-.001),y));
                 const up=surfacePoint(u,y+.0001).sub(surfacePoint(u,y-.0001));
                 const normal=across.cross(up).multiplyScalar(side).normalize().applyMatrix3(normalToLocal).normalize();
-                // Match the existing shading exactly at the upper join;
-                // below it use the loft's own continuous derivative field.
-                v.values[ni]=new T.Vector3().fromArray(v.values[ni]).normalize().lerp(normal,blend).normalize().toArray();
+                v.values[ni]=normal.toArray();
               }
             }
           }

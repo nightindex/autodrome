@@ -6,8 +6,11 @@ import {parkingMouths} from './parking-control-lines';
 // Positions traced against the supplied plan; headings point towards the driver’s destination.
 export interface SurfaceLabel {text:string;point:Vec2;normal:Vec2;width:number;length:number}
 const label=(text:string,x:number,y:number,nx:number,nz:number,width=text==='B'?.75:1.2,length=1.3):SurfaceLabel=>({text,point:mapPoint(x,y),normal:{x:nx,z:nz},width,length});
+// Midpoints between the START divider (935) and the edge-paint centres
+// (898.35 / 971.65). Each category and its direction arrow share one axis.
+const startLanePlanY={B:953.325,CD:916.675};
 export const categoryLabels:SurfaceLabel[]=[
-  label('B',243,950,1,0),label('CD',243,915,1,0),
+  label('B',243,startLanePlanY.B,1,0),label('CD',243,startLanePlanY.CD,1,0),
   label('B',270,795,-1,0),label('CD',270,755,-1,0),
   label('B',545,795,-1,0),label('CD',545,755,-1,0),
   label('B',1235,812,0,-1),label('CD',1195,835,0,-1),
@@ -26,7 +29,7 @@ export const departureTurnArrows:PaintedArrow[]=[
 ];
 export const paintedArrows:PaintedArrow[]=[
   // START and FINISH, including the separate B and C/D lanes.
-  arrow(275,953.5,1,0),arrow(275,915.5,1,0),
+  arrow(275,startLanePlanY.B,1,0),arrow(275,startLanePlanY.CD,1,0),
   arrow(230,758,-1,0),arrow(230,795,-1,0),...departureTurnArrows,
   // Outer circulation and its opposing direction.
   arrow(198,98,-1,0,'left'),arrow(1061,98,-1,0),

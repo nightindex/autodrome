@@ -24,9 +24,27 @@ describe('railway steel section and embedded support structure',()=>{
     const crossing=createRailwayCrossing();
     for(const name of ['railway-sleepers','railway-fasteners','railway-deck-boards','railway-infill']){
       const mesh=crossing.getObjectByName(name)as T.Mesh;expect(mesh).toBeDefined();
-      expect(mesh.geometry.getAttribute('position').count).toBeGreaterThan(50);
+      expect(mesh.geometry.getAttribute('position').count).toBeGreaterThanOrEqual(36);
     }
     expect(crossing.userData.sleepers).toBe(12);
     crossing.traverse(node=>{if(node instanceof T.Mesh)node.geometry.dispose();});
+  });
+  it('ends all track geometry at the road edges without exposed verge pieces',()=>{
+    const crossing=createRailwayCrossing(),c=railwayCrossing;crossing.updateMatrixWorld(true);
+    try{
+      expect(crossing.userData.trackLength).toBe(c.length);
+      expect(crossing.userData.totalSleepers).toBe(12);
+      const bounds=new T.Box3().setFromObject(crossing);
+      expect(bounds.min.x).toBeCloseTo(c.center.x-c.length/2,5);
+      expect(bounds.max.x).toBeCloseTo(c.center.x+c.length/2,5);
+      for(const side of [-1,1]){
+        for(const z of [-.796,0,.796,1.1,1.5]){
+          const ray=new T.Raycaster(new T.Vector3(c.center.x+side*(c.length/2+.1),1,c.center.z+z),new T.Vector3(0,-1,0));
+          expect(ray.intersectObject(crossing,true)).toHaveLength(0);
+        }
+      }
+      expect(crossing.getObjectByName('railway-ballast-bed')).toBeUndefined();
+      expect(crossing.getObjectByName('railway-ballast-stones')).toBeUndefined();
+    }finally{crossing.traverse(node=>{if(node instanceof T.Mesh)node.geometry.dispose();});}
   });
 });

@@ -45,11 +45,10 @@ export function carBodyLift(wheels:CarWheel[]){
   return .02-loadedLength-authoredHub;
 }
 
-export function updateCarWheel(w:CarWheel,controller:Vehicle['controller'],initial:boolean,menu:boolean,bodyLift=0){
+export function updateCarWheel(w:CarWheel,controller:Vehicle['controller'],initial:boolean,menu:boolean,bodyLift=0,rotation=controller.wheelRotation(w.index)??0){
   w.pivot.rotation.y=!menu&&!initial&&w.front?controller.wheelSteering(w.index)??0:0;
-  // Rapier's positive wheel angle rolls towards local +Z. Convert by radius
+  // A positive wheel angle rolls towards local +Z. Convert by radius
   // and retain a reset phase independently of its cached accumulated angle.
-  const rotation=controller.wheelRotation(w.index)??0;
   if(initial)w.rotationOffset=rotation;
   w.spin.rotation.x=menu?0:(rotation-w.rotationOffset)*vehicleConfig.wheelRadius/w.radius;
   // A reset restores the physical tyres to rest length before Rapier updates

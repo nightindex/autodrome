@@ -225,7 +225,7 @@ export class CourseWorld {
   }
   private build(){
     const grassTex=noiseTexture([103,123,70]);grassTex.repeat.set(100,100);
-    const ground=new T.Mesh(new T.PlaneGeometry(500,500),new T.MeshStandardMaterial({map:grassTex,roughness:1}));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;this.group.add(ground);
+    const ground=new T.Mesh(new T.PlaneGeometry(500,500),new T.MeshStandardMaterial({map:grassTex,roughness:1}));ground.name='course-ground';ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;this.group.add(ground);
     this.physics.createCollider(RAPIER.ColliderDesc.cuboid(250,.2,250).setTranslation(0,-.2,0).setFriction(.85));
     const asphalt=new T.MeshStandardMaterial({map:noiseTexture([103,107,103]),roughness:.96});
     const pavement=new T.Mesh(asphaltGeometry(roadSurface),asphalt);pavement.name='course-asphalt';pavement.receiveShadow=true;this.group.add(pavement);

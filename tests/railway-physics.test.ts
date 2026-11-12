@@ -47,7 +47,7 @@ function cross(kmh:number,withRails=true,reverse=false,yaw=0,direction=1){
 }
 
 describe('traversable railway crossing',()=>{
-  it('keeps the striped infill between two railheads, with ordinary asphalt outside',()=>{
+  it('keeps the crossing deck between two railheads, with ordinary asphalt outside',()=>{
     const world=new RAPIER.World({x:0,y:-9.81,z:0}),surfaces=new Set<number>(),c=railwayCrossing;
     try{
       const colliders=addRailwayColliders(world,surfaces);world.step();
@@ -63,6 +63,18 @@ describe('traversable railway crossing',()=>{
       for(const offset of [-1.2,-.95,.95,1.2])expect(height(offset),'No slab outside the reference rails').toBeUndefined();
       // The source plan's crossing occupies about 17 pixels at 0.1 m/px.
       expect(c.deckHalfSpan*2).toBeGreaterThan(1.6);expect(c.deckHalfSpan*2).toBeLessThan(1.8);
+    }finally{world.free();}
+  });
+
+  it('leaves no hidden track colliders on either verge',()=>{
+    const world=new RAPIER.World({x:0,y:-9.81,z:0}),c=railwayCrossing;
+    try{
+      addRailwayColliders(world,new Set());world.step();
+      expect(world.colliders.len()).toBe(3);
+      for(const side of [-1,1])for(const offset of [-.796,0,.796,1.1,1.5]){
+        const ray=new RAPIER.Ray({x:c.center.x+side*(c.length/2+.1),y:1,z:c.center.z+offset},{x:0,y:-1,z:0});
+        expect(world.castRay(ray,2,true)).toBeNull();
+      }
     }finally{world.free();}
   });
 

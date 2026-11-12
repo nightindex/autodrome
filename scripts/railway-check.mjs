@@ -38,6 +38,27 @@ try{
       return true;
     });
     const outsideClear=[-1.2,-.95,.95,1.2].every(z=>physicsAt(deckX,c.center.z+z)===null&&visualAt(deckX,c.center.z+z)===undefined);
+    const allPhysicsAt=(x,z)=>{
+      const hit=v.world.castRay(new R.Ray({x,y:2,z},{x:0,y:-1,z:0}),3,true,undefined,undefined,undefined,v.body);
+      return hit?2-hit.timeOfImpact:null;
+    };
+    const vergeSurfaces=[];
+    for(const side of [-1,1]){
+      const x=c.center.x+side*(c.length/2+1),ground=s.world.group.getObjectByName('course-ground');
+      for(const z of [.796,1.1,1.5]){
+        const grass=new T.Raycaster(new T.Vector3(x,2,c.center.z+z),new T.Vector3(0,-1,0)).intersectObject(ground)[0];
+        vergeSurfaces.push({side,z,physical:allPhysicsAt(x,c.center.z+z),visual:visualAt(x,c.center.z+z)??null,grass:grass?.point.y??null,support:physicsAt(x,c.center.z+z)});
+      }
+    }
+    const curb=s.world.group.getObjectByName('course-curbs'),curbSurfaces=[];
+    for(const side of [-1,1])for(const offset of [-1.4,-.796,0,.796,1.4]){
+      const z=c.center.z+offset,edge=new T.Raycaster(new T.Vector3(c.center.x,.1,z),new T.Vector3(side,0,0),0,8).intersectObject(curb)[0];
+      const x=edge?edge.point.x+side*.06:NaN;
+      const top=edge?new T.Raycaster(new T.Vector3(x,2,z),new T.Vector3(0,-1,0)).intersectObject(curb)[0]:undefined;
+      curbSurfaces.push({side,z,physical:edge?allPhysicsAt(x,z):null,visual:top?.point.y??null});
+    }
+    const trackBounds=new T.Box3().setFromObject(crossing);
+    const pavedEdgeSupport=allPhysicsAt(c.center.x-c.length/2-.05,c.center.z+1.4);
     const railHandles=railSurfaces.map(r=>r.handle);let state;
     const sample=()=>{
       const p=v.body.translation(),q=v.body.rotation(),vel=v.body.linvel();
@@ -61,12 +82,13 @@ try{
     window.railwayView={eye:[64,5,-19],target:[57.5,0,-25.25],hideCar:true};const render=s.render.bind(s);
     s.render=(...args)=>{render(...args);s.car.visible=!window.railwayView.hideCar;s.guide.visible=s.goal.visible=false;const pose=window.railwayView;s.camera.clearViewOffset();s.camera.fov=44;s.camera.updateProjectionMatrix();s.camera.position.fromArray(pose.eye);s.camera.lookAt(new T.Vector3(...pose.target));s.renderer.setViewport(0,0,innerWidth,innerHeight);s.renderer.render(s.scene,s.camera);};
     window.railwayReview={setup,advance,clear,result,railHandles,render:()=>s.render(v,1/60,v.time,false,0)};
-    return {center:c.center,railTop:c.railTop,deckTop:c.deckTop,railSurfaces,deck,paintClear,dividerOpen,connectedBars,outsideClear,width:c.deckHalfSpan*2,sleepers:railwaySleeperCenters.length,supportCount:v.traversableSurfaces.size,obstacleOverlap:[...v.traversableSurfaces].some(h=>v.obstacles.has(h)),sharedSupportSet:v.traversableSurfaces===s.world.traversableSurfaces,headDrawGroups:railMeshes.map(m=>m.geometry.groups.length),deckMeshes:crossing.children.filter(m=>['railway-deck-boards','railway-infill'].includes(m.name)).length};
+    return {center:c.center,length:c.length,trackBounds:{minX:trackBounds.min.x,maxX:trackBounds.max.x},railTop:c.railTop,deckTop:c.deckTop,railSurfaces,deck,paintClear,dividerOpen,connectedBars,outsideClear,vergeSurfaces,curbSurfaces,pavedEdgeSupport,width:c.deckHalfSpan*2,sleepers:railwaySleeperCenters.length,supportCount:v.traversableSurfaces.size,obstacleOverlap:[...v.traversableSurfaces].some(h=>v.obstacles.has(h)),sharedSupportSet:v.traversableSurfaces===s.world.traversableSurfaces,headDrawGroups:railMeshes.map(m=>m.geometry.groups.length),deckMeshes:crossing.children.filter(m=>['railway-deck-boards','railway-infill'].includes(m.name)).length};
   });
   const captures=[];
   for(const [name,view]of [
     ['overview',{eye:[64,5,-19],target:[57.5,0,-25.25],hideCar:true}],
     ['rail-close',{eye:[59.4,.35,-23.8],target:[58,.02,-25.25],hideCar:true}],
+    ['verge-restored',{eye:[64.8,1.5,-22.9],target:[61.5,0,-25.25],hideCar:true}],
   ]){
     await page.evaluate(view=>{window.railwayView=view;window.railwayReview.render();},view);await page.screenshot({path:`${directory}/${name}.png`});captures.push(`${directory}/${name}.png`);
   }
@@ -103,10 +125,13 @@ try{
   await page.screenshot({path:`${directory}/profile-cutaway.png`});captures.push(`${directory}/profile-cutaway.png`);
   await page.evaluate(()=>{const s=window.__avtodrom.scene;s.scene.remove(s.scene.getObjectByName('railway-cutaway-preview'));s.world.group.getObjectByName('railway-crossing').visible=true;document.querySelector('#railway-cutaway-label').remove();});
   report={fixture,scenarios,captures,errors,checks};
-  check('Running CourseWorld registers the two rails and their central infill',fixture.supportCount===3&&fixture.sharedSupportSet&&!fixture.obstacleOverlap);
+  check('Running CourseWorld registers only the two road rails and central deck',fixture.supportCount===3&&fixture.sharedSupportSet&&!fixture.obstacleOverlap);
   check('Reference crossing is narrow, with asphalt directly outside the rails',fixture.outsideClear&&fixture.width>1.6&&fixture.width<1.8);
   check('Both rendered rail crowns coincide with their collision surfaces',fixture.railSurfaces.every(r=>Math.abs(r.physical-r.visual)<.0001&&Math.abs(r.physical-fixture.railTop)<.0001));
   check('Rendered deck agrees with its physical support',Math.abs(fixture.deck.physical-fixture.deck.visual)<.0001&&Math.abs(fixture.deck.physical-fixture.deckTop)<.0001);
+  check('Both former track beds have continuous grass and ground without hidden railway supports',fixture.vergeSurfaces.every(p=>p.physical!==null&&p.grass!==null&&Math.abs(p.physical)<.0001&&Math.abs(p.grass)<.0001&&p.visual===null&&p.support===null));
+  check('Both roadside curbs are continuous and match their physical surfaces',fixture.curbSurfaces.every(p=>p.visual!==null&&p.physical!==null&&Math.abs(p.visual-.2)<.0001&&Math.abs(p.physical-p.visual)<.0001));
+  check('Track geometry ends inside the road edges and the curved asphalt retains support',Math.abs(fixture.trackBounds.minX-(fixture.center.x-fixture.length/2))<.0001&&Math.abs(fixture.trackBounds.maxX-(fixture.center.x+fixture.length/2))<.0001&&Math.abs(fixture.pavedEdgeSupport)<.0001);
   check('Lane and roadside paint do not float across the railway deck',fixture.paintClear);
   check('Video longitudinal divider ends at both stopping bars and the L corners have no gaps',fixture.dividerOpen&&fixture.connectedBars);
   check('Deck slabs are batched and rail material groups stay compact',fixture.deckMeshes===2&&fixture.headDrawGroups.every(n=>n<=6));

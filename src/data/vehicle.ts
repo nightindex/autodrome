@@ -16,14 +16,25 @@ export const wheelCenter=(index:number):Vec2=>({
   z:(index<2?1:-1)*vehicleConfig.wheelbase/2,
 });
 
+// Hydraulic-steering Cobalt reference: 2.87 handwheel turns lock-to-lock and
+// 10.88 m turning diameter. Sources and regional applicability: docs/REFERENCE.md.
+// The road-wheel limits are an ideal Ackermann estimate, not published angles.
+export const vehicleSteering={
+  lockToLockTurns:2.87,turningDiameter:10.88,
+  maxSteeringWheelAngle:2.87*Math.PI,
+};
+const rearAxleTurnRadius=Math.sqrt((vehicleSteering.turningDiameter/2-vehicleConfig.tyreWidth/2)**2-vehicleConfig.wheelbase**2)-vehicleConfig.frontTrack/2;
+
 // Gameplay estimates for a dry-road, front-wheel-drive manual Cobalt.
 // Keep resistance explicit: body damping must not dictate top speed.
 export const vehicleDynamics={
   airDensity:1.225,dragArea:.70,rollingResistance:.013,grassResistance:.065,
   drivelineEfficiency:.88,clutchCapacity:210,engineInertia:.24,
+  // Estimated wheel/tyre rotational inertia and unloaded bearing losses.
+  wheelInertia:1.2,wheelBearingTorque:.2,wheelRotationalDrag:.08,
   serviceBrakeForce:10500,frontBrakeShare:.66,parkingBrakeForce:8000,
   // Nominal settled length measured on flat asphalt with this controller.
   suspensionRestLength:.28,loadedSuspensionLength:.21179,suspensionTravel:.18,suspensionStiffness:32,antiRollStiffness:4200,
   maxSuspensionForce:9500,asphaltGrip:.95,grassGrip:.45,
-  handbrakeGrip:.65,maxSteeringAngle:.56,steeringLateralAcceleration:6.5,
+  handbrakeGrip:.65,maxSteeringAngle:Math.atan(vehicleConfig.wheelbase/rearAxleTurnRadius),steeringLateralAcceleration:6.5,
 };

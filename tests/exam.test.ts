@@ -127,5 +127,34 @@ describe('scoring invariants',()=>{
   it('scores a stop first observed just after the emergency deadline',()=>{const e=make('emergency');tick(e,{}, {emergencySignal:true});tick(e,{speed:0},{},2.01);expect(has(e,19)).toBe(true);});
   it('scores hazards first activated just after their deadline',()=>{const e=make('emergency');tick(e,{}, {emergencySignal:true});tick(e,{speed:0});tick(e,{speed:0,hazards:true},{},3.01);expect(has(e,20)).toBe(true);});
   it('detects early restart even with slowly rising speed',()=>{const e=make('pedestrian');tick(e,{speed:0},{stopDistance:.5},1);tick(e,{speed:.13},{stopDistance:.49});expect(has(e,12)).toBe(true);});
+  for(const [mode,free]of [['practice',false],['practice',true],['exam',false]]as const){
+    it(`retains a completed hill stop through a brief rollback and re-stop (${mode}, free=${free})`,()=>{
+      const e=new ExamEngine(mode,900,free);e.setExercise('hill');
+      for(let frame=0;frame<180;frame++)tick(e,{speed:0,signedSpeed:0},{stopDistance:.5});
+      expect(e.stoppedCorrectly).toBe(true);
+      tick(e,{speed:.16,signedSpeed:-.16},{stopDistance:.52,hillRollback:.02});
+      tick(e,{speed:0,signedSpeed:0},{stopDistance:.53,hillRollback:.03});
+      tick(e,{speed:.18,signedSpeed:-.18},{stopDistance:.55,hillRollback:.05});
+      expect(has(e,12)).toBe(false);expect(e.stoppedCorrectly).toBe(true);expect(e.stopSeconds).toBeGreaterThanOrEqual(3-1e-8);
+    });
+  }
+  it('still scores a premature rollback before the hill hold is complete',()=>{
+    const e=make('hill');tick(e,{speed:0,signedSpeed:0},{stopDistance:.5},2.9);
+    tick(e,{speed:.16,signedSpeed:-.16},{stopDistance:.52,hillRollback:.02});
+    expect(has(e,12)).toBe(true);expect(e.stoppedCorrectly).toBe(false);
+  });
+  it('scores excessive hill rollback after a completed hold without inventing an early restart',()=>{
+    const e=make('hill');tick(e,{speed:0,signedSpeed:0},{stopDistance:.5},3);
+    tick(e,{speed:.16,signedSpeed:-.16},{stopDistance:.52,hillRollback:.02});
+    tick(e,{speed:0,signedSpeed:0},{stopDistance:.53,hillRollback:.03});
+    tick(e,{speed:.4,signedSpeed:-.4},{stopDistance:.81,hillRollback:.31});
+    expect(e.events.map(event=>event.ruleId)).toEqual([14]);
+  });
+  it('requires a fresh three-second hold on a new hill visit',()=>{
+    const e=make('hill');tick(e,{speed:0,signedSpeed:0},{stopDistance:.5},3);
+    e.setExercise('hill');tick(e,{speed:0,signedSpeed:0},{stopDistance:.5},1);
+    tick(e,{speed:.16,signedSpeed:-.16},{stopDistance:.52,hillRollback:.02});
+    expect(has(e,12)).toBe(true);expect(e.stoppedCorrectly).toBe(false);
+  });
   it('checks finish signaling when crossing, not after stopping',()=>{const e=make('finish');tick(e,{indicator:'right'},{finishCrossed:true});tick(e,{indicator:'off'},{finished:true});expect(has(e,7)).toBe(false);});
 });

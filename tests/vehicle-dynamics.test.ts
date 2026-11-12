@@ -2,7 +2,7 @@ import { beforeAll,describe,expect,it } from 'vitest';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Vehicle } from '../src/simulation/vehicle';
 import { Drivetrain,rpmAtSpeed } from '../src/simulation/drivetrain';
-import { vehicleConfig,vehicleDynamics } from '../src/data/vehicle';
+import { vehicleConfig,vehicleDynamics,vehicleSteering } from '../src/data/vehicle';
 import { addStaticObstacle } from '../src/simulation/static-collision';
 import { curbGeometry } from '../src/render/road-geometry';
 import { ExamEngine } from '../src/simulation/exam';
@@ -78,6 +78,22 @@ describe('gear-dependent road dynamics',()=>{
       // Recover the virtual rack angle from both Ackermann wheel angles.
       const cot=(index:number)=>1/Math.tan(run.car.controller.wheelSteering(index)!);
       expect(Math.atan(2/(cot(0)+cot(1)))).toBeCloseTo(vehicleDynamics.maxSteeringAngle);
+      expect(run.car.controller.wheelSteering(2)).toBe(0);expect(run.car.controller.wheelSteering(3)).toBe(0);
+    }finally{run.dispose();}
+  });
+  it.each([-1,1])('matches the Cobalt turning circle at full lock in direction %i',(direction)=>{
+    const run=track();
+    try{
+      run.held.add(direction>0?'left':'right');run.step(60,false);
+      const inner=run.car.controller.wheelSteering(direction>0?1:0)!;
+      const outer=run.car.controller.wheelSteering(direction>0?0:1)!;
+      expect(Math.abs(inner)*180/Math.PI).toBeCloseTo(39.7344,3);
+      expect(Math.abs(outer)*180/Math.PI).toBeCloseTo(29.3673,3);
+      expect(Math.sign(inner)).toBe(direction);expect(Math.sign(outer)).toBe(direction);
+      const outerRadius=vehicleConfig.wheelbase/Math.sin(Math.abs(outer));
+      expect(2*outerRadius+vehicleConfig.tyreWidth).toBeCloseTo(vehicleSteering.turningDiameter,5);
+      const handwheel=run.car.telemetry().steering*vehicleSteering.maxSteeringWheelAngle;
+      expect(handwheel*180/Math.PI).toBeCloseTo(direction*516.6,6);
       expect(run.car.controller.wheelSteering(2)).toBe(0);expect(run.car.controller.wheelSteering(3)).toBe(0);
     }finally{run.dispose();}
   });

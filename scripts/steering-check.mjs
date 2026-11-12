@@ -53,7 +53,7 @@ try{
     const R=(await import(rapierUrl)).default;
     const T=await import('/node_modules/three/build/three.module.js');
     const {Vehicle}=await import('/src/simulation/vehicle.ts');
-    const {vehicleDynamics}=await import('/src/data/vehicle.ts');
+    const {vehicleConfig,vehicleDynamics,vehicleSteering}=await import('/src/data/vehicle.ts');
     const create=()=>{
       const world=new R.World({x:0,y:-9.81,z:0});world.createCollider(R.ColliderDesc.cuboid(10000,.2,10000).setTranslation(0,-.2,0));
       const car=new Vehicle(world,new Set());car.reset({x:0,z:0},0);
@@ -100,7 +100,33 @@ try{
         const p=v.body.translation();road.push({kmh,assistance,minUp,peakBodySlip,peakTyreSlip,peakYawRate,peakHeight,finalSpeed:v.telemetry().speed,finalSteering:v.telemetry().steering,finite:[p.x,p.y,p.z].every(Number.isFinite)});
       }finally{run.dispose();}
     }
-    return {bench,road,maxAngle:vehicleDynamics.maxSteeringAngle};
+    const circles=[];
+    // An actual slow powered circle checks tyre forces as well as the geometric
+    // steering limits. Fit the centre from rear-axle points after full lock.
+    for(const direction of [-1,1]){
+      const run=create(),v=run.car;
+      try{
+        run.held.add(direction>0?'left':'right');
+        for(let i=0;i<60;i++)v.update(1/60,run.input,false);
+        v.drivetrain.clutch=1;v.action('ignition');v.action('gear1');
+        const samples=[];let yaw=0,lastYaw=v.telemetry().yaw;
+        for(let i=0;i<3600;i++){
+          if(v.telemetry().speed<1.2)run.held.add('throttle');else run.held.delete('throttle');
+          v.update(1/60,run.input,true);
+          const t=v.telemetry(),delta=Math.atan2(Math.sin(t.yaw-lastYaw),Math.cos(t.yaw-lastYaw));
+          yaw+=delta;lastYaw=t.yaw;
+          if(Math.abs(yaw)>.6&&i%10===0)samples.push({x:t.position.x-Math.sin(t.yaw)*vehicleConfig.wheelbase/2,z:t.position.z-Math.cos(t.yaw)*vehicleConfig.wheelbase/2});
+          if(Math.abs(yaw)>Math.PI*2+.6)break;
+        }
+        const a=samples[0],b=samples[Math.floor(samples.length/3)],c=samples[Math.floor(samples.length*2/3)];
+        const aa=a.x*a.x+a.z*a.z,bb=b.x*b.x+b.z*b.z,cc=c.x*c.x+c.z*c.z;
+        const d=2*(a.x*(b.z-c.z)+b.x*(c.z-a.z)+c.x*(a.z-b.z));
+        const centre={x:(aa*(b.z-c.z)+bb*(c.z-a.z)+cc*(a.z-b.z))/d,z:(aa*(c.x-b.x)+bb*(a.x-c.x)+cc*(b.x-a.x))/d};
+        const radii=samples.map(p=>Math.hypot(p.x-centre.x,p.z-centre.z)),radius=radii.reduce((sum,r)=>sum+r,0)/radii.length;
+        circles.push({direction,yaw,rearAxleRadius:radius,diameter:2*Math.hypot(radius+vehicleConfig.frontTrack/2,vehicleConfig.wheelbase)+vehicleConfig.tyreWidth,radialSpread:Math.max(...radii)-Math.min(...radii),samples:samples.length});
+      }finally{run.dispose();}
+    }
+    return {bench,road,circles,maxAngle:vehicleDynamics.maxSteeringAngle,reference:vehicleSteering};
   });
   await writeFile(`${directory}/physics.json`,JSON.stringify(physics,null,2));
   for(const row of physics.bench){
@@ -111,6 +137,7 @@ try{
   check('Short inputs are gentler at speed',physics.bench.find(r=>r.kmh===60&&!r.assistance).tap<physics.bench.find(r=>r.kmh===5&&!r.assistance).tap*.6);
   for(const row of physics.road)check(`Stable turn, countersteer and release at ${row.kmh} km/h, aid ${row.assistance}`,row.finite&&row.minUp>.75&&row.peakHeight<1.2&&Math.abs(row.finalSteering)<1e-6);
   check('Unassisted excessive high-speed steering produces front tyre slip',physics.road.find(r=>r.kmh===100&&!r.assistance).peakTyreSlip>.5);
+  for(const row of physics.circles)check(`Slow powered circle matches the Cobalt diameter: direction ${row.direction}`,Math.abs(row.yaw)>Math.PI*2&&Math.abs(row.diameter-physics.reference.turningDiameter)<.4&&row.radialSpread<.25);
 
   await page.evaluate(()=>{window.__avtodrom.start('practice');window.__avtodrom.pause();});
   const visual=await page.evaluate(async()=>{
@@ -124,7 +151,8 @@ try{
       v.update(1/60,left,false,true);
     }
     const t=v.telemetry();s.render(v,1/60,0,false,0);
-    const expected=s.steeringBase.clone().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-t.steering*4.2));
+    const {vehicleSteering}=await import('/src/data/vehicle.ts');
+    const expected=s.steeringBase.clone().multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-t.steering*vehicleSteering.maxSteeringWheelAngle));
     const result={rack:v.steering.angle,normalized:t.steering,cabinError:s.steering.quaternion.angleTo(expected),wheels:s.wheels.map(w=>({index:w.index,visual:w.pivot.rotation.y,physics:v.controller.wheelSteering(w.index)}))};
     s.cameraMode='cockpit';return result;
   });
@@ -132,7 +160,30 @@ try{
   check('All rendered road wheels match physical steering',visual.wheels.every(w=>Math.abs(w.visual-w.physics)<1e-7));
   await page.addStyleTag({content:'#hud,#menu-shell,#modal,.vignette,#toast{display:none!important}dialog::backdrop{display:none}'});
   await page.waitForTimeout(250);await page.screenshot({path:`${directory}/assisted-cockpit.png`});
+  const sweep=await page.evaluate(async()=>{
+    const T=await import('/node_modules/three/build/three.module.js'),a=window.__avtodrom,s=a.scene,v=a.vehicle;
+    v.reset({x:-25,z:40.5},Math.PI/2);
+    const idle={down:()=>false};for(let i=0;i<60;i++)v.update(1/60,idle,false);s.render(v,1/60,0,false,0);
+    const initial=s.steering.quaternion.clone();let previous=initial.clone(),rotation=0,maxStep=0,maxWheelError=0;
+    const captures=[];
+    // Accumulate signed frame rotations: quaternion endpoints alone cannot
+    // distinguish 2.87 turns from a short rotation to the same orientation.
+    for(const direction of [1,-1,0]){
+      for(let i=0;i<120;i++){
+        v.update(1/60,{down:action=>direction===1?action==='left':direction===-1?action==='right':false},false);
+        s.render(v,1/60,0,false,0);
+        const current=s.steering.quaternion.clone(),delta=previous.clone().invert().multiply(current);
+        let angle=2*Math.atan2(delta.z,delta.w);angle=Math.atan2(Math.sin(angle),Math.cos(angle));
+        rotation+=angle;maxStep=Math.max(maxStep,Math.abs(angle));previous=current;
+        for(const w of s.wheels)maxWheelError=Math.max(maxWheelError,Math.abs(w.pivot.rotation.y-v.controller.wheelSteering(w.index)));
+      }
+      captures.push({direction,degrees:rotation*180/Math.PI,rack:v.telemetry().steering,wheels:[0,1,2,3].map(i=>v.controller.wheelSteering(i)*180/Math.PI)});
+    }
+    return {captures,maxStep,maxWheelError,returnedError:s.steering.quaternion.angleTo(initial)};
+  });
+  check('Cabin wheel reaches 516.6 degrees in both directions',Math.abs(sweep.captures[0].degrees+516.6)<1e-5&&Math.abs(sweep.captures[1].degrees-516.6)<1e-5);
+  check('Full steering sweep stays smooth and returns to centre',sweep.maxStep<.5&&sweep.maxWheelError<1e-7&&sweep.returnedError<1e-7&&Math.abs(sweep.captures[2].degrees)<1e-5);
   check('No runtime errors',errors.length===0);
-  const report={checks,errors,modes,physics,visual};await writeFile(`${directory}/report.json`,JSON.stringify(report,null,2));
-  console.log(JSON.stringify({checks,errors,road:physics.road,visual},null,2));
+  const report={checks,errors,modes,physics,visual,sweep};await writeFile(`${directory}/report.json`,JSON.stringify(report,null,2));
+  console.log(JSON.stringify({checks,errors,road:physics.road,circles:physics.circles,visual,sweep},null,2));
 }finally{await browser.close();}

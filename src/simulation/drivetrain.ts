@@ -35,7 +35,7 @@ export class Drivetrain {
     this.pendingGear=gear;this.shiftTime=0;return true;
   }
   private safeGear(gear:number){return !((gear<0&&this.speed>.5)||(gear>0&&this.speed<-.5)||Math.abs(rpmAtSpeed(this.speed,gear))>c.redlineRpm*1.05);}
-  update(dt:number,signedSpeed:number,controls:{throttle:number;brake:number;clutch:number},assist:boolean){
+  update(dt:number,signedSpeed:number,controls:{throttle:number;brake:number;clutch:number},assist:boolean,freeAxleInertia?:number){
     this.speed=signedSpeed;
     if(!assist)this.pendingGear=null;
     if(this.manualGear!==null){
@@ -75,7 +75,10 @@ export class Drivetrain {
     const freeOmega=Math.max(0,omega+motorTorque*dt/engineInertia);
     // Implicit viscous coupling conserves the engine's response to load without
     // oscillating across the shaft speed on successive fixed steps.
-    const transmitted=clamp((freeOmega-shaftOmega)/(dt/engineInertia+1/18),-capacity,capacity);
+    // With both driven wheels airborne, include their reflected inertia in
+    // the same coupling step. Chassis speed no longer represents shaft RPM.
+    const axleResponse=freeAxleInertia===undefined?0:dt*ratio*ratio*dynamics.drivelineEfficiency/freeAxleInertia;
+    const transmitted=clamp((freeOmega-shaftOmega)/(dt/engineInertia+axleResponse+1/18),-capacity,capacity);
     this.rpm=Math.max(0,(freeOmega-transmitted*dt/engineInertia)/rpmToRadians);
     if(this.engine&&this.rpm<450&&this.clutch<.35&&!assist)this.stallTime+=dt;else this.stallTime=0;
     if(this.stallTime>.25){this.engine=false;this.stalled=true;}

@@ -40,7 +40,7 @@ describe('moving car shadow stability',()=>{
     }
   });
   it('keeps the source parcel shelf and rear pillar lining free of coarse shadow patches',()=>{
-    for(const name of ['COBALT_ParcelShelf','COBALT_RearPillarTrim']){
+    for(const name of ['COBALT_ParcelShelf','COBALT_RearPillarTrim','COBALT_Headliner','COBALT_HeadlinerJoint','COBALT_CabinWindowSeals','COBALT_PillarJoint']){
       const material=new T.MeshPhysicalMaterial();material.name=name;
       const mesh=new T.Mesh(new T.BoxGeometry(),material);mesh.name='chassis_door_source_trim';
       configureCarShadows(mesh);expect(mesh.castShadow).toBe(true);expect(mesh.receiveShadow).toBe(false);

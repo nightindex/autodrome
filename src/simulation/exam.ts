@@ -83,14 +83,16 @@ export class ExamEngine {
       const d=o.stopDistance;
       // An exercise can spawn parked near its line; preparation is not a failed approach.
       if(d>=0 && d<6 && (this.started||d<=1))this.stopApproached=true;
-      if(stopped && this.stopApproached && d>=0 && d<6){
+      // A completed hold belongs to this stop-line visit. Briefly stopping
+      // again while launching or arresting rollback must not start a new hold.
+      if(stopped && this.stopApproached && d>=0 && d<6 && !this.stopSatisfied){
         if(!this.wasStopped){this.stoppedAt=this.time;this.stoppedFor=0;if(d>1)this.add(4);}
         this.stoppedFor+=dt;
         if(d<=1)this.lineStopOccurred=true;
         if(d<=1 && this.stoppedFor>=3-1e-8)this.stopSatisfied=true;
       }
       if(!stopped && this.stoppedAt!==null){
-        if(this.stoppedFor<3-1e-8)this.add(12);
+        if(!this.stopSatisfied && this.stoppedFor<3-1e-8)this.add(12);
         this.stoppedAt=null;
       }
       if(this.exercise==='hill' && this.stoppedAt!==null && this.time-this.stoppedAt>=30)this.add(13);

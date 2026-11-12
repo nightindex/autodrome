@@ -10,7 +10,8 @@ import { trimSourceInterior,lineRearWheelWells,refineRearCabinTrim } from './cob
 import { fitFrontPillarFeet } from './cobalt-pillar-fit.mjs';
 import { buildMirrorSwitch } from './cobalt-mirror-switch.mjs';
 import { buildUpperCabinTrim } from './cobalt-upper-trim.mjs';
-import { extractRearGlassExterior,extractSideMirror } from './cobalt-glass.mjs';
+import { fitPillarFrameOpening } from './cobalt-pillar-frame.mjs';
+import { extractRearGlassExterior,extractSideMirror,fitFrontGlassFrame } from './cobalt-glass.mjs';
 import {buildSideMirrorMounts,rebuildSideMirrorShells} from './cobalt-mirror-mount.mjs';
 
 /** Refine the supplied mesh using authored materials/details, without embedding reference photos. */
@@ -202,6 +203,12 @@ export async function refineCar(doc){
   refineCabinRailMaterials({doc,buffer,nodes:originalNodes,worldPoint,lining:mats.headliner});
   const fittedRoofVertices=fitRoofLining(doc,buffer,normalize);
   buildUpperCabinTrim({doc,buffer,nodes:originalNodes,worldPoint,lining:mats.headliner,seam:material('COBALT_HeadlinerJoint',0x292b28,0,1),weatherstrip:material('COBALT_CabinWindowSeals',0x1b1c1a,0,1).setDoubleSided(true),put});
+  // Fit glazing last: the moulding/seal contours retain their original shape,
+  // while both glass faces extend underneath the finished opaque frame.
+  for(const node of originalNodes.filter(n=>/^windscreen/.test(n.getName())))for(const primitive of node.getMesh()?.listPrimitives()??[]){
+    if(primitive.getMaterial()===mats.glass)fitFrontGlassFrame({doc,buffer,node,primitive,worldPoint});
+  }
+  fitPillarFrameOpening({doc,buffer,nodes:originalNodes,worldPoint});
   const specular=doc.createExtension(KHRMaterialsSpecular);
   const matte=(name,hex)=>material(name,hex,0,1).setExtension('KHR_materials_specular',specular.createSpecular().setSpecularFactor(.12));
   const rearTrim=refineRearCabinTrim({doc,buffer,nodes:originalNodes,worldPoint,shelf:matte('COBALT_ParcelShelf',0x575b58),lining:matte('COBALT_RearPillarTrim',0xb1b2aa)});

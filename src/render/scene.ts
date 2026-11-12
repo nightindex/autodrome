@@ -6,7 +6,7 @@ import type { Settings, Vec2 } from '../types';
 import { CourseWorld,roadDistance } from './course-world';
 import { course, hillHeight } from '../data/course';
 import { intersectionApproaches } from '../data/intersection';
-import { vehicleConfig } from '../data/vehicle';
+import { vehicleConfig,vehicleSteering } from '../data/vehicle';
 import { CobaltVisuals } from './cobalt-visuals';
 import { CabinControls } from './cabin-controls';
 import { stableShadowTarget,shadowSpan,sunOffset } from './shadow-stability';
@@ -158,9 +158,9 @@ export class GameScene {
     const p=vehicle.body.translation(),r=vehicle.body.rotation();this.car.position.set(p.x,p.y,p.z);this.car.quaternion.set(r.x,r.y,r.z,r.w);
     if(menu)this.car.position.y=hillHeight(p.x,p.z)+(this.wheels.length?vehicleConfig.wheelRadius-this.wheels[0].base.y:.63);else this.car.translateY(this.bodyLift);
     const t=vehicle.telemetry();
-    for(const w of this.wheels)updateCarWheel(w,vehicle.controller,vehicle.time===0,menu,this.bodyLift);
+    for(const w of this.wheels)updateCarWheel(w,vehicle.controller,vehicle.time===0,menu,this.bodyLift,vehicle.wheelRotation(w.index));
     // Telemetry is the actual rack position, including optional assistance.
-    if(this.steering)this.steering.quaternion.copy(this.steeringBase).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-t.steering*4.2));
+    if(this.steering)this.steering.quaternion.copy(this.steeringBase).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-t.steering*vehicleSteering.maxSteeringWheelAngle));
     this.cobalt?.update(t,dt);
     (['left','right'] as const).forEach((side,i)=>{
       const angles=this.mirrorAngles[side],target=this.mirrorAdjustments[side];
