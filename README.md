@@ -46,6 +46,14 @@ npm run test:production # Build and check dist using real browser controls
 
 `test:production` starts and stops its own local preview server. It checks desktop keyboard driving, mobile multi-touch, RU/UZ, settings, exercises, practice/exam modes, pause/resume, portrait handling, asset delivery, missing-model retry and the absence of mutable development controls. It uses an installed Playwright Chromium or Windows Chrome; set `CHROME_PATH` to choose a browser, or run `npx playwright install chromium`. Reports and captures are written to `test-results/production/`.
 
+The same checks can run against a deployed site's root URL without a local build or preview server. This reads the deployed HTML and its actual bundle URL; it does not modify the deployment. Missing-model recovery is simulated only in the test browser. Deployment reports go to `test-results/deployment/`; `PRODUCTION_REPORT_DIR` can choose another report directory.
+
+```powershell
+$env:SIMULATOR_URL = 'https://autodrome.vercel.app/'
+node scripts/production-check.mjs
+Remove-Item Env:SIMULATOR_URL
+```
+
 For deployment, publish the contents of `dist/` at a site's root over HTTPS. The app uses root-relative asset URLs and a root-scoped manifest; a GitHub Pages project subdirectory needs a base-path change first. Enable Brotli/gzip at the host/CDN, cache content-hashed JS/CSS for a long time, and revalidate HTML, the manifest and unversioned public assets. Vite's preview server is for verification. The current entry bundle remains large; physical Android/iOS and Safari performance/gesture testing is still required before broad mobile release.
 
 `npm run test:browser` runs browser checks against the dev server. It uses an installed Chrome via `CHROME_PATH`, the detected local Playwright Chromium, or Playwright's default browser. If no browser is installed, run `npx playwright install chromium`. Results and screenshots go to `test-results/`.

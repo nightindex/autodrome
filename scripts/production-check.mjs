@@ -6,17 +6,21 @@ import {preview} from 'vite';
 
 // Exercise dist through public UI and keyboard/touch events. Production must
 // not depend on the mutable test controls exposed by the development server.
-const directory='test-results/production';
+const deployedURL=process.env.SIMULATOR_URL?new URL(process.env.SIMULATOR_URL):undefined;
+if(deployedURL)assert(['http:','https:'].includes(deployedURL.protocol)&&deployedURL.pathname==='/'&&!deployedURL.search&&!deployedURL.hash,'SIMULATOR_URL must be the root URL of the deployed site');
+const directory=process.env.PRODUCTION_REPORT_DIR??(deployedURL?'test-results/deployment':'test-results/production');
 await mkdir(directory,{recursive:true});
-const html=await readFile('dist/index.html','utf8');
-assert(!html.includes('/src/main.ts')&&!html.includes('/@vite/client'),'Build the production bundle first');
-const report={status:'running',engine:'Chromium; desktop and emulated mobile',checks:[],errors:[],consoleErrors:[],httpErrors:[],externalRequests:[],scenarios:[]};
+const report={status:'running',target:deployedURL?.href??'local production preview',engine:'Chromium; desktop and emulated mobile',checks:[],errors:[],consoleErrors:[],httpErrors:[],requestFailures:[],externalRequests:[],scenarios:[]};
 const check=(name,condition)=>{assert(condition,name);report.checks.push(name);};
-const server=await preview({preview:{host:'127.0.0.1',port:0,strictPort:true},logLevel:'error'});
-const origin=`http://127.0.0.1:${server.httpServer.address().port}`;
 const executablePath=[process.env.CHROME_PATH,chromium.executablePath(),'C:/Program Files/Google/Chrome/Application/chrome.exe'].find(p=>p&&existsSync(p));
-let browser;
+let browser,server;
 try{
+  if(!deployedURL)server=await preview({preview:{host:'127.0.0.1',port:0,strictPort:true},logLevel:'error'});
+  const origin=deployedURL?.origin??`http://127.0.0.1:${server.httpServer.address().port}`;
+  const response=deployedURL?await fetch(deployedURL):undefined;
+  if(response){assert(response.ok,`Deployed page returned HTTP ${response.status}`);report.delivery={url:response.url,status:response.status,headers:Object.fromEntries(['content-type','content-encoding','cache-control','strict-transport-security'].map(key=>[key,response.headers.get(key)]))};}
+  const html=response?await response.text():await readFile('dist/index.html','utf8');
+  assert(!html.includes('/src/main.ts')&&!html.includes('/@vite/client'),'The target must serve a production build');
   browser=await chromium.launch({headless:true,...(executablePath?{executablePath}:{}),args:['--enable-webgl','--ignore-gpu-blocklist','--enable-unsafe-swiftshader']});
   const init=()=>{
     localStorage.setItem('avtodrom.settings.v1',JSON.stringify({language:'ru',quality:'low',volume:0}));
@@ -31,6 +35,7 @@ try{
     page.setDefaultTimeout(20000);page.on('pageerror',e=>report.errors.push(`${name}: ${e.message}`));
     page.on('console',message=>{if(message.type()==='error')report.consoleErrors.push(`${name}: ${message.text()}`);});
     page.on('response',response=>{if(response.status()>=400)report.httpErrors.push({scenario:name,status:response.status(),url:response.url()});});
+    page.on('requestfailed',request=>report.requestFailures.push({scenario:name,url:request.url(),error:request.failure()?.errorText}));
     page.on('request',request=>{if(/^https?:/.test(request.url())&&new URL(request.url()).origin!==origin)report.externalRequests.push(request.url());});
     await page.addInitScript(init);await page.goto(origin);await ready(page);
     check(`${name}: production exposes read-only diagnostics only`,await page.evaluate(()=>Object.keys(window.__avtodrom).join(',')==='snapshot'));
@@ -109,7 +114,7 @@ try{
   check('Retry recovers a failed production load',(await snapshot(retry)).state==='menu');await retry.close();
   check('No unexpected browser errors',report.errors.length===0);
   check('No unexpected console errors',report.consoleErrors.length===0);
-  check('No missing production resources',report.httpErrors.length===0);
+  check('No missing production resources',report.httpErrors.length===0&&report.requestFailures.length===0);
   check('Startup needs no third-party services',report.externalRequests.length===0);
   report.status='passed';
   console.log(JSON.stringify(report,null,2));
@@ -117,5 +122,5 @@ try{
   report.status='failed';report.failure=error instanceof Error?error.message:String(error);throw error;
 }finally{
   await writeFile(`${directory}/report.json`,JSON.stringify(report,null,2));
-  await browser?.close();await server.close();
+  await browser?.close();await server?.close();
 }

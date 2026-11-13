@@ -1,5 +1,13 @@
 # Validation
 
+## Live Vercel deployment - 13 November 2026
+
+[autodrome.vercel.app](https://autodrome.vercel.app/) successfully deployed source commit `6d97a7b`. The live site passes all **29 production browser checks**, including actual desktop keyboard driving and simultaneous mobile steering/throttle, localized menus, settings/exercise selection, practice/exam entry, instrument actions, pause/resume, portrait clock freeze and browser-local failed-model retry. No unexpected page errors, console errors, failed requests, HTTP errors or third-party startup requests were observed. Production exposes only the read-only diagnostic snapshot. Evidence: `test-results/deployment/report.json`, `desktop.png`, `mobile.png`.
+
+A separate fresh desktop context with no saved settings verifies the default medium graphics path on hardware WebGL: all four wheels load, 376 draw calls and 1,313,980 triangles are submitted, with no browser/network errors. The Intel UHD / Chrome 157 check reached readiness in 10.7 seconds and observed 57 FPS in one menu sample; this is not a sustained driving or real-phone performance guarantee. Evidence: `test-results/deployment/default-desktop-report.json` and `default-desktop.png`.
+
+HTTP checks confirm HTTPS/HSTS, Brotli delivery for HTML and the model, and HTTP 200 with appropriate MIME types for the built entry, binary model, manifest and touch-wheel image. The deployment serves the expected `index-lKDO6V89.js` and `index-BD5ez5ul.css` bundle. Vercel's current revalidation policy preserves freshness of unversioned public assets. No application or Vercel configuration fix was needed. The production checker now accepts `SIMULATOR_URL`, validates the remote HTML rather than a local build, records the tested URL and delivery headers, and preserves the self-hosted preview path when that variable is unset. Physical iOS/Android, Safari gestures and sustained mobile performance remain outside these Chromium checks.
+
 ## Production release check - 13 November 2026
 
 - Full unit suite: **773 tests in 63 files pass** (`npm test -- --maxWorkers=2`). TypeScript and the Vite production build pass. The dependency lock matches `package.json` (`npm ci --dry-run --ignore-scripts --offline --audit=false`).
