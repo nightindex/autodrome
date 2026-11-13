@@ -42,7 +42,7 @@ export class CabinControls {
   }
   update(enabled:boolean){
     this.enabled=enabled;
-    if(this.knob){const phase=(performance.now()-this.pressedAt)/160;this.knob.position.z=this.rest-(phase>=0&&phase<1?Math.sin(phase*Math.PI)*.0013:0);}
+    if(this.knob){const phase=(performance.now()-this.pressedAt)/160;this.knob.position.z=this.rest-(phase>=0&&phase<1?Math.sin(phase*Math.PI)*.0013:0);this.knob.updateMatrixWorld();}
     if(!enabled||!this.control||Math.abs(this.pointer.x)>1||Math.abs(this.pointer.y)>1){this.setHover(false);return;}
     // Reject almost all pointer positions before raycasting the detailed car.
     this.bounds.setFromObject(this.control);let left=Infinity,right=-Infinity,bottom=Infinity,top=-Infinity;

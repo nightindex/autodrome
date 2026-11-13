@@ -2,6 +2,7 @@ import * as T from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import polygonClipping from 'polygon-clipping';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import {courseCurbSections} from './curb-clearance';
 import { course, hillBounds, hillHeight, hillProfile, mapPoint,startLinePoint,emergencyStopStation } from '../data/course';
 import { distance, segmentDistance } from '../simulation/math';
 import type { Vec2,Settings } from '../types';
@@ -56,7 +57,7 @@ export const intersectionCrossings=intersectionApproaches.map(a=>{
   return {id:a.id,...fitted,center:a.crossing,width:Math.min(7.2,fitted.width)};
 });
 export const boundaryLoops=roadBoundaryLoops(roadSurface);
-export const curbSections=boundarySections(boundaryLoops,-.025,-.025-roadPaint.curbWidth,roadPaint.curbStripe);
+export const curbSections=courseCurbSections(boundaryLoops);
 export const curbSurface=curbSurfaces(curbSections,roadSurface);
 const deck=railwayDeckBounds,railwayPaintGap:polygonClipping.MultiPolygon=[[[[deck.minX,deck.minZ],[deck.maxX,deck.minZ],[deck.maxX,deck.maxZ],[deck.minX,deck.maxZ],[deck.minX,deck.minZ]]]];
 const edgeSurface=polygonClipping.difference(boundaryPaintSurface(boundarySections(boundaryLoops,roadPaint.edgeInset,roadPaint.edgeInset+roadPaint.edgeWidth)),railwayPaintGap);
@@ -356,6 +357,7 @@ export class CourseWorld {
     this.box(9,3.8,5,-47,1.9,54,pale,true);this.box(9.8,.2,5.8,-47,3.9,54,this.pole);
   }
   private buildingTexture(){const c=document.createElement('canvas');c.width=c.height=256;const ctx=c.getContext('2d')!;ctx.fillStyle='#b7c1b9';ctx.fillRect(0,0,256,256);for(let x=12;x<256;x+=34)for(let y=12;y<256;y+=38){ctx.fillStyle='#567372';ctx.fillRect(x,y,20,25);ctx.fillStyle='#849d96';ctx.fillRect(x+2,y+2,7,20);}const t=new T.CanvasTexture(c);t.colorSpace=T.SRGBColorSpace;return t;}
+  whenReady(){return this.trees?.ready??Promise.resolve();}
   setTreeQuality(quality:Settings['quality']){this.trees?.setQuality(quality);}
   setCurbStyle(style:Settings['curbStyle']){this.curbAppearance.setStyle(style);this.group.userData.curbStyle=style;}
   update(time:number){this.trees?.update(time);this.trafficLights.forEach(light=>light.update(time));this.rearTrafficLights.forEach(light=>light.update(time));this.pedestrianLights.forEach(light=>light.update(time));}

@@ -54,6 +54,7 @@ try{
     const T=await import('/node_modules/three/build/three.module.js');
     const {Vehicle}=await import('/src/simulation/vehicle.ts');
     const {vehicleConfig,vehicleDynamics,vehicleSteering}=await import('/src/data/vehicle.ts');
+    const {Steering}=await import('/src/simulation/steering.ts');
     const create=()=>{
       const world=new R.World({x:0,y:-9.81,z:0});world.createCollider(R.ColliderDesc.cuboid(10000,.2,10000).setTranslation(0,-.2,0));
       const car=new Vehicle(world,new Set());car.reset({x:0,z:0},0);
@@ -73,7 +74,7 @@ try{
           v.update(1/60,run.input,false,assistance);
           if(i===11)tap=v.steering.angle;
         }
-        bench.push({kmh,assistance,tap,angle:v.steering.angle,normalized:v.telemetry().steering,wheels:[0,1,2,3].map(i=>v.controller.wheelSteering(i))});
+        bench.push({kmh,assistance,tap,angle:v.steering.angle,expectedLimit:new Steering().limit(kmh/3.6)/vehicleSteering.steeringRatio,normalized:v.telemetry().steering,wheels:[0,1,2,3].map(i=>v.controller.wheelSteering(i))});
       }finally{run.dispose();}
     }
     const road=[];
@@ -130,11 +131,11 @@ try{
   });
   await writeFile(`${directory}/physics.json`,JSON.stringify(physics,null,2));
   for(const row of physics.bench){
-    if(!row.assistance)check(`Full lock remains available at ${row.kmh} km/h`,Math.abs(row.angle-physics.maxAngle)<1e-6);
+    if(!row.assistance)check(`Configured speed envelope at ${row.kmh} km/h`,Math.abs(row.angle-row.expectedLimit)<1e-6);
     else if(Math.abs(row.kmh)>=40)check(`Optional aid reduces lock at ${row.kmh} km/h`,row.angle<.15);
     check(`Ackermann geometry and rear axle: ${row.kmh}, aid ${row.assistance}`,row.wheels[1]>row.wheels[0]&&row.wheels[2]===0&&row.wheels[3]===0);
   }
-  check('Short inputs are gentler at speed',physics.bench.find(r=>r.kmh===60&&!r.assistance).tap<physics.bench.find(r=>r.kmh===5&&!r.assistance).tap*.6);
+  check('Short inputs retain the configured handwheel rate at speed',Math.abs(physics.bench.find(r=>r.kmh===60&&!r.assistance).tap-physics.bench.find(r=>r.kmh===5&&!r.assistance).tap)<1e-6);
   for(const row of physics.road)check(`Stable turn, countersteer and release at ${row.kmh} km/h, aid ${row.assistance}`,row.finite&&row.minUp>.75&&row.peakHeight<1.2&&Math.abs(row.finalSteering)<1e-6);
   check('Unassisted excessive high-speed steering produces front tyre slip',physics.road.find(r=>r.kmh===100&&!r.assistance).peakTyreSlip>.5);
   for(const row of physics.circles)check(`Slow powered circle matches the Cobalt diameter: direction ${row.direction}`,Math.abs(row.yaw)>Math.PI*2&&Math.abs(row.diameter-physics.reference.turningDiameter)<.4&&row.radialSpread<.25);
@@ -169,7 +170,7 @@ try{
     // Accumulate signed frame rotations: quaternion endpoints alone cannot
     // distinguish 2.87 turns from a short rotation to the same orientation.
     for(const direction of [1,-1,0]){
-      for(let i=0;i<120;i++){
+      for(let i=0;i<180;i++){
         v.update(1/60,{down:action=>direction===1?action==='left':direction===-1?action==='right':false},false);
         s.render(v,1/60,0,false,0);
         const current=s.steering.quaternion.clone(),delta=previous.clone().invert().multiply(current);

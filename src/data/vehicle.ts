@@ -1,4 +1,5 @@
 import type { Vec2, VehicleConfig } from '../types';
+import {steeringConfig} from './steering';
 // Body dimensions, wheelbase, axle tracks and 160 mm clearance follow the
 // user-supplied Cobalt diagram. Tyres use the selected 195/65 R15 size.
 export const vehicleConfig: VehicleConfig = {
@@ -16,14 +17,18 @@ export const wheelCenter=(index:number):Vec2=>({
   z:(index<2?1:-1)*vehicleConfig.wheelbase/2,
 });
 
-// Hydraulic-steering Cobalt reference: 2.87 handwheel turns lock-to-lock and
-// 10.88 m turning diameter. Sources and regional applicability: docs/REFERENCE.md.
-// The road-wheel limits are an ideal Ackermann estimate, not published angles.
+// The requested handwheel travel and fixed ratio define the nominal rack lock.
+// Ideal Ackermann then derives separate inner/outer wheel angles. Turning
+// diameter is a model result, not an additional independent constraint.
+const handwheelLock=steeringConfig.mechanics.maxHandwheelAngleDeg*Math.PI/180;
+const rackLock=handwheelLock/steeringConfig.mechanics.steeringRatio;
+const rearAxleTurnRadius=vehicleConfig.wheelbase/Math.tan(rackLock);
 export const vehicleSteering={
-  lockToLockTurns:2.87,turningDiameter:10.88,
-  maxSteeringWheelAngle:2.87*Math.PI,
+  lockToLockTurns:steeringConfig.mechanics.maxHandwheelAngleDeg/180,
+  maxSteeringWheelAngle:handwheelLock,
+  steeringRatio:steeringConfig.mechanics.steeringRatio,
+  turningDiameter:2*Math.hypot(rearAxleTurnRadius+vehicleConfig.frontTrack/2,vehicleConfig.wheelbase)+vehicleConfig.tyreWidth,
 };
-const rearAxleTurnRadius=Math.sqrt((vehicleSteering.turningDiameter/2-vehicleConfig.tyreWidth/2)**2-vehicleConfig.wheelbase**2)-vehicleConfig.frontTrack/2;
 
 // Gameplay estimates for a dry-road, front-wheel-drive manual Cobalt.
 // Keep resistance explicit: body damping must not dictate top speed.
@@ -36,5 +41,5 @@ export const vehicleDynamics={
   // Nominal settled length measured on flat asphalt with this controller.
   suspensionRestLength:.28,loadedSuspensionLength:.21179,suspensionTravel:.18,suspensionStiffness:32,antiRollStiffness:4200,
   maxSuspensionForce:9500,asphaltGrip:.95,grassGrip:.45,
-  handbrakeGrip:.65,maxSteeringAngle:Math.atan(vehicleConfig.wheelbase/rearAxleTurnRadius),steeringLateralAcceleration:6.5,
+  handbrakeGrip:.65,maxSteeringAngle:rackLock,steeringLateralAcceleration:steeringConfig.gripAssist.maxLateralAcceleration,
 };

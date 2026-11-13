@@ -8,14 +8,16 @@ import {asphaltGeometry} from '../src/render/road-geometry';
 import {yellowEdgeSurface,whiteEdgeSurface,roadDistance} from '../src/render/course-world';
 
 describe('video parking boundaries for B and C/D',()=>{
- it('uses a broken white separator along both parking approaches',()=>{
-  for(const id of ['parking-channel','finish-divider']){
-   const line=laneLines.find(l=>l.id===id)!;
-   expect(line.dash).toEqual({length:1.6,gap:1.5});
-   const paths=lanePaintPaths(line);
-   expect(paths.length).toBeGreaterThan(8);
-   expect(paths[1][0].x-paths[0][1].x).toBeCloseTo(1.5);
-  }
+ it('uses a broken white separator on the B parking approach',()=>{
+  const line=laneLines.find(l=>l.id==='parking-channel')!;
+  expect(line.dash).toEqual({length:1.6,gap:1.5});
+  const paths=lanePaintPaths(line);
+  expect(paths.length).toBeGreaterThan(8);
+  expect(paths[1][0].x-paths[0][1].x).toBeCloseTo(1.5);
+ });
+ it('keeps the B/CD finish separator solid as seen at 11:21',()=>{
+  const line=laneLines.find(l=>l.id==='finish-divider')!;
+  expect(line.dash).toBeUndefined();expect(lanePaintPaths(line)).toEqual([line.points]);
  });
  it('marks four separate mouths with centred dashes and clear corners',()=>{
   expect(parkingMouths.map(m=>m.category)).toEqual(['B','B','B','CD']);

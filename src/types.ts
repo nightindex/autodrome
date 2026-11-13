@@ -32,7 +32,7 @@ export interface VehicleTelemetry {
   /** Speed along the supporting road plane, or horizontal speed when airborne, in m/s. */
   speed: number; signedSpeed: number;
   rpm: number; gear: number; throttle: number; brake: number; clutch: number;
-  /** Actual rack angle divided by its mechanical limit, including any aid. */
+  /** Actual handwheel angle / mechanical handwheel lock, including speed/grip limits. */
   steering: number; engine: boolean; stalled: boolean; belt: boolean; handbrake: boolean;
   indicator: 'off' | 'left' | 'right'; hazards: boolean;
   ignition:boolean;positionLights:boolean;headlights:boolean;fogLights:boolean;

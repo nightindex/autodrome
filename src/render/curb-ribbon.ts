@@ -64,7 +64,7 @@ export function curbRibbonGeometries(sections:BoundarySection[],cutout?:CurbCuto
   };
   const source=(inner:{x:number;z:number},outer:{x:number;z:number})=>({x:inner.x-(outer.x-inner.x)*.025/.24,z:inner.z-(outer.z-inner.z)*.025/.24});
   const tangent=(a:{x:number;z:number},b:{x:number;z:number})=>{const dx=b.x-a.x,dz=b.z-a.z,length=Math.hypot(dx,dz)||1;return {x:dx/length,z:dz/length};};
-  const bases=sections.map(s=>({a:source(s.a,s.outerA),b:source(s.b,s.outerB)}));
+  const bases=sections.map(s=>({a:s.sourceA??source(s.a,s.outerA),b:s.sourceB??source(s.b,s.outerB)}));
   const groups=new Map<number,number[]>();sections.forEach((s,i)=>{const list=groups.get(s.loop)??[];list.push(i);groups.set(s.loop,list);});
   const neighbours=new Map<number,{before:number;after:number}>();for(const list of groups.values())list.forEach((v,i)=>neighbours.set(v,{before:list[(i-1+list.length)%list.length],after:list[(i+1)%list.length]}));
   for(let index=0;index<sections.length;index++){

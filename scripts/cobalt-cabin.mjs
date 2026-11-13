@@ -316,7 +316,10 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
   // toward the pane keeps the complete mirror in the normal driver's view.
   const mirrorRotation=new T.Quaternion().setFromEuler(new T.Euler(-.06,-.16,0));
   const mirrorPosition=new T.Vector3(.060,.645,.495);
-  const mirrorRoot=doc.createNode('COBALT_CABIN_MIRROR').setTranslation(mirrorPosition.toArray()).setRotation(mirrorRotation.toArray());root.addChild(mirrorRoot);
+  // Keep the windscreen attachment fixed while shrinking the complete assembly.
+  const mirrorScale=.9,mirrorAttachment=new T.Vector3(0,.697,.492);
+  const mirrorOrigin=mirrorPosition.clone().lerp(mirrorAttachment,1-mirrorScale);
+  const mirrorRoot=doc.createNode('COBALT_CABIN_MIRROR').setTranslation(mirrorOrigin.toArray()).setRotation(mirrorRotation.toArray()).setScale([mirrorScale,mirrorScale,mirrorScale]);root.addChild(mirrorRoot);
   const mirrorPart=(g,mat,name,p=[0,0,0],r=[0,0,0])=>emit(g,mat,name,p,r,mirrorRoot);
   const outline=new T.Shape();outline.moveTo(-.108,.031);
   outline.quadraticCurveTo(0,.043,.108,.031);outline.quadraticCurveTo(.122,.028,.122,.012);
@@ -333,7 +336,7 @@ export async function buildCobaltCabin({doc,root,mats,material,svgTexture,put:ad
     glassUv.setXY(i,(glassPosition.getX(i)-glassBounds.min.x)/(glassBounds.max.x-glassBounds.min.x),1-(glassPosition.getY(i)-glassBounds.min.y)/(glassBounds.max.y-glassBounds.min.y));
   }
   mirrorPart(glass,mirror,'COBALT_CabinMirrorGlass',[0,0,-.0144]);
-  const mount=new T.Vector3(0,.697,.492).sub(mirrorPosition).applyQuaternion(mirrorRotation.clone().invert());
+  const mount=mirrorAttachment.clone().sub(mirrorPosition).applyQuaternion(mirrorRotation.clone().invert());
   const armCurve=new T.CatmullRomCurve3([new T.Vector3(0,.025,.010),mount.clone().lerp(new T.Vector3(0,.025,.010),.45),mount]);
   mirrorPart(new T.TubeGeometry(armCurve,4,.0065,8,false),mirrorShell,'COBALT_CabinMirrorArm');
   mirrorPart(new RoundedBoxGeometry(.026,.031,.010,1,.003),mirrorShell,'COBALT_CabinMirrorMount',mount.toArray(),[-1.08,0,0]);

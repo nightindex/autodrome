@@ -1,0 +1,11 @@
+{
+  "name": "AVTODROM - Chevrolet Cobalt",
+  "short_name": "AVTODROM",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#f7f6ec",
+  "theme_color": "#16382e",
+  "icons": [{"src":"/assets/branding/avtodrom-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]
+}

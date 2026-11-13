@@ -151,7 +151,7 @@ export class Vehicle {
     if(action==='indicatorRight')this.indicator=this.indicator==='right'?'off':'right';
   }
   update(dt:number,input:Input,assist:boolean,steeringAssist=false){
-    if(input.down('throttle')||input.down('brake')||input.down('left')||input.down('right'))this.body.wakeUp();
+    if(input.down('throttle')||input.down('brake')||input.down('left')||input.down('right')||input.steeringCommand?.())this.body.wakeUp();
     this.time+=dt;const q=this.body.rotation(),rotation=new T.Quaternion(q.x,q.y,q.z,q.w);
     const forward=new T.Vector3(0,0,1).applyQuaternion(rotation),position=this.body.translation();
     const vel=this.body.linvel(),speed=vel.x*forward.x+vel.y*forward.y+vel.z*forward.z;
@@ -163,7 +163,7 @@ export class Vehicle {
       const {x,z}=wheelCenter(i),point=contact??new T.Vector3(x,0,z).applyQuaternion(rotation).add(position);
       return this.surfaceAt(point)==='grass'?dynamics.grassGrip:dynamics.asphaltGrip;
     })):undefined;
-    const steer=this.steering.update(dt,+input.down('left')-+input.down('right'),horizontalSpeed,steeringGrip);
+    const steer=this.steering.update(dt,input.steeringCommand?.()??(+input.down('left')-+input.down('right')),horizontalSpeed,steeringGrip);
     if(horizontalSpeed>.001){
       const drag=.5*dynamics.airDensity*dynamics.dragArea*horizontalSpeed*horizontalSpeed;
       const impulse=Math.min(drag*dt,config.mass*horizontalSpeed);

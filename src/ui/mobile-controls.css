@@ -1,0 +1,42 @@
+/* Touch driving keeps the road in the middle and the controls under each thumb. */
+#mobile-controls,#fullscreen-button,.touch-control-help{display:none}
+.touch-device{--touch-ink:#fffdf2;--touch-surface:#17382ee8;--touch-line:#f7f6ec66;--touch-accent:#e6ca87;--header-height:60px}
+.touch-device body{overscroll-behavior:none}
+.touch-device.driving,.touch-device .driving{user-select:none;-webkit-user-select:none}
+.touch-device #viewport canvas{touch-action:none}
+.touch-device #hud{--hud-gap:max(12px,env(safe-area-inset-left));--touch-bottom:max(14px,env(safe-area-inset-bottom));--wheel-size:clamp(144px,25vw,212px);--drive-width:192px}
+.touch-device #mobile-controls{display:block;pointer-events:none;position:absolute;inset:0;z-index:9;color:var(--touch-ink)}
+.touch-device #mobile-controls button,.touch-device #touch-wheel{pointer-events:auto;touch-action:none;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+.touch-device #mobile-controls button{color:var(--touch-ink);background:var(--touch-surface);border:1px solid var(--touch-line);border-radius:12px;min-width:44px;min-height:44px;padding:0;display:flex;align-items:center;justify-content:center;transition:background .12s,border-color .12s}
+.touch-device #mobile-controls button:hover{filter:none}
+.touch-device #mobile-controls button:active{transform:none}
+.touch-device #mobile-controls button[aria-pressed=true]{background:#e6ca87;color:#17382e;border-color:#e6ca87}
+.touch-device #mobile-controls button:focus-visible,.touch-device #touch-wheel:focus-visible{outline:3px solid var(--touch-accent);outline-offset:3px}
+.touch-device #mobile-controls button svg{width:24px;height:24px;flex:none}
+.touch-device #mobile-controls button span{font-size:9px;line-height:1.2;max-width:100%;overflow-wrap:anywhere}
+.touch-device .touch-wheel-area{position:absolute;left:max(14px,env(safe-area-inset-left));bottom:var(--touch-bottom);width:var(--wheel-size)}
+.touch-device #touch-wheel{width:100%;aspect-ratio:1;cursor:grab;border-radius:50%;position:relative}
+.touch-device #touch-wheel[data-held=true]{cursor:grabbing}
+.touch-device #touch-wheel img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none;will-change:transform;filter:drop-shadow(0 4px 5px #10271d66)}
+.touch-device .touch-wheel-label{display:block;text-align:center;color:#fffdf2;font-size:10px;line-height:16px;text-shadow:0 1px 3px #10271d}
+.touch-device .touch-switches{position:absolute;left:50%;bottom:var(--touch-bottom);transform:translateX(-50%);display:grid;gap:8px;width:164px}
+.touch-device .touch-signals,.touch-device .touch-preparation{display:grid;grid-template-columns:repeat(3,minmax(44px,1fr));gap:8px}
+.touch-device .touch-switches button{height:48px;flex-direction:column;gap:2px}
+.touch-device .touch-signals button span{display:none}
+.touch-device .touch-preparation button svg{width:21px;height:21px}
+.touch-device .touch-drive{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:var(--touch-bottom);width:var(--drive-width);display:grid;gap:10px}
+.touch-device .touch-gears{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:8px}
+.touch-device .touch-gears output{display:grid;place-items:center;height:44px;font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--touch-ink);background:var(--touch-surface);border-radius:10px}
+.touch-device .touch-pedals{display:grid;grid-template-columns:repeat(3,minmax(44px,1fr));gap:8px;align-items:end}
+.touch-device #mobile-controls .touch-pedal{height:88px;flex-direction:column;gap:6px}
+.touch-device #mobile-controls .touch-pedal.throttle{height:108px;background:#214c3df0}
+.touch-device #mobile-controls .touch-pedal[aria-pressed=true]{background:var(--touch-accent);color:#17382e}
+.touch-device #mobile-controls .touch-pedal svg{width:30px;height:46px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
+
+/* Shared touch behaviour; compact-hud.css owns overlay placement. */
+.touch-device #viewport canvas{touch-action:none}
+.touch-device #driving-controls .drive-shortcuts,.touch-device #driving-controls .light-controls kbd{display:none}
+.touch-device #driving-controls .touch-control-help{display:block;font-size:14px;line-height:1.6;color:var(--hud-ink);text-shadow:none}
+.touch-device #modal{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overscroll-behavior:contain}
+.touch-device #modal input,.touch-device #modal select{font-size:16px;min-height:44px}
+@media(prefers-reduced-motion:reduce){.touch-device #mobile-controls button{transition:none}}

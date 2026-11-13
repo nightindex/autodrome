@@ -53,12 +53,16 @@ export function asphaltGeometry(surface:MultiPolygon,height=.02):T.BufferGeometr
   }
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 }
-export interface BoundarySection {a:Vec2;b:Vec2;outerA:Vec2;outerB:Vec2;stripe:number;loop:number;index:number;length:number}
+export interface BoundarySection {a:Vec2;b:Vec2;outerA:Vec2;outerB:Vec2;sourceA?:Vec2;sourceB?:Vec2;stripe:number;loop:number;index:number;length:number}
 /** Split a continuous ring at paint changes; adjacent sections meet at the same cross section. */
-export function boundarySections(loops:Vec2[][],innerOffset:number,outerOffset:number,stripeLength=Infinity):BoundarySection[]{
+export function boundarySections(loops:Vec2[][],innerOffset:number,outerOffset:number,stripeLength=Infinity,outerLimit?:(points:Vec2[],index:number)=>number):BoundarySection[]{
   const sections:BoundarySection[]=[];
   loops.forEach((points,loop)=>{
     const inside=offsetPath(points,innerOffset,true),outside=offsetPath(points,outerOffset,true);let travelled=0,index=0;
+    if(outerLimit)outside.forEach((p,i)=>{
+      const factor=Math.min(1,outerLimit(points,i)/Math.abs(outerOffset));
+      p.x=points[i].x+(p.x-points[i].x)*factor;p.z=points[i].z+(p.z-points[i].z)*factor;
+    });
     for(let i=0;i<points.length;i++){
       const next=(i+1)%points.length,length=Math.hypot(points[next].x-points[i].x,points[next].z-points[i].z);if(length<1e-6)continue;
       const interpolate=(a:Vec2,b:Vec2,t:number)=>({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t});let start=0;
@@ -66,7 +70,7 @@ export function boundarySections(loops:Vec2[][],innerOffset:number,outerOffset:n
         const stripe=Number.isFinite(stripeLength)?Math.floor((travelled+start+1e-7)/stripeLength):0;
         const end=Math.min(length,Number.isFinite(stripeLength)?(stripe+1)*stripeLength-travelled:length);
         if(end-start<1e-7)break;
-        sections.push({a:interpolate(inside[i],inside[next],start/length),b:interpolate(inside[i],inside[next],end/length),outerA:interpolate(outside[i],outside[next],start/length),outerB:interpolate(outside[i],outside[next],end/length),stripe,loop,index:index++,length:end-start});start=end;
+        sections.push({a:interpolate(inside[i],inside[next],start/length),b:interpolate(inside[i],inside[next],end/length),outerA:interpolate(outside[i],outside[next],start/length),outerB:interpolate(outside[i],outside[next],end/length),sourceA:interpolate(points[i],points[next],start/length),sourceB:interpolate(points[i],points[next],end/length),stripe,loop,index:index++,length:end-start});start=end;
       }
       travelled+=length;
     }

@@ -80,7 +80,7 @@ export class MirrorControls {
   }
   private setOpen(open:boolean,focus=false){
     this.stop();this.open=open;this.panel.hidden=!open;this.toggle.setAttribute('aria-expanded',String(open));this.hud.dataset.mirrorAdjusting=String(open);
-    this.preview(open?this.selected:null);if(focus)this.toggle.focus();
+    this.preview(open?this.selected:null);if(focus){const tools=this.toggle.closest<HTMLElement>('#driving-controls');(tools?.hidden?this.hud.querySelector<HTMLButtonElement>('#controls-button'):this.toggle)?.focus();}
   }
   setCamera(camera:string){if(this.open&&camera!=='cockpit')this.setOpen(false);}
   show(){this.setOpen(true);}

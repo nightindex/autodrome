@@ -1,0 +1,176 @@
+/* Only the driving essentials stay over the scene. Details open on demand. */
+#hud{--header-height:56px}
+#hud .drive-header{position:absolute;top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));height:44px;margin:0;padding:0;border:0;display:flex;align-items:center;justify-content:space-between;gap:8px;background:none;pointer-events:none}
+#hud .drive-brand{display:none}
+#hud .exam-stats{display:flex;align-items:center;gap:16px;height:44px;padding:6px 12px;background:#f7f6ecf0;border-radius:10px;flex:none;pointer-events:auto}
+#hud .exam-stats>div{display:flex;flex-direction:row;align-items:center;gap:7px}
+#hud .exam-stats span{font-size:9px;letter-spacing:0;max-width:76px;line-height:1.2}
+#hud .exam-stats strong{font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+#hud .exam-stats small{font-size:10px}
+#hud .header-controls{display:flex;gap:2px;background:#f7f6ecf0;border-radius:10px;padding:0 2px;pointer-events:auto}
+#hud .header-controls button{width:44px;min-height:44px;padding:10px;border:0;background:transparent;border-radius:8px}
+#hud .header-controls button[aria-expanded=true]{background:var(--green);color:#fffdf2}
+#hud .header-controls button span,#hud .header-controls kbd{display:none}
+html:not(.touch-device) #hud .header-controls button{display:inline-flex;align-items:center;justify-content:center;flex:none}
+html:not(.touch-device) #hud .header-controls #fullscreen-button{display:inline-flex}
+#exercise-button{position:absolute;top:calc(64px + env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));display:flex;align-items:center;gap:9px;width:auto;max-width:min(280px,calc(100vw - 24px));min-height:44px;padding:8px 12px;background:#f7f6eced;color:#214c3d;border-radius:10px;pointer-events:auto;text-align:left;z-index:10}
+#exercise-button>svg{width:18px;height:18px;flex:none}
+#exercise-button>svg:last-child{width:14px;transition:transform .15s}
+#exercise-button[aria-expanded=true]>svg:last-child{transform:rotate(90deg)}
+#exercise-button>span{min-width:0;display:grid;gap:2px}
+#task-name{font-size:12px;font-weight:600;line-height:1.2}
+#task-hint{display:block;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:1.3;color:#536950}
+#hud .exercise-card,#hud[data-practice=true][data-free=false] .exercise-card,#hud[data-free=true] .exercise-card{position:absolute;top:calc(116px + env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));width:260px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom));padding:12px 14px 0;background:#f7f6ec;border:1px solid #cbd5c1;border-radius:12px;z-index:14;pointer-events:auto;overflow:auto}
+#hud .exercise-card h2{display:block;font-size:17px;line-height:1.3}
+#hud[data-free=true] .exercise-card #free-practice>p{display:block}
+#hud #start-help,#hud #provisional{display:none}
+#hud .instrument-panel{width:160px;padding:10px 12px;right:12px;bottom:12px;border-radius:12px}
+#hud .instrument-top,#hud .instrument-panel .rpm-labels,#hud .instrument-panel .pedals{display:none}
+#hud .instrument-panel .speed-row{margin:0 0 7px}
+#hud .instrument-panel .speed-row strong{font-size:36px}
+#hud .instrument-panel .speed-row span{font-size:9px;white-space:nowrap}
+#hud .instrument-panel .gear-box{width:auto;min-width:28px;padding-left:10px}
+#hud .instrument-panel .gear-box strong{font-size:26px}
+#hud .instrument-panel #gear-caption{display:none}
+#hud .instrument-panel .vehicle-status{padding:7px 0 0;font-size:9px;display:flex;justify-content:space-between;gap:6px}
+#hud .instrument-panel .rpm-track{height:3px}
+#hud #driving-controls,#hud #mirror-controls{top:calc(64px + env(safe-area-inset-top));max-height:calc(100dvh - 88px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+#hud .driving-utilities{display:flex;flex-wrap:wrap;gap:6px;padding:12px 0;width:100%;max-width:none;background:none;border:0;text-shadow:none}
+#hud .driving-utilities button{display:flex;align-items:center;justify-content:center;gap:8px;min-width:44px;min-height:44px;padding:8px 10px;background:#e9edde;color:var(--hud-ink);border:1px solid #cbd5c1;border-radius:8px;font-size:12px}
+#hud .driving-utilities kbd{display:none}
+#hud .driving-utilities #fullscreen-button{display:flex}
+#hud .driving-utilities #fullscreen-button[hidden]{display:none}
+#hud .touch-preparation{display:flex;gap:8px;margin:12px 0;padding:0;width:100%;max-width:none;background:none;border:0;text-shadow:none}
+#hud .touch-preparation button{display:flex;flex:1;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:8px;background:#e9edde;color:var(--hud-ink);border:1px solid #cbd5c1;border-radius:8px;font-size:12px;touch-action:manipulation}
+#hud .touch-preparation button svg{width:20px;height:20px}
+#hud .touch-preparation button[aria-pressed=true]{background:var(--green);color:#fffdf2}
+.driving #toast{top:calc(116px + env(safe-area-inset-top));max-width:calc(100vw - 24px);font-size:12px}
+.touch-device{--header-height:56px}
+.touch-device #hud{--wheel-size:144px;--drive-width:164px;--touch-bottom:max(12px,env(safe-area-inset-bottom));--touch-warning:#ff626d;--touch-warning-surface:#43191ff5}
+.touch-device #hud .exam-stats{gap:12px;padding:6px 10px}
+.touch-device #hud .exam-stats>div{gap:5px}
+.touch-device #hud .exam-stats strong{font-size:20px}
+.touch-device #hud .exam-stats span{font-size:8px;max-width:62px}
+.touch-device #hud .instrument-panel{top:12px;left:50%;right:auto;bottom:auto;transform:translateX(-50%);width:94px;height:44px;padding:8px 10px;border:0;border-radius:10px;display:flex;align-items:center;justify-content:center;background:#f7f6ecf0}
+.touch-device #hud .instrument-panel .speed-row{margin:0;gap:0}
+.touch-device #hud .instrument-panel .speed-row strong{font-size:28px}
+.touch-device #hud .instrument-panel .speed-row>div:first-child{gap:4px}
+.touch-device #hud .instrument-panel .gear-box,.touch-device #hud .instrument-panel .rpm-track,.touch-device #hud .instrument-panel .vehicle-status{display:none}
+.touch-device .touch-wheel-label{display:none}
+.touch-device .touch-wheel-area{left:max(12px,env(safe-area-inset-left))}
+.touch-device .touch-switches{left:max(12px,env(safe-area-inset-left));right:auto;bottom:calc(var(--touch-bottom) + var(--wheel-size) + 8px);width:144px;transform:none;display:block}
+.touch-device .touch-signals{gap:6px}
+.touch-device #mobile-controls .touch-signals button{height:44px;min-height:44px}
+.touch-device .touch-vehicle{position:absolute;right:0;bottom:calc(100% + 8px);width:100%;display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.touch-device .touch-startup{display:flex;flex:1;gap:6px;min-width:0}
+.touch-device #mobile-controls .touch-startup button{flex:1;flex-direction:column;height:44px;gap:1px}
+.touch-device #mobile-controls .touch-startup button svg{width:20px;height:20px}
+.touch-device .touch-startup[data-ready=true]{flex:none;width:94px}
+.touch-device #mobile-controls .touch-startup[data-ready=true] button,.touch-device #mobile-controls .touch-startup [data-fastened=true]{flex:none;width:44px}
+.touch-device .touch-startup[data-driven=true]{flex:none;width:auto}
+.touch-device #mobile-controls .touch-startup[data-driven=true] button{flex:none;width:54px}
+.touch-device .touch-startup[data-ready=true] button span,.touch-device .touch-startup [data-fastened=true] span{display:none}
+.touch-device #mobile-controls .touch-startup [data-fastened=true]{color:#fffdf2;background:#17382ee8;border-color:#f7f6ec66}
+.touch-device #mobile-controls .touch-startup [data-touch-action="belt"][aria-pressed=false],
+.touch-device #mobile-controls .touch-handbrake[aria-pressed=true]{color:var(--touch-warning);background:var(--touch-warning-surface);border-color:var(--touch-warning)}
+.touch-device #mobile-controls .touch-startup [data-stalled=true]{color:#17382e;background:#e6ca87;border-color:#e6ca87}
+.touch-device .touch-drive{right:max(12px,env(safe-area-inset-right));gap:8px}
+.touch-device #mobile-controls .touch-handbrake{position:absolute;right:0;bottom:calc(100% + 8px);width:44px;height:44px;border-radius:50%}
+.touch-device #mobile-controls .touch-vehicle .touch-handbrake{position:static;flex:none}
+.touch-device #mobile-controls .touch-handbrake span{display:none}
+.touch-device .touch-gears{gap:6px}
+.touch-device .touch-pedals{gap:6px}
+.touch-device #mobile-controls .touch-pedal{height:66px;gap:3px;background:#17382ec9}
+.touch-device #mobile-controls .touch-pedal.throttle{height:84px;background:#17382ed9}
+.touch-device #mobile-controls .touch-pedal svg{height:34px;width:26px}
+.touch-device #mobile-controls .touch-pedal span{font-size:8px;white-space:nowrap;overflow-wrap:normal}
+.touch-device #hud #route-map{top:calc(64px + env(safe-area-inset-top));max-height:calc(100dvh - 88px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+.touch-device #hud #route-map canvas{max-height:calc(100dvh - 196px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+.touch-device #hud #recovery-prompt{bottom:calc(var(--touch-bottom) + 144px);max-height:calc(100dvh - 220px)}
+.touch-device .driving #toast{top:calc(116px + env(safe-area-inset-top))}
+@media(max-width:650px){
+ #hud .exam-stats span{display:none}
+ #hud .exam-stats>div{gap:0}
+ #hud .exam-stats{gap:14px}
+ #hud .instrument-panel{width:144px}
+ #hud #exercise-card{width:min(280px,calc(100vw - 24px))}
+}
+@media(max-width:560px){
+ html:not(.touch-device) #hud .drive-header{height:auto;flex-direction:column;align-items:stretch;gap:8px}
+ html:not(.touch-device) #hud .exam-stats{align-self:flex-start}
+ html:not(.touch-device) #hud .header-controls{align-self:flex-end}
+ html:not(.touch-device) #exercise-button{top:calc(116px + env(safe-area-inset-top))}
+ html:not(.touch-device) #hud #route-map,html:not(.touch-device) #hud #driving-controls,html:not(.touch-device) #hud #mirror-controls{top:calc(116px + env(safe-area-inset-top));max-height:calc(100dvh - 140px)}
+ html:not(.touch-device) #hud .exercise-card{top:calc(168px + env(safe-area-inset-top));max-height:calc(100dvh - 192px)}
+}
+@media(orientation:portrait){
+ .touch-device #hud{--wheel-size:144px;--drive-width:158px}
+ .touch-device #hud .drive-header{display:flex;gap:6px}
+ .touch-device #hud .exam-stats{gap:10px;padding:6px 10px}
+ .touch-device #hud .exam-stats strong{font-size:18px}
+ .touch-device #hud .header-controls{gap:0;padding:0}
+.touch-device #hud .instrument-panel{top:64px;left:auto;right:12px;transform:none;width:94px}
+ .touch-device #exercise-button{max-width:calc(100vw - 120px)}
+ .touch-device #task-hint{max-width:170px}
+ .touch-device #hud .exercise-card{top:116px;max-height:calc(100dvh - 284px);width:calc(100vw - 24px)}
+ .touch-device .touch-switches{left:max(12px,env(safe-area-inset-left));right:auto;bottom:calc(var(--touch-bottom) + var(--wheel-size) + 8px);width:144px;display:block}
+ .touch-device #mobile-controls .touch-pedal{height:78px}
+ .touch-device #mobile-controls .touch-pedal.throttle{height:94px}
+ .touch-device #hud #route-map,.touch-device #hud #driving-controls,.touch-device #hud #mirror-controls{width:calc(100vw - 24px);max-height:calc(100dvh - 88px)}
+}
+@media(max-width:359px) and (orientation:portrait){
+ .touch-device #hud{--wheel-size:126px;--drive-width:146px}
+ .touch-device .touch-wheel-area{left:8px}
+ .touch-device .touch-drive{right:8px}
+ .touch-device .touch-switches{left:8px;bottom:calc(var(--touch-bottom) + var(--wheel-size) + 8px)}
+ .touch-device #task-name{font-size:11px}
+ .touch-device #task-hint{max-width:122px;font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){#exercise-button>svg:last-child{transition:none}}
+/* PC instruments keep vehicle actions together; touch controls stay unchanged. */
+html:not(.touch-device) #hud .instrument-panel{left:auto;right:12px;bottom:12px;transform:none;width:216px;padding:10px 12px 12px}
+html:not(.touch-device) #hud .instrument-panel #fps{display:block;margin-bottom:6px;text-align:right;font-size:10px;line-height:1.2;color:var(--hud-secondary)}
+html:not(.touch-device) #hud .instrument-panel .speed-row{margin:0 0 10px;gap:8px}
+html:not(.touch-device) #hud .instrument-panel .speed-row strong{font-size:40px}
+html:not(.touch-device) #hud .instrument-panel .speed-row>div:first-child{gap:6px}
+html:not(.touch-device) #hud .instrument-panel .gear-box{gap:4px;min-width:70px;padding-left:12px}
+html:not(.touch-device) #hud .instrument-panel .gear-box strong{font-size:32px}
+html:not(.touch-device) #hud .instrument-panel #gear-caption{display:block;font-size:9px;line-height:1.2;letter-spacing:0}
+html:not(.touch-device) #hud .instrument-panel .rpm-readout{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px;color:var(--hud-secondary);font-size:10px;line-height:1.3}
+html:not(.touch-device) #hud .rpm-readout>span:last-child{display:flex;align-items:baseline;gap:4px}
+html:not(.touch-device) #hud #engine-rpm{color:var(--hud-ink);font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+html:not(.touch-device) #hud .rpm-readout small{font-size:9px}
+html:not(.touch-device) #hud .instrument-panel .rpm-labels{display:flex;margin-top:4px;font-size:9px;letter-spacing:0}
+html:not(.touch-device) #hud .rpm-labels small{font-size:8px}
+html:not(.touch-device) #hud .instrument-panel .pedals{display:flex;gap:8px;margin-top:10px;padding-top:10px}
+html:not(.touch-device) #hud .pedals>div{min-width:0}
+html:not(.touch-device) #hud .pedals span{font-size:10px;letter-spacing:0;color:var(--hud-secondary)}
+html:not(.touch-device) #hud .pedals i{height:4px;margin-top:6px;background:#d1dbc8;border-radius:2px;overflow:hidden}
+html:not(.touch-device) #hud .pedals b{background:var(--green)}
+html:not(.touch-device) #hud #brake-bar{background:#a73743}
+html:not(.touch-device) #hud .instrument-panel .vehicle-status{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px 0 0}
+html:not(.touch-device) #hud .vehicle-status button{display:grid;place-items:center;min-width:44px;min-height:44px;padding:10px;border:1px solid #cbd5c1;border-radius:8px;background:#e9edde;color:var(--hud-ink)}
+html:not(.touch-device) #hud .vehicle-status button svg{width:22px;height:22px}
+html:not(.touch-device) #hud .vehicle-status button span{display:none}
+html:not(.touch-device) #hud .vehicle-status button:hover{background:#dce4d3}
+html:not(.touch-device) #hud .vehicle-status [data-touch-action=ignition][aria-pressed=true]{background:var(--green);border-color:var(--green);color:#fffdf2}
+html:not(.touch-device) #hud .vehicle-status [data-touch-action=ignition][aria-pressed=false]{background:#f6ead2;border-color:#dac291;color:#805316}
+html:not(.touch-device) #hud .vehicle-status [data-touch-action=belt][aria-pressed=false],html:not(.touch-device) #hud .vehicle-status [data-touch-action=handbrake][aria-pressed=true]{background:#f8e5e2;border-color:#dbaeb0;color:#a73743}
+html:not(.touch-device) #hud #start-help{display:flex;left:12px;bottom:12px;max-width:none;padding:0;background:none;z-index:12}
+html:not(.touch-device) #hud #start-help>span{display:block}
+html:not(.touch-device) #hud:not([data-controls-open=true]):not([data-mobility-open=true]) #start-help:not(.collapsed){width:min(520px,calc(100vw - 252px));flex-direction:row;align-items:flex-end;gap:12px;padding:10px;background:#214c3df5;color:#fffdf2;border-radius:10px;font-size:12px;line-height:1.6}
+html:not(.touch-device) #hud:not([data-controls-open=true]):not([data-mobility-open=true]) #start-help:not(.collapsed) #controls-button{width:44px;min-width:44px;padding:0;border:1px solid #ffffff66;border-radius:6px;background:#ffffff14;color:#fffdf2}
+html:not(.touch-device) #hud:not([data-controls-open=true]):not([data-mobility-open=true]) #start-help:not(.collapsed) #controls-button span{display:none}
+html:not(.touch-device) #hud[data-controls-open=true] #start-help>span,html:not(.touch-device) #hud[data-mobility-open=true] #start-help>span{display:none}
+html:not(.touch-device) #hud #controls-button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 12px;border-radius:10px;background:#f7f6ecf0;color:var(--hud-ink);font-size:12px;font-weight:600;line-height:1.2}
+html:not(.touch-device) #hud #controls-button svg{width:22px;height:22px;flex:none}
+html:not(.touch-device) #hud #controls-button:hover{background:#e5e9dc}
+html:not(.touch-device) #hud #controls-button[aria-expanded=true]{background:var(--green);color:#fffdf2}
+html:not(.touch-device) #hud #driving-controls{left:12px;top:auto;bottom:64px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 136px)}
+@media(max-width:560px){
+ html:not(.touch-device) #hud:not([data-controls-open=true]):not([data-mobility-open=true]) #start-help:not(.collapsed){flex-direction:column;align-items:flex-start}
+ html:not(.touch-device) #hud #start-help>span{max-height:max(60px,calc(100dvh - 260px));overflow:auto;scrollbar-width:thin;scrollbar-color:#a5b7a4 #214c3d}
+}
+@media(max-width:359px){
+ html:not(.touch-device) #hud #controls-button span{display:none}
+}

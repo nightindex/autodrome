@@ -9,11 +9,13 @@ const server=await createServer({server:{middlewareMode:true},appType:'custom'})
 const directory='test-results/steering-physics';
 const report={date:new Date().toISOString(),checks:[],manoeuvres:[],handbrake:[]};
 const check=(name,passed)=>report.checks.push({name,passed:!!passed});
-let dynamics,currentLock;
+let dynamics,currentLock,keyboardConfig,currentRatio;
 try{
   await RAPIER.init();
   const {Vehicle}=await server.ssrLoadModule('/src/simulation/vehicle.ts');
   ({vehicleDynamics:dynamics}=await server.ssrLoadModule('/src/data/vehicle.ts'));
+  ({steeringConfig:keyboardConfig}=await server.ssrLoadModule('/src/data/steering.ts'));
+  currentRatio=keyboardConfig.mechanics.steeringRatio;
   currentLock=dynamics.maxSteeringAngle;
   report.limits={previous:.56,current:currentLock};
   const create=(surface)=>{
@@ -40,6 +42,7 @@ try{
   };
   for(const [version,lock] of [['previous',.56],['current',currentLock]]){
     dynamics.maxSteeringAngle=lock;
+    keyboardConfig.mechanics.steeringRatio=keyboardConfig.mechanics.maxHandwheelAngleDeg*Math.PI/180/lock;
     for(const kmh of [5,30,50,60,100,-5,-20])for(const surface of ['asphalt','grass'])for(const assistance of [false,true])for(const direction of [-1,1]){
       const run=create(surface),{car,held,input}=run;
       try{
@@ -93,5 +96,6 @@ try{
 }catch(error){report.failure=String(error);throw error;}
 finally{
   if(dynamics&&currentLock!==undefined)dynamics.maxSteeringAngle=currentLock;
+  if(keyboardConfig&&currentRatio!==undefined)keyboardConfig.mechanics.steeringRatio=currentRatio;
   await mkdir(directory,{recursive:true});await writeFile(`${directory}/report.json`,JSON.stringify(report,null,2));await server.close();
 }

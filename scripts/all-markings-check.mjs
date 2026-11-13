@@ -19,7 +19,7 @@ try{
         for(let j=0;j<=steps;j++){const p={x:a.x+(b.x-a.x)*j/steps,z:a.z+(b.z-a.z)*j/steps};stations++;if(!painted(mesh,p))missing.push({id:line.id,...p});}
       }
     }
-    const yellow=group.getObjectByName('course-yellow-edge-lines'),yellowPoints=[[185.1,350],[127.1,275],[394.1,225],[477.1,260],[390,612.9],[420,697.1],[940,282.1],[920,342.9]].map(([x,y])=>({x,y,painted:painted(yellow,mapPoint(x,y))}));
+    const yellow=group.getObjectByName('course-yellow-edge-lines'),yellowPoints=[[185.1,340],[127.1,275],[394.1,225],[477.1,260],[390,612.9],[420,697.1],[940,282.1],[930,335.6]].map(([x,y])=>({x,y,painted:painted(yellow,mapPoint(x,y))}));
     const gores=laneGores.map(gore=>({id:gore.id,triangles:group.getObjectByName(`paint-gore-${gore.id}`).geometry.index.count/3}));
     const controls=group.getObjectByName('paint-yellow-control-lines'),controlSamples=yellowControlLines.map(([a,b])=>{const length=Math.hypot(b.x-a.x,b.z-a.z);let hits=0,total=0;for(let d=.16;d<length;d+=.65){const p={x:a.x+(b.x-a.x)*d/length,z:a.z+(b.z-a.z)*d/length};total++;if(painted(controls,p))hits++;}return {hits,total};});
     return {stations,missing,yellowPoints,gores,controlSamples,startLine:startLinePoint};

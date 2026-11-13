@@ -1,0 +1,104 @@
+/* A small launch panel leaves the vehicle as the home screen's main visual. */
+#menu-shell{display:block;overflow:auto;padding:0;overscroll-behavior:contain;pointer-events:none;scrollbar-color:#9baa91 #f7f6ec}
+#menu-shell .menu-header{position:absolute;top:max(16px,env(safe-area-inset-top));left:max(24px,5vw);right:max(24px,5vw);height:52px;margin:0;padding:0;border:0;pointer-events:auto}
+#menu-shell .brand-logo{width:210px;height:36px}
+#menu-shell .header-right{gap:8px}
+#menu-shell .home-settings,#menu-shell .language-button{display:grid;place-items:center;width:44px;min-height:44px;padding:0;margin:0;border:1px solid #49664e33;border-radius:8px;background:#f7f6eced;color:#214c3d}
+#menu-shell .home-settings svg{width:21px;height:21px}
+#menu-shell .language-button{font-size:12px;letter-spacing:0}
+#menu-shell .hero{position:absolute;top:50%;left:max(24px,5vw);bottom:auto;right:auto;transform:translateY(-50%);align-self:auto;margin:16px 0 0;padding:0;width:352px;max-width:calc(100vw - 48px);pointer-events:auto}
+#menu-shell .hero h1{font-family:Georgia,'Times New Roman',serif;font-size:48px;line-height:1.08;letter-spacing:-1.4px;font-weight:400;margin:0 0 12px;text-wrap:balance}
+#menu-shell .home-vehicle{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 12px;margin:0 0 24px;color:#3c5b46;font-size:14px;line-height:1.4}
+#menu-shell .home-vehicle span{font-size:11px;color:#536950}
+#menu-shell .hero-actions{max-width:none;gap:8px}
+#menu-shell .hero-actions button{min-height:48px;padding:12px 16px;border-radius:8px;font-size:13px;line-height:1.35;justify-content:center}
+#menu-shell .hero-actions .primary{min-height:52px;justify-content:space-between}
+#menu-shell .hero-actions .primary svg{width:20px;height:20px}
+#menu-shell .home-secondary{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#menu-shell .home-secondary button{background:#f7f6ece6;color:#214c3d;border-color:#49664e55}
+#menu-shell #exercises{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;margin:8px 0 0;padding:8px 0;text-align:left;color:#214c3d;font-size:12px}
+#menu-shell #exercises svg{width:18px;height:18px;flex:none}
+#menu-shell #exercises svg:last-child{width:15px;margin-left:auto}
+#menu-shell .menu-footer{position:static;left:auto;right:auto;bottom:auto;min-height:44px;height:auto;margin:8px 0 0;padding:4px 0 0;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:0 16px;border-top:1px solid #49664e33;pointer-events:auto;font-size:10px}
+#menu-shell .load-state{gap:8px;color:#536950;font-size:10px;letter-spacing:0}
+#menu-shell .load-state .live-dot{box-shadow:none;width:5px;height:5px}
+#menu-shell .menu-footer button{min-height:44px;padding:8px 0;margin:0;color:#536950;font-size:11px}
+body:not(.driving) .vignette{background:linear-gradient(90deg,#f3f4eef5,#f3f4eed9 25%,#f3f4ee55 42%,#f3f4ee00 64%)}
+@media(max-width:900px) and (orientation:portrait){
+ #menu-shell .menu-header{top:max(12px,env(safe-area-inset-top));left:max(16px,env(safe-area-inset-left));right:max(16px,env(safe-area-inset-right));height:44px}
+ #menu-shell .brand-logo{width:176px;height:30px}
+ #menu-shell .hero{top:auto;bottom:max(12px,env(safe-area-inset-bottom));left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));transform:none;width:auto;max-width:none;max-height:calc(100dvh - 88px - env(safe-area-inset-top));overflow:auto;margin:0;padding:18px 20px 8px;background:#f7f6ecf7;border-radius:14px;scrollbar-width:thin}
+ #menu-shell .hero h1{font-size:30px;line-height:1.08;letter-spacing:-.7px;margin:0 0 8px}
+ #menu-shell .home-vehicle{font-size:12px;margin-bottom:16px}
+ #menu-shell .home-vehicle span{font-size:10px}
+ #menu-shell .hero-actions button{font-size:12px}
+ #menu-shell #exercises{margin-top:4px}
+ #menu-shell .menu-footer{margin-top:4px}
+ body:not(.driving) .vignette{background:linear-gradient(0deg,#193b2d55,transparent 55%),linear-gradient(180deg,#f3f4eeaa,transparent 20%)}
+}
+@media(max-width:900px) and (orientation:landscape), (max-height:520px) and (min-width:901px){
+ #menu-shell .menu-header{top:max(10px,env(safe-area-inset-top));left:max(16px,env(safe-area-inset-left));right:max(16px,env(safe-area-inset-right));height:44px}
+ #menu-shell .brand-logo{width:180px;height:30px}
+ #menu-shell .hero{top:auto;bottom:max(12px,env(safe-area-inset-bottom));left:max(16px,env(safe-area-inset-left));transform:none;width:304px;max-height:calc(100dvh - 76px - env(safe-area-inset-top));overflow:auto;scrollbar-width:thin;margin:0;padding:14px 16px 4px;background:#f7f6ecf5;border-radius:12px}
+ #menu-shell .hero h1{font-size:27px;line-height:1.08;letter-spacing:-.6px;margin-bottom:6px}
+ #menu-shell .home-vehicle{font-size:11px;margin-bottom:12px;gap:8px}
+ #menu-shell .home-vehicle span{font-size:9px}
+ #menu-shell .hero-actions button{min-height:44px;padding:9px 10px;font-size:11px}
+ #menu-shell #exercises{margin-top:2px;font-size:11px}
+ #menu-shell .menu-footer{margin-top:0}
+}
+@media(max-width:359px) and (orientation:portrait){
+ #menu-shell .brand-logo{width:154px;height:28px}
+ #menu-shell .hero{padding:14px 16px 4px}
+ #menu-shell .hero h1{font-size:26px}
+ #menu-shell .home-vehicle{margin-bottom:12px}
+ #menu-shell .hero-actions button{min-height:44px;font-size:11px;padding:10px}
+}
+/* Desktop uses the extra room for mode descriptions and named utilities. */
+html:not(.touch-device) #menu-shell{display:flex;flex-direction:column;align-items:flex-start;padding:20px 5vw 28px;gap:24px}
+html:not(.touch-device) #menu-shell .menu-header{position:static;flex:none;align-self:stretch;width:auto;height:52px;margin:0}
+html:not(.touch-device) #menu-shell .brand-logo{width:240px;height:41px}
+html:not(.touch-device) #menu-shell .header-right{font-size:13px;letter-spacing:0}
+html:not(.touch-device) #menu-shell .home-settings,html:not(.touch-device) #menu-shell .language-button{display:flex;align-items:center;justify-content:center;gap:10px;width:auto;min-height:44px;padding:10px 14px;font-size:13px}
+html:not(.touch-device) #menu-shell .header-right>button span{display:inline;margin:0}
+html:not(.touch-device) #menu-shell .language-button{width:44px;padding:0;font-size:12px}
+html:not(.touch-device) #menu-shell .hero{position:static;inset:auto;transform:none;flex:none;width:440px;max-width:100%;max-height:none;overflow:visible;margin:auto 0;padding:12px 0;background:none;border-radius:0}
+html:not(.touch-device) #menu-shell .hero h1{font-size:clamp(48px,4.2vw,64px);line-height:1.04;letter-spacing:-.03em;margin:0 0 16px}
+html:not(.touch-device) #menu-shell .home-vehicle{font-size:15px;gap:12px;margin-bottom:28px}
+html:not(.touch-device) #menu-shell .home-vehicle span{font-size:12px}
+html:not(.touch-device) #menu-shell .hero-actions{gap:8px}
+html:not(.touch-device) #menu-shell .hero-actions button{justify-content:space-between;gap:20px;min-height:72px;padding:14px 18px;text-align:left}
+html:not(.touch-device) #menu-shell .home-mode-copy{display:grid;gap:5px;min-width:0;font-size:inherit;line-height:1.4}
+html:not(.touch-device) #menu-shell .home-mode-copy strong{font-size:16px;font-weight:600}
+html:not(.touch-device) #menu-shell .home-mode-copy small{font-size:12px;font-weight:400;color:#48634f}
+html:not(.touch-device) #menu-shell .primary .home-mode-copy small{color:#e1eadc}
+html:not(.touch-device) #menu-shell .hero-actions button>svg{width:20px;height:20px;flex:none}
+html:not(.touch-device) #menu-shell .home-secondary{grid-template-columns:1fr;gap:0}
+html:not(.touch-device) #menu-shell .home-secondary button{border:0;border-bottom:1px solid #49664e33;border-radius:0;background:none}
+html:not(.touch-device) #menu-shell .home-secondary button:hover{background:#f7f6ecb3}
+html:not(.touch-device) #menu-shell #exercises{min-height:48px;gap:12px;margin-top:12px;padding:10px 0;font-size:14px}
+html:not(.touch-device) #menu-shell .menu-footer{margin-top:12px;min-height:44px;font-size:11px}
+html:not(.touch-device) #menu-shell .load-state,html:not(.touch-device) #menu-shell .menu-footer button{font-size:11px}
+@media(max-height:760px){
+ html:not(.touch-device) #menu-shell{padding-block:16px;gap:16px}
+ html:not(.touch-device) #menu-shell .hero{padding-block:4px}
+ html:not(.touch-device) #menu-shell .hero h1{font-size:48px;margin-bottom:10px}
+ html:not(.touch-device) #menu-shell .home-vehicle{margin-bottom:16px}
+ html:not(.touch-device) #menu-shell .hero-actions button{min-height:64px;padding-block:10px}
+ html:not(.touch-device) #menu-shell #exercises{margin-top:8px}
+ html:not(.touch-device) #menu-shell .menu-footer{margin-top:4px}
+}
+@media(max-height:640px) and (min-width:901px){
+ html:not(.touch-device) #menu-shell .hero h1{font-size:40px}
+ html:not(.touch-device) #menu-shell .home-secondary{grid-template-columns:1fr 1fr;gap:16px}
+ html:not(.touch-device) #menu-shell .home-secondary button{padding-inline:0;gap:10px}
+ html:not(.touch-device) #menu-shell .home-secondary .home-mode-copy strong{font-size:14px}
+ html:not(.touch-device) #menu-shell .home-secondary .home-mode-copy small{font-size:11px}
+}
+@media(max-width:600px){
+ html:not(.touch-device) #menu-shell{padding-inline:20px}
+ html:not(.touch-device) #menu-shell .menu-header{height:auto;min-height:44px;flex-wrap:wrap;gap:12px}
+ html:not(.touch-device) #menu-shell .brand-logo{width:190px;height:33px}
+ html:not(.touch-device) #menu-shell .header-right{flex-wrap:wrap}
+ html:not(.touch-device) #menu-shell .hero h1{font-size:42px}
+}

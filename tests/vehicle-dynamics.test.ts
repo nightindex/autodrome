@@ -60,12 +60,12 @@ describe('gear-dependent road dynamics',()=>{
       expect(distance).toBeGreaterThan(10);expect(distance).toBeLessThan(18);
     }finally{run.dispose();}
   });
-  it('uses a tighter inside wheel and slows short steering inputs at speed',()=>{
+  it('uses a tighter inside wheel with the same configured keyboard rate at every speed',()=>{
     const steer=(speed:number)=>{const run=track();try{moving(run.car,speed);run.held.add('left');run.step(12);return [run.car.controller.wheelSteering(0)!,run.car.controller.wheelSteering(1)!];}finally{run.dispose();}};
     const low=steer(2),high=steer(20);
-    expect(low[1]).toBeGreaterThan(low[0]);expect(high[1]).toBeGreaterThan(high[0]);expect(high[1]).toBeLessThan(low[1]*.6);
+    expect(low[1]).toBeGreaterThan(low[0]);expect(high[1]).toBeGreaterThan(high[0]);expect(high[1]).toBeCloseTo(low[1],5);
   });
-  it('keeps full travel independent of clutch assistance and reports the actual rack',()=>{
+  it('applies the speed envelope independently of clutch assistance and reports the actual rack',()=>{
     const run=track();
     try{
       moving(run.car,60/3.6);run.held.add('left');
@@ -74,21 +74,21 @@ describe('gear-dependent road dynamics',()=>{
         run.car.body.setLinvel({x:0,y:0,z:60/3.6},true);
         run.car.update(1/60,run.input,false);
       }
-      expect(run.car.telemetry().steering).toBeCloseTo(1);
+      expect(run.car.telemetry().steering).toBeCloseTo(((516.6+75)/2)/516.6);
       // Recover the virtual rack angle from both Ackermann wheel angles.
       const cot=(index:number)=>1/Math.tan(run.car.controller.wheelSteering(index)!);
-      expect(Math.atan(2/(cot(0)+cot(1)))).toBeCloseTo(vehicleDynamics.maxSteeringAngle);
+      expect(Math.atan(2/(cot(0)+cot(1)))).toBeCloseTo(run.car.steering.angle);
       expect(run.car.controller.wheelSteering(2)).toBe(0);expect(run.car.controller.wheelSteering(3)).toBe(0);
     }finally{run.dispose();}
   });
-  it.each([-1,1])('matches the Cobalt turning circle at full lock in direction %i',(direction)=>{
+  it.each([-1,1])('derives Ackermann wheel locks from the requested 15.8:1 ratio in direction %i',(direction)=>{
     const run=track();
     try{
-      run.held.add(direction>0?'left':'right');run.step(60,false);
+      run.held.add(direction>0?'left':'right');run.step(90,false);
       const inner=run.car.controller.wheelSteering(direction>0?1:0)!;
       const outer=run.car.controller.wheelSteering(direction>0?0:1)!;
-      expect(Math.abs(inner)*180/Math.PI).toBeCloseTo(39.7344,3);
-      expect(Math.abs(outer)*180/Math.PI).toBeCloseTo(29.3673,3);
+      expect(Math.abs(inner)*180/Math.PI).toBeCloseTo(38.1980,3);
+      expect(Math.abs(outer)*180/Math.PI).toBeCloseTo(28.4591,3);
       expect(Math.sign(inner)).toBe(direction);expect(Math.sign(outer)).toBe(direction);
       const outerRadius=vehicleConfig.wheelbase/Math.sin(Math.abs(outer));
       expect(2*outerRadius+vehicleConfig.tyreWidth).toBeCloseTo(vehicleSteering.turningDiameter,5);
@@ -113,12 +113,14 @@ describe('gear-dependent road dynamics',()=>{
       expect(run.car.controller.wheelSteering(0)).toBe(0);expect(run.car.controller.wheelSteering(1)).toBe(0);
     }finally{run.dispose();}
   });
-  it('uses horizontal speed while sliding sideways instead of applying parking-rate steering',()=>{
+  it('uses horizontal speed to limit steering while sliding sideways',()=>{
     const run=track();
     try{
-      moving(run.car,0);run.car.body.setLinvel({x:20,y:0,z:0},true);run.held.add('left');run.step(1);
-      expect(run.car.steering.angle).toBeGreaterThan(0);
-      expect(run.car.steering.angle).toBeLessThan(.01);
+      moving(run.car,0);run.held.add('left');
+      for(let i=0;i<120;i++){run.car.body.setLinvel({x:20,y:0,z:0},true);run.step(1);}
+      const expected=run.car.steering.limit(20)/vehicleSteering.steeringRatio;
+      expect(run.car.steering.angle).toBeCloseTo(expected,8);
+      expect(run.car.steering.angle).toBeLessThan(vehicleDynamics.maxSteeringAngle*.6);
     }finally{run.dispose();}
   });
   it('keeps the body upright during a sudden turn at 60 km/h',()=>{

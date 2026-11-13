@@ -1,0 +1,5 @@
+{
+  "source": "images/руль.png",
+  "method": "Built-in image_gen background extraction, resized to 512 x 512 with Sharp, alpha preserved",
+  "prompt": "Use case: background-extraction. Edit target: the supplied Cobalt steering wheel photograph. Create a transparent PNG game control asset: isolate ONLY the complete front-facing Chevrolet Cobalt steering wheel from the blue advertisement. Remove every blue pixel from the background AND all open spaces inside the wheel. Remove all advertisement text at top and the red arrow at bottom, restoring the wheel rim beneath the arrow. Preserve the original wheel's round contour, black leather grain, black airbag/hub, silver lower three-spoke trim, and small gold Chevrolet emblem as faithfully as possible. Center the wheel with its rotation pivot at the exact center of a square canvas, wheel outer rim circular and filling 95% of canvas, neutral straight-ahead orientation, spokes downward. No scenery, no shadow on background, no extra controls, no lettering. True transparent alpha outside and within openings."
+}

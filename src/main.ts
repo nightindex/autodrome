@@ -2,6 +2,10 @@ import './style.css';
 import './ui/hud.css';
 import './ui/brand.css';
 import './ui/cockpit-controls.css';
+import './ui/mobile-controls.css';
+import './ui/home.css';
+import './ui/compact-hud.css';
+import './ui/mobile-display.css';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { course, itinerary } from './data/course';
 import { Vehicle } from './simulation/vehicle';
@@ -19,6 +23,7 @@ import {loadDirectionSignArtwork} from './render/road-signs';
 import {PracticeGuide} from './simulation/practice-guide';
 import {FreePracticeTracker} from './simulation/free-practice';
 import {MobilityAdvisor,type MobilityIssue} from './simulation/mobility-advisor';
+import {MobileDisplay} from './ui/mobile-display';
 
 const settings=readSettings();document.documentElement.lang=settings.language;
 let vehicle:Vehicle,scene:GameScene,physics:RAPIER.World;
@@ -40,7 +45,8 @@ const ui=new Interface(settings,{
   mirrorSelect:side=>{mirrorPreviewLook=side==='left'?1:side==='right'?-1:undefined;},
   start,pause,resume,menu:goMenu,reset:()=>start(mode,selectedIndex,guidedRoute),retryStage,chooseExercise:()=>{if(state==='driving'&&mode==='practice'){pause();ui.showExercises(true);}},recover,camera:()=>scene?.cycleCamera(),
   settingsChanged:()=>{saveSettings(settings);input.bindings=settings.bindings;audio.volume=settings.volume;scene?.setQuality(settings.quality);scene?.setCurbStyle(settings.curbStyle);scene?.setMirrorAdjustments(settings.mirrors);scene?.setCockpitView(settings.cockpit);},
-});
+},input);
+const mobileDisplay=new MobileDisplay(()=>settings.language,()=>{if(state==='driving')pause();else input.clear();audio.update(0,0,false,true);});
 input.onAction=action=>{
   if(action==='pause'){state==='driving'?pause():state==='paused'?resume():null;return;}
   if(state!=='driving')return;
@@ -65,6 +71,7 @@ function recover(){
   if(state!=='driving'||mode!=='practice'||!vehicle.canRecover)return;
   input.clear();accumulator=0;
   if(!vehicle.recover()){ui.toast(ui.c.recoveryBlocked);return;}
+  scene.resetMotion();
   // Teleporting is not a driven crossing of a stop/finish line.
   tracker.previous=null;tracker.goalTime=0;
   freeTracker.resetCrossings();
@@ -72,13 +79,16 @@ function recover(){
   ui.recovery(null);ui.toast(ui.c.recovered);
 }
 function start(nextMode:Mode,index?:number,guided=false){
-  if(!ui.ready)return;
+  if(!ui.ready||mobileDisplay.blocked)return;
+  void mobileDisplay.enter();
   mode=nextMode;selectedIndex=index;guidedRoute=mode==='practice'&&index===undefined&&guided;engine=new ExamEngine(mode,settings.examMinutes*60,freePractice());
   tracker=new CourseTracker(index!==undefined,index!==undefined?[course.exercises[index]]:itinerary);
   freeTracker=new FreePracticeTracker();
   mobilityAdvisor.reset();mobilityIssue=null;
   const exercise=tracker.current;engine.setExercise(exercise.id);vehicle.reset(exercise.spawn,exercise.yaw);
+  scene.resetMotion();
   input.clear();input.enabled=true;state='driving';accumulator=0;eventCount=0;emergencyUntil=0;
+  scene.resetFPS();
   practiceGuide=new PracticeGuide(exercise,tracker.index,index!==undefined);
   scene.cameraMode='chase';scene.setGoal(exercise.point,false);ui.enter(mode,index!==undefined,guidedRoute);ui.emergency(false);
   if(mode==='practice'&&!freePractice())scene.setPracticeGuide(practiceGuide.view(vehicle.telemetry(),engine,settings.language),exercise.parking);
@@ -89,12 +99,13 @@ function retryStage(){
   start('practice',selectedIndex);
   ui.toast(settings.language==='ru'?'Текущий этап начат заново':'Joriy bosqich qayta boshlandi');
 }
-function pause(){if(state!=='driving'&&state!=='paused')return;state='paused';input.clear();input.enabled=false;accumulator=0;ui.showPause(mode);}
-function resume(){if(state!=='paused')return;state='driving';input.clear();input.enabled=true;ui.enter(mode,selectedIndex!==undefined,guidedRoute,true);accumulator=0;lastTime=performance.now();void audio.start().catch(()=>{});}
+function pause(){if(state!=='driving'&&state!=='paused')return;state='paused';input.clear();input.enabled=false;accumulator=0;scene.resetMotion();ui.showPause(mode);}
+function resume(){if(state!=='paused'||mobileDisplay.blocked)return;void mobileDisplay.enter();state='driving';input.clear();input.enabled=true;ui.enter(mode,selectedIndex!==undefined,guidedRoute,true);accumulator=0;scene.resetMotion();scene.resetFPS();lastTime=performance.now();void audio.start().catch(()=>{});}
 function goMenu(){
   if(state==='paused'&&mode==='exam'){engine.update(vehicle.telemetry(),{abandoned:true},0);finish();return;}
   state='menu';input.clear();input.enabled=false;ui.showMenu();scene.setGoal(tracker.current.point,false);
   vehicle.reset(course.exercises[0].spawn,course.exercises[0].yaw);
+  scene.resetMotion();
 }
 function finish(){
   if(state==='result')return;state='result';input.enabled=false;input.clear();
@@ -103,6 +114,7 @@ function finish(){
   scene.setGoal(tracker.current.point,false);ui.showResult(result,selectedIndex!==undefined);
 }
 function step(dt:number){
+  scene.capturePhysicsPose(vehicle);
   vehicle.update(dt,input,mode==='practice'&&settings.assist,mode==='practice'&&settings.steeringAssist);
   const t=vehicle.telemetry();
   mobilityIssue=mobilityAdvisor.update(t,{throttle:input.down('throttle'),brake:input.down('brake'),clutch:input.down('clutch')},dt,vehicle.recoveryReason);
@@ -137,6 +149,7 @@ function announceErrors(){
   eventCount=engine.events.length;
 }
 function frame(now:number){
+  if(mobileDisplay.blocked){lastTime=now;requestAnimationFrame(frame);return;}
   const raw=(now-lastTime)/1000,dt=Math.min(.1,Math.max(.001,raw));lastTime=now;
   if(state==='driving'){
     accumulator+=dt;while(accumulator>=1/60&&state==='driving'){step(1/60);accumulator-=1/60;}
@@ -149,8 +162,9 @@ function frame(now:number){
       elapsed:state==='menu'?0:engine.time,score:state==='menu'?0:engine.score,
       exerciseName:state==='menu'?'':freePractice()?settings.language==='ru'?'Свободное вождение':'Erkin haydash':tracker.current.name[settings.language],
       events:state==='menu'?[]:engine.events.slice(-6).map(event=>({points:event.points,text:ruleById(event.ruleId).text[settings.language]}))});
-    scene.render(vehicle,dt,now/1000,state==='menu',mirrorPreviewLook??(+input.down('lookRight')-+input.down('lookLeft')));
+    scene.render(vehicle,dt,now/1000,state==='menu',mirrorPreviewLook??(+input.down('lookRight')-+input.down('lookLeft')),state==='driving'?accumulator*60:1);
     const t=vehicle.telemetry();audio.update(t.rpm,t.throttle,t.engine,state!=='driving');
+    if(state==='driving')ui.touchFrame(scene.handwheelAngle,vehicle.steering.holdCommand);
     ui.recovery(state==='driving'&&mode==='practice'?(vehicle.recoveryReason==='overturned'?'overturned':mobilityIssue):null,vehicle.canRecover);
     uiAccumulator+=dt;if(uiAccumulator>.08&&state!=='menu'){
       uiAccumulator=0;
@@ -171,15 +185,18 @@ async function boot(){
     vehicle.reset(course.exercises[0].spawn,course.exercises[0].yaw);
     scene=new GameScene(ui.viewport,vehicle);scene.setQuality(settings.quality);scene.setCurbStyle(settings.curbStyle);scene.setMirrorAdjustments(settings.mirrors);scene.setCockpitView(settings.cockpit);
     scene.onCabinMirrorSwitch=()=>{if(state==='driving')ui.openMirrorControls();};
-    ui.loadingStage('car');requestAnimationFrame(frame);await scene.loadCar(v=>ui.progress(v));
+    ui.loadingStage('car');await scene.loadCar(v=>ui.progress(v));
     ui.loadingStage('finishing');
+    await scene.prepareForPlay(vehicle);
     await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+    lastTime=performance.now();
     ui.setReady();
     // Diagnostics are read-only in production. Test controls are gated by Vite's dev mode.
     Object.defineProperty(window,'__avtodrom',{value:{
-      snapshot:()=>({state,mode,freePractice:freePractice(),exercise:tracker.current.id,index:tracker.index,telemetry:vehicle.telemetry(),score:engine.score,events:engine.events,fps:scene.fps,drawCalls:scene.renderStats.calls,triangles:scene.renderStats.triangles,camera:scene.cameraMode,loaded:scene.loaded,wheels:vehicle.controller.numWheels()}),
+      snapshot:()=>({state,mode,orientationBlocked:mobileDisplay.blocked,fullscreen:!!document.fullscreenElement,freePractice:freePractice(),exercise:tracker.current.id,index:tracker.index,telemetry:vehicle.telemetry(),score:engine.score,events:engine.events,fps:scene.fps,drawCalls:scene.renderStats.calls,triangles:scene.renderStats.triangles,camera:scene.cameraMode,loaded:scene.loaded,wheels:vehicle.controller.numWheels()}),
       ...(import.meta.env.DEV?{start,vehicle,engine:()=>engine,tracker:()=>tracker,practiceGuide:()=>practiceGuide,scene,step,pause,resume}:{}),
     }});
+    requestAnimationFrame(frame);
   }catch(error){console.error(error);ui.showError(error instanceof Error&&/WebGL/i.test(error.message)?ui.c.webgl:undefined);}
 }
 void boot();

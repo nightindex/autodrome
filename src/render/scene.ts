@@ -6,7 +6,7 @@ import type { Settings, Vec2 } from '../types';
 import { CourseWorld,roadDistance } from './course-world';
 import { course, hillHeight } from '../data/course';
 import { intersectionApproaches } from '../data/intersection';
-import { vehicleConfig,vehicleSteering } from '../data/vehicle';
+import { vehicleConfig } from '../data/vehicle';
 import { CobaltVisuals } from './cobalt-visuals';
 import { CabinControls } from './cabin-controls';
 import { stableShadowTarget,shadowSpan,sunOffset } from './shadow-stability';
@@ -20,6 +20,10 @@ import type {PracticeHint} from '../simulation/practice-guide';
 import type {Exercise} from '../types';
 import { moveMirrorAngle,readMirrorAdjustments,sideMirrorDirection,sideMirrorView,type MirrorAdjustments } from './mirror-adjustment';
 import {readCockpitView,cockpitEyePosition,cockpitVerticalFov,type CockpitView} from './cockpit-view';
+import {VehicleMotion} from './vehicle-motion';
+import {createCourseShadowLight,configureCourseShadowReceivers} from './course-shadows';
+import {createCarShadowBatches,detailShadowLayer} from './car-shadow-batches';
+import {touchDevice} from '../device';
 
 export class GameScene {
   onCabinMirrorSwitch:()=>void=()=>{};
@@ -28,12 +32,14 @@ export class GameScene {
   scene=new T.Scene();camera=new T.PerspectiveCamera(52,1,.06,600);renderer:T.WebGLRenderer;
   car=new T.Group();cameraMode:'chase'|'cockpit'|'overview'='chase';world:CourseWorld;
   private sun=new T.DirectionalLight(0xfff1d4,2.4);
+  private distantSun:T.DirectionalLight;
   private wheels:CarWheel[]=[];private bodyLift=0;
   private cabinEye=new T.Vector3(.31,.48,.2);
   private cockpitView=readCockpitView(null);
   get cockpitEye(){return cockpitEyePosition(this.cabinEye,this.cockpitView);}
   setCockpitView(value:CockpitView){this.cockpitView=readCockpitView(value);}
   private steering:T.Object3D|undefined;private steeringBase=new T.Quaternion();
+  private motion=new VehicleMotion();
   private cobalt:CobaltVisuals|undefined;
   private examDisplay:CabinExamDisplay|undefined;
   private guide=new T.Group();private goal=new T.Group();
@@ -46,7 +52,7 @@ export class GameScene {
   private sideMirrorPivots:T.Group[]=[];
   private mirrorAdjustments=readMirrorAdjustments(null);private mirrorAngles=readMirrorAdjustments(null);
   private quality:Settings['quality']|undefined;private frameCount=0;private fpsTime=0;fps=0;
-  loaded=false;carError='';
+  loaded=false;prepared=false;carError='';
   renderStats={calls:0,triangles:0};
   constructor(container:HTMLElement,vehicle:Vehicle){
     this.renderer=new T.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
@@ -60,7 +66,15 @@ export class GameScene {
     Object.assign(this.sun.shadow.camera,{left:-shadowSpan/2,right:shadowSpan/2,top:shadowSpan/2,bottom:-shadowSpan/2,near:1,far:110});this.sun.shadow.mapSize.set(2048,2048);this.sun.shadow.bias=-.00015;this.sun.shadow.normalBias=.018;this.sun.shadow.radius=1.5;
     this.scene.add(this.sun,this.sun.target);
     this.world=new CourseWorld(vehicle.world);vehicle.obstacles=this.world.obstacles;vehicle.traversableSurfaces=this.world.traversableSurfaces;vehicle.surfaceAt=point=>roadDistance(point)<=0?'asphalt':'grass';this.scene.add(this.world.group,this.car,this.guide,this.goal);
+    this.distantSun=createCourseShadowLight(this.world.group);this.scene.add(this.distantSun,this.distantSun.target);
+    this.sun.shadow.camera.layers.set(detailShadowLayer);
+    this.world.group.traverse(node=>{if(node instanceof T.Mesh&&node.castShadow&&node.layers.isEnabled(0))node.layers.enable(detailShadowLayer);});
+    configureCourseShadowReceivers(this.world.group);
     this.createGuide();
+    // Course animation changes materials and wind uniforms, never transforms.
+    // Keep its local matrices and update world matrices once before all views.
+    this.world.group.traverse(node=>{node.updateMatrix();node.matrixAutoUpdate=false;});
+    this.scene.matrixAutoUpdate=false;this.scene.matrixWorldAutoUpdate=false;
     window.addEventListener('resize',()=>this.resize());this.resize();
   }
   async loadCar(onProgress:(value:number|undefined)=>void){
@@ -115,9 +129,58 @@ export class GameScene {
       this.cobalt=new CobaltVisuals(model);
       this.examDisplay=new CabinExamDisplay(model);
       this.cabinControls=new CabinControls(this.car,this.camera,this.renderer.domElement,()=>this.onCabinMirrorSwitch());
+      configureCourseShadowReceivers(this.car);
+      const animated=[...this.wheels.flatMap(w=>[w.pivot,w.spin]),...this.sideMirrorPivots,
+        this.steering,model.getObjectByName('COBALT_INDICATOR_STALK'),model.getObjectByName('COBALT_TACH_NEEDLE'),model.getObjectByName('COBALT_MirrorSwitchKnob')]
+        .filter((node):node is T.Object3D=>!!node);
+      createCarShadowBatches(this.car,animated);
       this.loaded=true;onProgress(1);
     }catch(error){this.carError=String(error);throw error;}
   }
+  /** Compile and upload before the loading screen releases the controls.
+   * The exterior rear feed hides the car and its cabin light, so it needs
+   * a different lighting program from the main view and the side mirrors. */
+  async prepareForPlay(vehicle:Vehicle){
+    const renderer=this.renderer,mode=this.cameraMode,carVisible=this.car.visible;
+    const nextFrame=()=>new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));
+    try{
+      await this.world.whenReady();
+      const textures=new Set<T.Texture>();
+      this.scene.traverse(node=>{
+        if(!(node instanceof T.Mesh||node instanceof T.Sprite||node instanceof T.Line||node instanceof T.Points))return;
+        const materials=Array.isArray(node.material)?node.material:[node.material];
+        for(const material of materials)for(const value of Object.values(material)){
+          if(value instanceof T.Texture&&!value.isRenderTargetTexture&&value.source.data)textures.add(value);
+        }
+      });
+      for(const texture of textures)renderer.initTexture(texture);
+      for(const target of [this.mirrorTarget,...this.sideTargets])renderer.initRenderTarget(target);
+      this.scene.updateMatrixWorld(true);
+      this.car.visible=true;await renderer.compileAsync(this.scene,this.camera);
+      this.car.visible=false;await renderer.compileAsync(this.scene,this.mirrorCamera);
+      this.car.visible=true;
+      // Real passes also prepare shadow programs, vertex buffers, reflection
+      // output formats and the actual driver/side-view material variants.
+      for(const [camera,look]of [['chase',0],['cockpit',0],['cockpit',1],['cockpit',-1]] as const){
+        this.cameraMode=camera;this.render(vehicle,1,0,false,look);await nextFrame();
+      }
+      this.cameraMode=mode;this.render(vehicle,1,0,true,0);
+      // Wait asynchronously for submitted GPU work instead of showing the
+      // menu while texture uploads and first-pass rendering are still queued.
+      const gl=renderer.getContext();
+      if('fenceSync' in gl){
+        const fence=gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE,0);
+        if(fence){
+          gl.flush();
+          try{
+            while(gl.clientWaitSync(fence,0,0)===gl.TIMEOUT_EXPIRED)await nextFrame();
+          }finally{gl.deleteSync(fence);}
+        }
+      }
+      this.prepared=true;
+    }finally{this.cameraMode=mode;this.car.visible=carVisible;this.resetFPS();}
+  }
+  resetFPS(){this.fps=0;this.fpsTime=0;this.frameCount=0;}
   private createGuide(){
     const material=new T.MeshBasicMaterial({color:0xe7bd60,transparent:true,opacity:.85,depthWrite:false});
     const shape=new T.Shape();shape.moveTo(-.3,-.3);shape.lineTo(0,.25);shape.lineTo(.3,-.3);shape.lineTo(0,-.04);shape.closePath();
@@ -149,18 +212,24 @@ export class GameScene {
   }
   setGoal(point:Vec2,visible:boolean){this.goal.position.set(point.x,hillHeight(point.x,point.z)+.06,point.z);this.goal.visible=visible;this.guide.visible=visible;}
   setCurbStyle(style:Settings['curbStyle']){this.world.setCurbStyle(style);}
-  setQuality(q:Settings['quality']){if(this.quality===q)return;this.quality=q;this.world.setTreeQuality(q);const mirrorScale=q==='low'?.5:q==='medium'?.75:1;this.mirrorTarget.setSize(512*mirrorScale,160*mirrorScale);for(const target of this.sideTargets)target.setSize(512*mirrorScale,288*mirrorScale);this.renderer.setPixelRatio(Math.min(devicePixelRatio,q==='high'?1.75:q==='medium'?1.25:1));this.renderer.shadowMap.enabled=q!=='low';this.sun.shadow.mapSize.set(2048,2048);this.sun.shadow.map?.dispose();this.sun.shadow.map=null;this.resize();}
-  resize(){const w=window.innerWidth,h=window.innerHeight;this.renderer.setSize(w,h);this.camera.aspect=w/h;if(this.cameraMode==='cockpit')this.camera.fov=cockpitVerticalFov(this.cockpitView.fov,this.camera.aspect);this.camera.updateProjectionMatrix();}
+  setQuality(q:Settings['quality']){if(this.quality===q)return;this.quality=q;this.world.setTreeQuality(q);const mirrorScale=q==='low'?.5:q==='medium'?.75:1;this.mirrorTarget.setSize(512*mirrorScale,160*mirrorScale);for(const target of this.sideTargets)target.setSize(512*mirrorScale,288*mirrorScale);this.renderer.setPixelRatio(Math.min(devicePixelRatio,q==='high'?1.75:q==='medium'?1.25:1));this.renderer.shadowMap.enabled=q!=='low';this.sun.castShadow=this.distantSun.castShadow=this.renderer.shadowMap.enabled;this.sun.shadow.mapSize.set(2048,2048);this.sun.shadow.map?.dispose();this.sun.shadow.map=null;this.resize();}
+  resize(){const w=window.innerWidth,h=window.innerHeight;
+    if(touchDevice())this.renderer.setPixelRatio(Math.min(devicePixelRatio,this.quality==='high'?1.5:1,Math.sqrt(1_500_000/(w*h))));
+    this.renderer.setSize(w,h);this.camera.aspect=w/h;if(this.cameraMode==='cockpit')this.camera.fov=cockpitVerticalFov(this.cockpitView.fov,this.camera.aspect);this.camera.updateProjectionMatrix();}
   cycleCamera(){this.cameraMode=this.cameraMode==='chase'?'cockpit':this.cameraMode==='cockpit'?'overview':'chase';}
   setMirrorAdjustments(value:MirrorAdjustments){this.mirrorAdjustments=readMirrorAdjustments(value);}
   setExamDisplay(value:CabinExamDisplayState){this.examDisplay?.update(value);}
-  render(vehicle:Vehicle,dt:number,time:number,menu:boolean,look:number){
-    const p=vehicle.body.translation(),r=vehicle.body.rotation();this.car.position.set(p.x,p.y,p.z);this.car.quaternion.set(r.x,r.y,r.z,r.w);
+  capturePhysicsPose(vehicle:Vehicle){this.motion.beforeStep(vehicle);}
+  get handwheelAngle(){return this.motion.handwheelAngle;}
+  resetMotion(){this.motion.reset();}
+  render(vehicle:Vehicle,dt:number,time:number,menu:boolean,look:number,alpha=1){
+    const pose=this.motion.sample(vehicle,menu?1:alpha),p=pose.position,r=pose.rotation;
+    this.car.position.copy(p);this.car.quaternion.copy(r);
     if(menu)this.car.position.y=hillHeight(p.x,p.z)+(this.wheels.length?vehicleConfig.wheelRadius-this.wheels[0].base.y:.63);else this.car.translateY(this.bodyLift);
     const t=vehicle.telemetry();
-    for(const w of this.wheels)updateCarWheel(w,vehicle.controller,vehicle.time===0,menu,this.bodyLift,vehicle.wheelRotation(w.index));
-    // Telemetry is the actual rack position, including optional assistance.
-    if(this.steering)this.steering.quaternion.copy(this.steeringBase).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-t.steering*vehicleSteering.maxSteeringWheelAngle));
+    for(const w of this.wheels){const wheel=pose.wheels[w.index];updateCarWheel(w,vehicle.controller,vehicle.time===0,menu,this.bodyLift,wheel.rotation,wheel);}
+    // Use the actual virtual handwheel angle 1:1, including speed/grip limits.
+    if(this.steering)this.steering.quaternion.copy(this.steeringBase).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(0,0,1),-pose.handwheel));
     this.cobalt?.update(t,dt);
     (['left','right'] as const).forEach((side,i)=>{
       const angles=this.mirrorAngles[side],target=this.mirrorAdjustments[side];
@@ -169,7 +238,11 @@ export class GameScene {
     });
     const pos=this.car.position.clone(),forward=new T.Vector3(0,0,1).applyQuaternion(this.car.quaternion);
     this.camera.clearViewOffset();
-    if(menu){const a=.75+Math.sin(time*.025)*.25;const desired=new T.Vector3(p.x+Math.sin(a)*8,p.y+2.6,p.z+Math.cos(a)*8);this.camera.position.lerp(desired,1-Math.exp(-dt*2));this.camera.lookAt(p.x,p.y+.1,p.z);this.camera.fov=48;this.camera.setViewOffset(window.innerWidth,window.innerHeight,-window.innerWidth*.14,0,window.innerWidth,window.innerHeight);}
+    if(menu){const portrait=window.innerHeight>window.innerWidth&&window.innerWidth<900;
+      const a=.75+Math.sin(time*.025)*.25,distance=portrait?12:8;
+      const desired=new T.Vector3(p.x+Math.sin(a)*distance,p.y+(portrait?3.3:2.6),p.z+Math.cos(a)*distance);
+      this.camera.position.lerp(desired,1-Math.exp(-dt*2));this.camera.lookAt(p.x,p.y+.1,p.z);this.camera.fov=48;
+      this.camera.setViewOffset(window.innerWidth,window.innerHeight,portrait?0:-window.innerWidth*.14,portrait?window.innerHeight*.2:0,window.innerWidth,window.innerHeight);}
     else if(this.cameraMode==='cockpit'){
       this.camera.position.copy(this.cockpitEye.applyQuaternion(this.car.quaternion).add(pos));
       const target=new T.Vector3(Math.sin(look*.85),-.025,Math.cos(look*.85)).applyQuaternion(this.car.quaternion).multiplyScalar(10).add(this.camera.position);this.camera.lookAt(target);this.camera.fov=cockpitVerticalFov(this.cockpitView.fov,this.camera.aspect);
@@ -186,7 +259,9 @@ export class GameScene {
     this.world.update(vehicle.time);this.goal.rotation.y=Math.sin(time)*.05;
     const renderer=this.renderer;
     this.camera.updateMatrixWorld();
-    this.car.updateMatrixWorld(true);
+    // Main view and mirrors share the same pose. Renderer.render otherwise
+    // traverses and recomputes this hierarchy separately for every feed.
+    this.scene.updateMatrixWorld();
     if(this.cabinControls){this.cabinControls.label=this.cabinControlLabel;this.cabinControls.update(this.cabinInteractionEnabled&&!menu&&this.cameraMode==='cockpit');}
     const panes=[this.cabinMirror,...this.sideMirrors];
     this.mirrorFrustum.setFromProjectionMatrix(this.mirrorProjection.multiplyMatrices(this.camera.projectionMatrix,this.camera.matrixWorldInverse));

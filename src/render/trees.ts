@@ -84,13 +84,15 @@ function barkTextures(){
   const map=texture(color);map.colorSpace=T.SRGBColorSpace;return {map,normalMap:texture(normals)};
 }
 export class TreeStand{
+  readonly ready:Promise<void>;
   group=new T.Group();
   private time={value:0};
   private leaves:{mesh:T.InstancedMesh;geometry:ReturnType<typeof treePrototype>['foliage']}[]=[];
   constructor(){
+    let loaded:()=>void=()=>{};this.ready=new Promise<void>(resolve=>{loaded=resolve;});
     this.group.name='course-trees';this.group.userData={trees:74,variants:3,textureLoaded:false,quality:'medium'};
     const {map,normalMap}=barkTextures(),barkMaterial=new T.MeshStandardMaterial({map,normalMap,normalScale:new T.Vector2(.65,.65),roughness:.98});
-    const atlas=new T.TextureLoader().load(atlasPath,()=>{this.group.userData.textureLoaded=true;},undefined,()=>{this.group.userData.textureError=atlasPath;});
+    const atlas=new T.TextureLoader().load(atlasPath,()=>{this.group.userData.textureLoaded=true;loaded();},undefined,()=>{this.group.userData.textureError=atlasPath;loaded();});
     atlas.colorSpace=T.SRGBColorSpace;atlas.anisotropy=8;
     const leafMaterial=new T.MeshStandardMaterial({map:atlas,alphaTest:.5,alphaToCoverage:true,side:T.DoubleSide,vertexColors:true,roughness:.92,emissive:0xffffff,emissiveMap:atlas,emissiveIntensity:.065});
     leafMaterial.forceSinglePass=true;
